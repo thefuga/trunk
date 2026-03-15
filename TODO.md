@@ -18,6 +18,7 @@
 - When committing, we currently have a checkbox that says "amend previous commit". Let's change that to a three-way selector that selects between commit, amend, and stash
 - Change the right sidebar "stage all changes" to a green button, and the "unstage all changes" to a red button
 - When not collapsed, both unstaged and staged files should have the same height
+- When creating a stash, the name of the stash should be the message in the right panel commit form
 
 ## Commit Graph
 - Ability to search for commit hashes, commit messages, and branches on the commit graph with cmd+f
