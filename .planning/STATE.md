@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
-status: completed
-stopped_at: Phase 28 complete, ready to plan Phase 29
-last_updated: "2026-03-15T21:49:55.992Z"
-last_activity: 2026-03-15 - Completed 28-04 overflow pill context menus
+status: planning
+stopped_at: Phase 29 context gathered
+last_updated: "2026-03-15T22:17:32.609Z"
+last_activity: 2026-03-15 - Phase 28 complete (gap closure verified)
 progress:
   total_phases: 6
   completed_phases: 3
@@ -105,7 +105,7 @@ v0.6 Progress: [████████████░░░░░░░░] 3/
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Phase 28 complete, ready to plan Phase 29
-Resume file: None
+Last session: 2026-03-15T22:17:32.606Z
+Stopped at: Phase 29 context gathered
+Resume file: .planning/phases/29-staging-commit-ux/29-CONTEXT.md
 Next action: Discuss Phase 29
