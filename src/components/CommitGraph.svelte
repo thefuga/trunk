@@ -488,8 +488,9 @@
       <div class="flex-1 relative px-2">
         Message
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <!-- message handle is always rendered — it is the LEFT edge of the author column, not a trailing right edge -->
-        <div class="col-resize-handle" onmousedown={(e) => startColumnResize('author', e, true)}></div>
+        {#if 'message' !== lastVisibleColumn}
+          <div class="col-resize-handle" onmousedown={(e) => startColumnResize('author', e, true)}></div>
+        {/if}
       </div>
     {/if}
     {#if columnVisibility.author}
