@@ -7,6 +7,7 @@
 - ✅ **v0.3 Actions** — Phases 11-14 (shipped 2026-03-12)
 - ✅ **v0.4 Graph Rework** — Phases 15-17 (shipped 2026-03-13)
 - ✅ **v0.5 Graph Overlay** — Phases 20-26 (shipped 2026-03-15)
+- 🔵 **v0.6 UI Polish & Core Ops** — Phases 27-31 (active)
 
 ## Phases
 
@@ -76,6 +77,71 @@ Full details: [milestones/v0.5-ROADMAP.md](milestones/v0.5-ROADMAP.md)
 
 </details>
 
+### v0.6 UI Polish & Core Ops (Active)
+
+- [ ] **Phase 27: Foundation — Icons, Toast & Bug Fixes** — Icon system, toast notifications, and critical bug fixes that unblock all subsequent phases
+- [ ] **Phase 28: Destructive Operations** — Discard changes, branch/tag delete, branch rename, and reset — all with confirmation dialogs
+- [ ] **Phase 29: Staging & Commit UX** — Three-way commit/amend/stash selector, colored stage/unstage buttons, equal-height file lists
+- [ ] **Phase 30: Graph Polish & Navigation** — Graph padding, column overflow/shrink, sidebar ref navigation, and right pane auto-open
+- [ ] **Phase 31: Layout Polish** — Merge window top bar with tab/actions bar into unified bar
+
+## Phase Details
+
+### Phase 27: Foundation — Icons, Toast & Bug Fixes
+**Goal**: App has a consistent visual vocabulary, non-blocking operation feedback, and correct dirty-state behavior for untracked files
+**Depends on**: Nothing (first v0.6 phase)
+**Requirements**: ICON-01, TOAST-01, FIX-01, FIX-02
+**Success Criteria** (what must be TRUE):
+  1. Every toolbar button, file row, sidebar section, tab bar item, and commit form element displays an SVG icon instead of a Unicode symbol
+  2. Successful operations (e.g. stash created, branch checked out) and errors show a non-blocking toast notification that auto-dismisses
+  3. Creating a new untracked file in the repo causes the WIP row to appear in the commit graph and the file to appear in the unstaged list
+  4. The last visible column in the commit graph header renders without a trailing resize divider on its right edge
+**Plans**: TBD
+
+### Phase 28: Destructive Operations
+**Goal**: Users can perform common destructive git operations (discard, delete, rename, reset) with clear confirmation safeguards
+**Depends on**: Phase 27 (icons for buttons/menus, toast for operation feedback)
+**Requirements**: GITOP-01, GITOP-02, GITOP-03, GITOP-04, GITOP-05, GITOP-06
+**Success Criteria** (what must be TRUE):
+  1. User can right-click an unstaged file and discard its changes — a confirmation dialog appears, and after confirming, the file reverts to its last committed state (or is deleted if untracked)
+  2. User can click "Discard all" to revert all unstaged changes at once, with a confirmation dialog showing the count of affected files
+  3. User can right-click a local branch in the sidebar, choose Delete, confirm in a dialog, and the branch is removed (HEAD branch deletion is prevented)
+  4. User can right-click a tag in the commit graph or sidebar, choose Delete, confirm, and the tag is removed
+  5. User can right-click a local branch, choose Rename, enter a new name, and the branch is renamed in place
+  6. User can right-click any commit, choose Reset, pick soft/mixed/hard mode, confirm, and the current branch tip moves to that commit
+**Plans**: TBD
+
+### Phase 29: Staging & Commit UX
+**Goal**: Users have a unified "save my work" workflow through a three-way selector and polished staging controls
+**Depends on**: Phase 27 (icons for selector/buttons)
+**Requirements**: STAGE-01, STAGE-02, STAGE-03, STAGE-04, STAGE-05
+**Success Criteria** (what must be TRUE):
+  1. Commit form displays a three-way selector (commit / amend / stash) that replaces the old amend checkbox, and switching modes updates form state (amend pre-fills last message, stash changes button label)
+  2. When stash mode is selected, the subject field auto-populates with the current commit form message as the default stash name
+  3. "Stage all changes" button is visually green and "Unstage all changes" button is visually red, clearly distinguishable at a glance
+  4. When both unstaged and staged file lists have files, they render at equal height (50/50 split of available space)
+**Plans**: TBD
+
+### Phase 30: Graph Polish & Navigation
+**Goal**: Commit graph handles dense histories gracefully and users can jump to any ref from the sidebar
+**Depends on**: Phase 27 (icons for navigation affordances)
+**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, LAYOUT-01
+**Success Criteria** (what must be TRUE):
+  1. Commit graph has visible padding above the first commit row and below the last commit row, preventing content from touching container edges
+  2. Graph column can shrink narrower than its full lane content width — lanes compress rather than overflowing or causing horizontal scroll
+  3. Clicking a branch or tag name in the left sidebar scrolls the commit graph to center that ref's commit row, loading additional history if needed
+  4. When the right pane is collapsed and the user clicks a commit, branch, or tag that would show detail, the right pane automatically opens to display it
+**Plans**: TBD
+
+### Phase 31: Layout Polish
+**Goal**: App window uses vertical space efficiently with a single unified top bar
+**Depends on**: Phase 27 (icons in merged bar)
+**Requirements**: LAYOUT-02
+**Success Criteria** (what must be TRUE):
+  1. The window's title bar area and the tab/actions toolbar are visually merged into one continuous bar — no visible boundary or wasted vertical space between them
+  2. All existing toolbar actions (pull, push, branch, stash, pop, undo, redo) and tab controls remain fully functional in the merged bar
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -104,7 +170,12 @@ Full details: [milestones/v0.5-ROADMAP.md](milestones/v0.5-ROADMAP.md)
 | 24. Integration | v0.5 | 1/1 | Complete | 2026-03-14 |
 | 25. Interaction Preservation | v0.5 | 1/1 | Complete | 2026-03-14 |
 | 26. SVG Ref Pills | v0.5 | 2/2 | Complete | 2026-03-14 |
+| 27. Foundation — Icons, Toast & Bug Fixes | v0.6 | 0/? | Not started | - |
+| 28. Destructive Operations | v0.6 | 0/? | Not started | - |
+| 29. Staging & Commit UX | v0.6 | 0/? | Not started | - |
+| 30. Graph Polish & Navigation | v0.6 | 0/? | Not started | - |
+| 31. Layout Polish | v0.6 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-15 — v0.5 Graph Overlay shipped*
+*Last updated: 2026-03-15 — v0.6 roadmap created*

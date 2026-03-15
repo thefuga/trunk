@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
-status: defining_requirements
-stopped_at: Defining requirements
+status: roadmap_complete
+stopped_at: Roadmap created, ready for phase planning
 last_updated: "2026-03-15"
-last_activity: "2026-03-15 - Completed quick task 10: make the pill line thinner"
+last_activity: "2026-03-15 - v0.6 roadmap created (phases 27-31)"
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,25 +24,33 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 27 — Foundation — Icons, Toast & Bug Fixes (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-15 - Completed quick task 10: make the pill line thinner
+Status: Roadmap complete, ready for phase planning
+Last activity: 2026-03-15 - v0.6 roadmap created (phases 27-31)
+
+```
+v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/5 phases
+```
 
 ## Performance Metrics
 
-| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 |
-|--------|------|------|------|------|------|
-| Phases | 6 | 4 | 4 | 3 | 7 |
-| Plans | 27 | 9 | 14 | 5 | 12 |
-| Commits | 155 | 76 | 88 | ~30 | 111 |
-| Days | 7 | 2 | 3 | 1 | 2 |
+| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 | v0.6 |
+|--------|------|------|------|------|------|------|
+| Phases | 6 | 4 | 4 | 3 | 7 | 5 |
+| Plans | 27 | 9 | 14 | 5 | 12 | — |
+| Commits | 155 | 76 | 88 | ~30 | 111 | — |
+| Days | 7 | 2 | 3 | 1 | 2 | — |
 
 ## Accumulated Context
 
 ### Decisions
 
-(Cleared at milestone boundary — full decision log in PROJECT.md Key Decisions table and .planning/milestones/v0.5-ROADMAP.md)
+| Decision | Rationale |
+|----------|-----------|
+| LAYOUT-01 in Phase 30 (not 31) | Right pane auto-open is triggered by ref navigation (GRAPH-03) — natural companion |
+| 5 phases (standard granularity) | 20 requirements cluster into 5 natural delivery boundaries; no artificial splits |
+| Phase 27 includes bug fixes | FIX-01/FIX-02 are trivial (1-line fixes), high-value, and unblock clean testing |
 
 ### Pending Todos
 
@@ -58,7 +66,7 @@ Last activity: 2026-03-15 - Completed quick task 10: make the pill line thinner
 
 ### Blockers/Concerns
 
-(None — milestone complete)
+(None)
 
 ### Quick Tasks Completed
 
@@ -70,5 +78,6 @@ Last activity: 2026-03-15 - Completed quick task 10: make the pill line thinner
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Milestone v0.5 complete
+Stopped at: v0.6 roadmap created (phases 27-31)
 Resume file: None
+Next action: `/gsd-plan-phase 27`

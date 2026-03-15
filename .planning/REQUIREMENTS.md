@@ -94,32 +94,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ICON-01 | — | Pending |
-| GITOP-01 | — | Pending |
-| GITOP-02 | — | Pending |
-| GITOP-03 | — | Pending |
-| GITOP-04 | — | Pending |
-| GITOP-05 | — | Pending |
-| GITOP-06 | — | Pending |
-| STAGE-01 | — | Pending |
-| STAGE-02 | — | Pending |
-| STAGE-03 | — | Pending |
-| STAGE-04 | — | Pending |
-| STAGE-05 | — | Pending |
-| GRAPH-01 | — | Pending |
-| GRAPH-02 | — | Pending |
-| GRAPH-03 | — | Pending |
-| FIX-01 | — | Pending |
-| FIX-02 | — | Pending |
-| TOAST-01 | — | Pending |
-| LAYOUT-01 | — | Pending |
-| LAYOUT-02 | — | Pending |
+| ICON-01 | Phase 27 | Pending |
+| GITOP-01 | Phase 28 | Pending |
+| GITOP-02 | Phase 28 | Pending |
+| GITOP-03 | Phase 28 | Pending |
+| GITOP-04 | Phase 28 | Pending |
+| GITOP-05 | Phase 28 | Pending |
+| GITOP-06 | Phase 28 | Pending |
+| STAGE-01 | Phase 29 | Pending |
+| STAGE-02 | Phase 29 | Pending |
+| STAGE-03 | Phase 29 | Pending |
+| STAGE-04 | Phase 29 | Pending |
+| STAGE-05 | Phase 29 | Pending |
+| GRAPH-01 | Phase 30 | Pending |
+| GRAPH-02 | Phase 30 | Pending |
+| GRAPH-03 | Phase 30 | Pending |
+| FIX-01 | Phase 27 | Pending |
+| FIX-02 | Phase 27 | Pending |
+| TOAST-01 | Phase 27 | Pending |
+| LAYOUT-01 | Phase 30 | Pending |
+| LAYOUT-02 | Phase 31 | Pending |
 
 **Coverage:**
 - v0.6 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 — traceability updated with phase mappings*
