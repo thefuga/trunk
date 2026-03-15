@@ -206,12 +206,13 @@
           <button
             onclick={(e) => { e.stopPropagation(); handleDiscardAll(); }}
             style="
-              color: var(--color-text-muted);
+              background: #f87171;
+              color: white;
               font-size: 11px;
-              background: none;
               border: none;
+              border-radius: 4px;
               cursor: pointer;
-              padding: 0 4px;
+              padding: 2px 8px;
               white-space: nowrap;
             "
             aria-label="Discard all changes"
@@ -221,13 +222,15 @@
           <button
             onclick={(e) => { e.stopPropagation(); stageAll(); }}
             style="
-              color: var(--color-text-muted);
+              background: #22c55e;
+              color: white;
               font-size: 11px;
-              background: none;
               border: none;
+              border-radius: 4px;
               cursor: pointer;
-              padding: 0 4px;
+              padding: 2px 8px;
               white-space: nowrap;
+              margin-left: 4px;
             "
             aria-label="Stage all changes"
           >
@@ -289,12 +292,13 @@
           <button
             onclick={(e) => { e.stopPropagation(); unstageAll(); }}
             style="
-              color: var(--color-text-muted);
+              background: #f87171;
+              color: white;
               font-size: 11px;
-              background: none;
               border: none;
+              border-radius: 4px;
               cursor: pointer;
-              padding: 0 4px;
+              padding: 2px 8px;
               white-space: nowrap;
             "
             aria-label="Unstage all"

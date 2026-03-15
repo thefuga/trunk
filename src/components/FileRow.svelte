@@ -86,7 +86,7 @@
         background: none;
         border: none;
         cursor: pointer;
-        color: var(--color-accent);
+        color: {actionLabel === '+' ? '#22c55e' : '#f87171'};
         display: flex;
         align-items: center;
         padding: 0 4px;
