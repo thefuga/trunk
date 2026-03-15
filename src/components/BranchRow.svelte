@@ -11,6 +11,7 @@
     ahead?: number;
     behind?: number;
     onclick?: () => void;
+    oncontextmenu?: (e: MouseEvent) => void;
   }
 
   let {
@@ -23,6 +24,7 @@
     ahead = 0,
     behind = 0,
     onclick,
+    oncontextmenu,
   }: Props = $props();
 
   const kindIcon = { local: Laptop, remote: Globe, tag: Tag } as const;
@@ -37,6 +39,7 @@
     tabindex="0"
     onclick={() => onclick?.()}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onclick?.(); }}
+    oncontextmenu={(e) => { if (oncontextmenu) { e.preventDefault(); oncontextmenu(e); } }}
     onmouseenter={() => (hovered = true)}
     onmouseleave={() => (hovered = false)}
     style="

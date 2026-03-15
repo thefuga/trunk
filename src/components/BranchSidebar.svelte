@@ -5,6 +5,7 @@
   import BranchSection from './BranchSection.svelte';
   import BranchRow from './BranchRow.svelte';
   import RemoteGroup from './RemoteGroup.svelte';
+  import InputDialog from './InputDialog.svelte';
 
   interface Props {
     repoPath: string;
@@ -221,6 +222,105 @@
       stashEntryErrors = { ...stashEntryErrors, [index]: err.message ?? 'Failed to drop stash' };
     }
   }
+
+  // --- Branch/Tag context menu support ---
+
+  interface DialogConfig {
+    title: string;
+    fields: { key: string; label: string; placeholder?: string; required?: boolean; defaultValue?: string }[];
+    onsubmit: (values: Record<string, string>) => void;
+  }
+  let dialogConfig = $state<DialogConfig | null>(null);
+  function closeDialog() { dialogConfig = null; }
+
+  async function handleDeleteBranch(branchName: string) {
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await ask(
+      `Delete branch '${branchName}'? This cannot be undone.`,
+      { title: 'Delete Branch', kind: 'warning' }
+    );
+    if (!confirmed) return;
+    try {
+      await safeInvoke('delete_branch', { path: repoPath, branchName });
+      await loadRefs(repoPath);
+      onrefreshed?.();
+      showToast(`Deleted branch ${branchName}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Failed to delete branch', 'error');
+    }
+  }
+
+  function handleRenameBranch(branchName: string) {
+    dialogConfig = {
+      title: 'Rename Branch',
+      fields: [{ key: 'name', label: 'New name', required: true, defaultValue: branchName }],
+      onsubmit: async (values) => {
+        closeDialog();
+        const newName = values.name.trim();
+        if (!newName || newName === branchName) return;
+        try {
+          await safeInvoke('rename_branch', { path: repoPath, oldName: branchName, newName });
+          await loadRefs(repoPath);
+          onrefreshed?.();
+          showToast(`Renamed branch to ${newName}`, 'success');
+        } catch (e) {
+          const err = e as TrunkError;
+          showToast(err.message ?? 'Failed to rename branch', 'error');
+        }
+      },
+    };
+  }
+
+  async function handleDeleteTag(tagName: string) {
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await ask(
+      `Delete tag '${tagName}'? This cannot be undone.`,
+      { title: 'Delete Tag', kind: 'warning' }
+    );
+    if (!confirmed) return;
+    try {
+      await safeInvoke('delete_tag', { path: repoPath, tagName });
+      await loadRefs(repoPath);
+      onrefreshed?.();
+      showToast(`Deleted tag ${tagName}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Failed to delete tag', 'error');
+    }
+  }
+
+  async function showBranchContextMenu(e: MouseEvent, branchName: string, isHead: boolean) {
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({
+          text: 'Rename…',
+          action: () => { handleRenameBranch(branchName); },
+        }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
+        await MenuItem.new({
+          text: 'Delete',
+          enabled: !isHead,
+          action: () => { handleDeleteBranch(branchName).catch(() => {}); },
+        }),
+      ],
+    });
+    await menu.popup();
+  }
+
+  async function showTagContextMenu(e: MouseEvent, tagShortName: string) {
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({
+          text: 'Delete',
+          action: () => { handleDeleteTag(tagShortName).catch(() => {}); },
+        }),
+      ],
+    });
+    await menu.popup();
+  }
 </script>
 
 <aside style="
@@ -303,6 +403,7 @@
             ahead={branch.ahead}
             behind={branch.behind}
             onclick={() => handleCheckout(branch.name)}
+            oncontextmenu={(e) => showBranchContextMenu(e, branch.name, branch.is_head)}
           />
         {/each}
       </BranchSection>
@@ -338,7 +439,11 @@
         ontoggle={() => (tagsExpanded = !tagsExpanded)}
       >
         {#each filteredTags as tag (tag.name)}
-          <BranchRow name={tag.short_name} kind="tag" />
+          <BranchRow
+            name={tag.short_name}
+            kind="tag"
+            oncontextmenu={(e) => showTagContextMenu(e, tag.short_name)}
+          />
         {/each}
       </BranchSection>
     {/if}
@@ -390,6 +495,15 @@
       {/each}
     </BranchSection>
   </div>
+
+  {#if dialogConfig}
+    <InputDialog
+      title={dialogConfig.title}
+      fields={dialogConfig.fields}
+      onsubmit={dialogConfig.onsubmit}
+      oncancel={closeDialog}
+    />
+  {/if}
 </aside>
 
 <style>

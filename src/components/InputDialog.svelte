@@ -5,6 +5,7 @@
     placeholder?: string;
     multiline?: boolean;
     required?: boolean;
+    defaultValue?: string;
   }
 
   interface Props {
@@ -28,7 +29,7 @@
     const currentValues = untrack(() => values);
     const init: Record<string, string> = {};
     for (const field of currentFields) {
-      init[field.key] = currentValues[field.key] ?? '';
+      init[field.key] = currentValues[field.key] ?? field.defaultValue ?? '';
     }
     values = init;
   });
