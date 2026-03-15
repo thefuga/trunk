@@ -46,11 +46,6 @@ export function isRemoteOnlyRef(ref: RefLabel, allRefs: RefLabel[]): boolean {
   );
 }
 
-/** Whether a ref type should show an icon (Tag, Stash) */
-function hasIcon(refType: string): boolean {
-  return refType === 'Tag' || refType === 'Stash';
-}
-
 /** Estimate "+N" badge width based on character count */
 function estimateBadgeWidth(count: number): number {
   // "+N" text is small (BADGE_FONT_SIZE), estimate ~7px per char + padding
@@ -95,8 +90,8 @@ export function buildRefPillData(
     const primary = sorted[0];
     const overflowCount = sorted.length - 1;
 
-    // Compute icon width
-    const iconWidth = hasIcon(primary.ref_type) ? ICON_WIDTH : 0;
+    // All ref types include icon width (Laptop for local, Globe for remote, Tag for tag, Archive for stash)
+    const iconWidth = ICON_WIDTH;
 
     // Compute available text width
     const badgeWidth = overflowCount > 0 ? PILL_GAP + estimateBadgeWidth(overflowCount) : 0;

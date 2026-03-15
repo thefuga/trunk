@@ -118,8 +118,8 @@ describe('buildRefPillData', () => {
     expect(pill.x).toBe(PILL_MARGIN_LEFT);
     expect(pill.y).toBe(cy(0));
     expect(pill.height).toBe(PILL_HEIGHT);
-    // "main" = 4 chars * 7 = 28px text + PILL_PADDING_X*2 = 40px (no icon for branch)
-    expect(pill.width).toBe(28 + PILL_PADDING_X * 2);
+    // "main" = 4 chars * 7 = 28px text + PILL_PADDING_X*2 + ICON_WIDTH = 50px (icon included for all types)
+    expect(pill.width).toBe(28 + PILL_PADDING_X * 2 + ICON_WIDTH);
   });
 
   it('HEAD branch pill has isHead=true', () => {
@@ -209,13 +209,13 @@ describe('buildRefPillData', () => {
     expect(result[0].truncatedLabel).not.toBe('longbranchname');
   });
 
-  it('pill width = textWidth + PILL_PADDING_X*2 for branches (no icon)', () => {
+  it('pill width = textWidth + PILL_PADDING_X*2 + ICON_WIDTH for branches', () => {
     const ref = makeRef({ short_name: 'dev', is_head: true });
     const nodes = [makeNode({ x: 0, y: 0 })];
     const commits = [makeCommit({ refs: [ref] })];
     const result = buildRefPillData(nodes, commits, 200, mockMeasure);
-    // "dev" = 3*7 = 21px text
-    expect(result[0].width).toBe(21 + PILL_PADDING_X * 2);
+    // "dev" = 3*7 = 21px text + ICON_WIDTH for all ref types
+    expect(result[0].width).toBe(21 + PILL_PADDING_X * 2 + ICON_WIDTH);
   });
 
   it('pill width includes ICON_WIDTH for Tag refs', () => {
