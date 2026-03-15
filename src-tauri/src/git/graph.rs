@@ -1,7 +1,8 @@
 use crate::error::TrunkError;
 use crate::git::repository;
 use crate::git::types::{EdgeType, GraphCommit, GraphEdge, GraphResult};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Find a free column nearest to `target`, spiraling outward (±1, ±2, …).
 /// Inspired by gitamine's `insertCommit` proximity search — keeps branches
@@ -9,8 +10,14 @@ use std::collections::{HashMap, HashSet};
 /// globally-available slot.
 /// `min_col` prevents placement below a minimum column index (e.g., col 0
 /// is reserved for the HEAD chain).
+/// Lane slot: (occupant OID, dashed).
+/// The dashed flag is set by the commit that creates/takes over the lane:
+/// stash commits set true (their connection to parent is dashed),
+/// non-stash commits set false.
+type LaneSlot = Option<(git2::Oid, bool)>;
+
 fn find_free_column_near(
-    active_lanes: &mut Vec<Option<git2::Oid>>,
+    active_lanes: &mut Vec<LaneSlot>,
     target: usize,
     min_col: usize,
 ) -> usize {
@@ -129,9 +136,10 @@ pub fn walk_commits(
     let page_oids = oids[start..end].to_vec();
 
     // Step 4: Lane assignment — single pass over ALL oids for lane continuity
-    // active_lanes[col] = Some(oid) → col is tracking that oid's chain
+    // active_lanes[col] = Some((oid, dashed)) → col is tracking that oid's chain
+    // The dashed flag is set by the commit that creates/takes over the lane.
     // pending_parents[oid] = col → a child already reserved this column for oid
-    let mut active_lanes: Vec<Option<git2::Oid>> = Vec::new();
+    let mut active_lanes: Vec<LaneSlot> = Vec::new();
     let mut pending_parents: HashMap<git2::Oid, usize> = HashMap::new();
     // per_oid_data stores (column, edges, color_index, is_branch_tip, is_stash) for each processed commit
     let mut per_oid_data: HashMap<git2::Oid, (usize, Vec<GraphEdge>, usize, bool, bool)> =
@@ -143,15 +151,6 @@ pub fn walk_commits(
     // Branch color counter (Fix 4): deterministic per-branch color assignment
     let mut next_color: usize = 1; // 0 reserved for HEAD chain
     let mut lane_colors: HashMap<usize, usize> = HashMap::new();
-
-    // Stash lanes: columns that currently belong to a stash branch.
-    // Edges at these columns (pass-through, fork-in) are marked dashed.
-    let mut stash_lanes: HashSet<usize> = HashSet::new();
-
-    // Inline stash tracking: when a stash is placed inline (same column as its
-    // parent), we track the column and parent OID so pass-through edges at that
-    // column are marked dashed until the parent is processed.
-    let mut inline_stash_parent: Option<(usize, git2::Oid)> = None;
 
     // Pre-compute HEAD's first-parent chain and tip OID
     let mut head_chain: HashSet<git2::Oid> = HashSet::new();
@@ -181,13 +180,6 @@ pub fn walk_commits(
     }
 
     for &oid in &oids {
-        // Clear inline stash tracking when its parent is reached
-        if let Some((_, parent_oid)) = inline_stash_parent {
-            if oid == parent_oid {
-                inline_stash_parent = None;
-            }
-        }
-
         let commit = repo.find_commit(oid)?;
         let is_stash = stash_oid_set.contains(&oid);
         // Stash commits have 2-3 parents (base, index, untracked) but are NOT merges
@@ -224,11 +216,6 @@ pub fn walk_commits(
                 if c >= active_lanes.len() {
                     active_lanes.resize(c + 1, None);
                 }
-                // Inline: inherit parent's color, don't add to stash_lanes.
-                // Track for dashed pass-throughs on intermediate rows.
-                if let Some(pid) = parent_oid {
-                    inline_stash_parent = Some((c, pid));
-                }
                 c
             } else {
                 // Normal placement: find free column near parent's column.
@@ -237,10 +224,6 @@ pub fn walk_commits(
                 // New branch gets a new color
                 lane_colors.insert(c, next_color);
                 next_color += 1;
-                // Stash lanes: mark column so edges are dashed
-                if is_stash {
-                    stash_lanes.insert(c);
-                }
                 c
             }
         };
@@ -264,9 +247,8 @@ pub fn walk_commits(
         let mut fork_in_cols: Vec<usize> = Vec::new();
         for (other_col, slot) in active_lanes.iter().enumerate() {
             if other_col != col {
-                if let Some(&occupant) = slot.as_ref() {
-                    let is_dashed = stash_lanes.contains(&other_col)
-                        || inline_stash_parent.map_or(false, |(c, _)| c == other_col);
+                if let Some(&(occupant, lane_dashed)) = slot.as_ref() {
+                    let is_dashed = lane_dashed;
                     if occupant == oid {
                         // Fork-in: a child kept this lane alive pointing to us.
                         // Emit fork-out edge from our column to the branch column.
@@ -302,7 +284,6 @@ pub fn walk_commits(
         for &fc in &fork_in_cols {
             active_lanes[fc] = None;
             lane_colors.remove(&fc);
-            stash_lanes.remove(&fc);
         }
 
         // Phase 3: Consume this commit's slot (TERMINATE current occupant)
@@ -332,15 +313,15 @@ pub fn walk_commits(
                             to_column: col,
                             edge_type: EdgeType::Straight,
                             color_index: edge_color,
-                            dashed: stash_lanes.contains(&col) || is_stash,
+                            dashed: is_stash,
                         });
-                        active_lanes[col] = Some(parent_oid);
+                        active_lanes[col] = Some((parent_oid, is_stash));
                         col_reoccupied = true;
                     } else {
                         // Different column — keep lane alive so the PARENT emits the fork-out edge.
                         // This creates pass-through rails at this column on intermediate rows,
                         // giving the branch its own visible lane.
-                        active_lanes[col] = Some(parent_oid);
+                        active_lanes[col] = Some((parent_oid, is_stash));
                         col_reoccupied = true;
                         let edge_color = *lane_colors.get(&col).unwrap_or(&col);
                         edges.push(GraphEdge {
@@ -348,7 +329,7 @@ pub fn walk_commits(
                             to_column: col,
                             edge_type: EdgeType::Straight,
                             color_index: edge_color,
-                            dashed: stash_lanes.contains(&col) || is_stash,
+                            dashed: is_stash,
                         });
                     }
                 } else if is_stash && !base_oid_set.contains(&parent_oid) {
@@ -362,7 +343,7 @@ pub fn walk_commits(
                     if col >= active_lanes.len() {
                         active_lanes.resize(col + 1, None);
                     }
-                    active_lanes[col] = Some(parent_oid);
+                    active_lanes[col] = Some((parent_oid, is_stash));
                     pending_parents.insert(parent_oid, col);
                     col_reoccupied = true;
                     let edge_color = *lane_colors.get(&col).unwrap_or(&col);
@@ -371,7 +352,7 @@ pub fn walk_commits(
                         to_column: col,
                         edge_type: EdgeType::Straight,
                         color_index: edge_color,
-                        dashed: stash_lanes.contains(&col) || is_stash,
+                        dashed: is_stash,
                     });
                 }
             } else {
@@ -383,7 +364,7 @@ pub fn walk_commits(
                     let min_col = if !head_chain.is_empty() { 1 } else { 0 };
                     let target = col.max(min_col);
                     let c = find_free_column_near(&mut active_lanes, target, min_col);
-                    active_lanes[c] = Some(parent_oid);
+                    active_lanes[c] = Some((parent_oid, false));
                     pending_parents.insert(parent_oid, c);
                     // New secondary parent lane gets a new color
                     lane_colors.insert(c, next_color);
