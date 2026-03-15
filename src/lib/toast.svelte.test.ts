@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-// This import will fail (file doesn't exist yet) — RED is correct for Wave 0
-import { showToast, toasts } from './toast.svelte.js';
+import { showToast, toasts, _resetToasts } from './toast.svelte.js';
 
 describe('toast store', () => {
   beforeEach(() => {
+    _resetToasts();
     vi.useFakeTimers();
   });
 
