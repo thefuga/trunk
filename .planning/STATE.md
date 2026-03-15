@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
-status: executing
-stopped_at: Completed 28-01-PLAN.md
-last_updated: "2026-03-15T20:14:22Z"
-last_activity: 2026-03-15 - Completed 28-01 backend destructive operations
+status: completed
+stopped_at: Completed 28-03-PLAN.md
+last_updated: "2026-03-15T20:22:34.991Z"
+last_activity: 2026-03-15 - Completed 28-03 branch/tag frontend context menus
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 ## Current Position
 
 Phase: 28 — Destructive Operations
-Plan: 1 of 3 complete
-Status: Executing phase 28
-Last activity: 2026-03-15 - Completed 28-01 backend destructive operations
+Plan: 3 of 3 complete
+Status: Phase 28 complete
+Last activity: 2026-03-15 - Completed 28-03 branch/tag frontend context menus
 
 ```
 v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/5 phases
@@ -48,6 +48,8 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 | Phase 27-foundation-icons-toast-bug-fixes P05 | 3min | 1 tasks | 1 files |
 | Phase 27.1-add-icons-to-commit-graph-pills P01 | 2min | 2 tasks | 3 files |
 | Phase 28-destructive-operations P01 | 4min | 2 tasks | 4 files |
+| Phase 28-destructive-operations P02 | 2min | 1 tasks | 2 files |
+| Phase 28-destructive-operations P03 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -68,6 +70,9 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 - [Phase 28-destructive-operations]: discard_file uses git2 checkout for tracked files and std::fs::remove_file for untracked — no git CLI subprocess needed
 - [Phase 28-destructive-operations]: discard commands skip cache rebuild + repo-changed emit — FS watcher handles workdir change detection
 - [Phase 28-destructive-operations]: Branch/tag mutation commands rebuild graph cache before emitting repo-changed — matches existing create_branch/create_tag pattern
+- [Phase 28-destructive-operations]: oncontextmenu prop wired only on unstaged FileRow instances — discard only applies to unstaged changes
+- [Phase 28-destructive-operations]: InputDialog gains backward-compatible defaultValue field for pre-filling rename input
+- [Phase 28-destructive-operations]: Pill context menus wired on rect, icon g, and text span for full click coverage
 
 ### Roadmap Evolution
 
@@ -98,7 +103,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 
 ## Session Continuity
 
-Last session: 2026-03-15T20:14:22Z
-Stopped at: Completed 28-01-PLAN.md
+Last session: 2026-03-15T20:22:34.987Z
+Stopped at: Completed 28-03-PLAN.md
 Resume file: None
 Next action: Execute 28-02-PLAN.md

@@ -18,7 +18,7 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 - [x] **GITOP-03**: User can delete a local branch via right-click context menu with confirmation
 - [x] **GITOP-04**: User can delete a tag via right-click context menu with confirmation
 - [x] **GITOP-05**: User can rename a local branch via right-click context menu
-- [ ] **GITOP-06**: User can reset current branch to any commit (soft/mixed/hard) via context menu
+- [x] **GITOP-06**: User can reset current branch to any commit (soft/mixed/hard) via context menu
 
 ### Staging & Commit UX
 
@@ -100,7 +100,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GITOP-03 | Phase 28 | Complete |
 | GITOP-04 | Phase 28 | Complete |
 | GITOP-05 | Phase 28 | Complete |
-| GITOP-06 | Phase 28 | Pending |
+| GITOP-06 | Phase 28 | Complete |
 | STAGE-01 | Phase 29 | Pending |
 | STAGE-02 | Phase 29 | Pending |
 | STAGE-03 | Phase 29 | Pending |
