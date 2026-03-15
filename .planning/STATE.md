@@ -65,6 +65,7 @@ Last activity: 2026-03-15 — Milestone v0.6 started
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 9 | Revert commit graph row height to more packed style, keep lane width, increase commit dot radius by 2px | 2026-03-14 | 901f73a | [9-revert-commit-graph-row-height-to-more-p](./quick/9-revert-commit-graph-row-height-to-more-p/) |
+| 10 | Make the pill connector line thinner (1.5px → 1px) | 2026-03-15 | a2b7b95 | [10-make-the-pill-line-thinner](./quick/10-make-the-pill-line-thinner/) |
 
 ## Session Continuity
 
