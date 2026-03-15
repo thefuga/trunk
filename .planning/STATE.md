@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
-status: planning
-stopped_at: Phase 28 context gathered
-last_updated: "2026-03-15T19:38:54.987Z"
-last_activity: 2026-03-15 - v0.6 roadmap created (phases 27-31)
+status: executing
+stopped_at: Completed 28-01-PLAN.md
+last_updated: "2026-03-15T20:14:22Z"
+last_activity: 2026-03-15 - Completed 28-01 backend destructive operations
 progress:
   total_phases: 6
   completed_phases: 2
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 
 ## Current Position
 
-Phase: 27 — Foundation — Icons, Toast & Bug Fixes (not started)
-Plan: —
-Status: Roadmap complete, ready for phase planning
-Last activity: 2026-03-15 - v0.6 roadmap created (phases 27-31)
+Phase: 28 — Destructive Operations
+Plan: 1 of 3 complete
+Status: Executing phase 28
+Last activity: 2026-03-15 - Completed 28-01 backend destructive operations
 
 ```
 v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/5 phases
@@ -47,6 +47,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 | Phase 27-foundation-icons-toast-bug-fixes P01 | 8 min | 2 tasks | 2 files |
 | Phase 27-foundation-icons-toast-bug-fixes P05 | 3min | 1 tasks | 1 files |
 | Phase 27.1-add-icons-to-commit-graph-pills P01 | 2min | 2 tasks | 3 files |
+| Phase 28-destructive-operations P01 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 - [Phase 27-foundation-icons-toast-bug-fixes]: Wave 0 test scaffolds — tests written before implementation for TOAST-01 and FIX-01 — Verifies Nyquist compliance: RED tests exist before Wave 1 implementations
 - [Phase 27-foundation-icons-toast-bug-fixes]: Preserved startColumnResize('author', e, true) handler inside the guard — Handler resizes author column from message's right edge; must remain when author is visible
 - [Phase 27.1-add-icons-to-commit-graph-pills]: All ref types unconditionally use ICON_WIDTH — removes hasIcon() branching and makes pill widths uniform — Removes conditional branching (Tag/Stash only) in favor of uniform icon handling for all ref types
+- [Phase 28-destructive-operations]: discard_file uses git2 checkout for tracked files and std::fs::remove_file for untracked — no git CLI subprocess needed
+- [Phase 28-destructive-operations]: discard commands skip cache rebuild + repo-changed emit — FS watcher handles workdir change detection
+- [Phase 28-destructive-operations]: Branch/tag mutation commands rebuild graph cache before emitting repo-changed — matches existing create_branch/create_tag pattern
 
 ### Roadmap Evolution
 
@@ -94,7 +98,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:38:54.982Z
-Stopped at: Phase 28 context gathered
-Resume file: .planning/phases/28-destructive-operations/28-CONTEXT.md
-Next action: `/gsd-plan-phase 27`
+Last session: 2026-03-15T20:14:22Z
+Stopped at: Completed 28-01-PLAN.md
+Resume file: None
+Next action: Execute 28-02-PLAN.md

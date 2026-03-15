@@ -13,11 +13,11 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 
 ### Git Operations
 
-- [ ] **GITOP-01**: User can discard changes for an individual unstaged file with confirmation dialog
-- [ ] **GITOP-02**: User can discard all unstaged changes at once with confirmation dialog
-- [ ] **GITOP-03**: User can delete a local branch via right-click context menu with confirmation
-- [ ] **GITOP-04**: User can delete a tag via right-click context menu with confirmation
-- [ ] **GITOP-05**: User can rename a local branch via right-click context menu
+- [x] **GITOP-01**: User can discard changes for an individual unstaged file with confirmation dialog
+- [x] **GITOP-02**: User can discard all unstaged changes at once with confirmation dialog
+- [x] **GITOP-03**: User can delete a local branch via right-click context menu with confirmation
+- [x] **GITOP-04**: User can delete a tag via right-click context menu with confirmation
+- [x] **GITOP-05**: User can rename a local branch via right-click context menu
 - [ ] **GITOP-06**: User can reset current branch to any commit (soft/mixed/hard) via context menu
 
 ### Staging & Commit UX
@@ -95,11 +95,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ICON-01 | Phase 27 | Complete |
-| GITOP-01 | Phase 28 | Pending |
-| GITOP-02 | Phase 28 | Pending |
-| GITOP-03 | Phase 28 | Pending |
-| GITOP-04 | Phase 28 | Pending |
-| GITOP-05 | Phase 28 | Pending |
+| GITOP-01 | Phase 28 | Complete |
+| GITOP-02 | Phase 28 | Complete |
+| GITOP-03 | Phase 28 | Complete |
+| GITOP-04 | Phase 28 | Complete |
+| GITOP-05 | Phase 28 | Complete |
 | GITOP-06 | Phase 28 | Pending |
 | STAGE-01 | Phase 29 | Pending |
 | STAGE-02 | Phase 29 | Pending |
