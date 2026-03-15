@@ -79,7 +79,7 @@ Full details: [milestones/v0.5-ROADMAP.md](milestones/v0.5-ROADMAP.md)
 
 ### v0.6 UI Polish & Core Ops (Active)
 
-- [x] **Phase 27: Foundation — Icons, Toast & Bug Fixes** — Icon system, toast notifications, and critical bug fixes that unblock all subsequent phases (4 plans) (completed 2026-03-15)
+- [x] **Phase 27: Foundation — Icons, Toast & Bug Fixes** — Icon system, toast notifications, and critical bug fixes that unblock all subsequent phases (5 plans) (completed 2026-03-15)
 - [ ] **Phase 28: Destructive Operations** — Discard changes, branch/tag delete, branch rename, and reset — all with confirmation dialogs
 - [ ] **Phase 29: Staging & Commit UX** — Three-way commit/amend/stash selector, colored stage/unstage buttons, equal-height file lists
 - [ ] **Phase 30: Graph Polish & Navigation** — Graph padding, column overflow/shrink, sidebar ref navigation, and right pane auto-open
@@ -96,12 +96,13 @@ Full details: [milestones/v0.5-ROADMAP.md](milestones/v0.5-ROADMAP.md)
   2. Successful operations (e.g. stash created, branch checked out) and errors show a non-blocking toast notification that auto-dismisses
   3. Creating a new untracked file in the repo causes the WIP row to appear in the commit graph and the file to appear in the unstaged list
   4. The last visible column in the commit graph header renders without a trailing resize divider on its right edge
-**Plans**: 4 plans
+**Plans**: 5 plans
 Plans:
 - [ ] 27-01-PLAN.md — Wave 0: Failing test scaffolds for toast store and dirty-counts fix
 - [ ] 27-02-PLAN.md — Toast system: store, overlay component, wired into operations
 - [ ] 27-03-PLAN.md — Icon system: install @lucide/svelte, replace Unicode symbols in 7 components
 - [ ] 27-04-PLAN.md — Bug fixes: FIX-01 untracked files in dirty counts, FIX-02 last-column resize handle
+- [ ] 27-05-PLAN.md — Gap closure: guard message column resize handle with lastVisibleColumn check
 
 ### Phase 28: Destructive Operations
 **Goal**: Users can perform common destructive git operations (discard, delete, rename, reset) with clear confirmation safeguards
