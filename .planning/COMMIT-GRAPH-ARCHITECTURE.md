@@ -67,9 +67,7 @@ Returns `GraphResult { commits: Vec<GraphCommit>, max_columns: usize }`.
 | `pending_parents` | `HashMap<Oid, usize>` | `pending_parents[oid] = col` means a child already reserved column `col` for `oid`. When `oid` is processed in Phase 1, it reads this to get its column. |
 | `reserved_cols` | `HashSet<usize>` | Columns pre-reserved for stash parents. Prevents other commits from stealing these columns without creating ghost pass-through lines (we don't set `active_lanes` for reserved columns — the reservation is only in `pending_parents`). |
 | `lane_colors` | `HashMap<usize, usize>` | Maps column → color index. Set when a branch first enters a column, removed when the branch terminates. |
-| `stash_lanes` | `HashSet<usize>` | Columns currently belonging to a branched-right stash. Edges in these columns are marked `dashed: true`. |
-| `inline_stash_oids` | `HashSet<Oid>` | OIDs of stashes placed inline (at parent's column). |
-| `inline_stash_colors` | `HashMap<Oid, usize>` | Per-OID color for inline stashes (can't use `lane_colors` because that would overwrite the parent's color). |
+| `stash_lanes` | `HashSet<usize>` | Columns currently belonging to a stash. Edges in these columns are marked `dashed: true`. |
 | `next_color` | `usize` | Monotonically incrementing color counter. Color 0 is reserved for the HEAD chain. |
 
 ### HEAD chain pre-reservation (lines ~107-130)
@@ -91,34 +89,12 @@ first HEAD chain commit is actually processed and sets `active_lanes[0] = Some(.
 
 ```
 if pending_parents.contains(oid)  → use that col (HEAD chain, merge parents, etc.)
-else if is_stash                  → try inline, else branch right
-else                              → new branch, scan for free col
+else                              → new branch/stash, scan for free col
 ```
 
-**Stash inline check** (`can_inline`, lines ~192-195):
-```rust
-let can_inline = parent_col.map_or(false, |pc| {
-    pc < active_lanes.len() && active_lanes[pc].is_none() || pc >= active_lanes.len()
-});
-```
-**Bug**: This only checks `active_lanes`. It misses `pending_parents` reservations.
-The HEAD chain reserves column 0 via `pending_parents` but leaves `active_lanes[0] = None`,
-so `can_inline` returns `true` for any stash whose parent is a HEAD chain commit —
-even when column 0 is logically occupied by the HEAD chain passing through.
-
-**Correct check** should also verify: no other `pending_parents` entry (besides the
-stash's own parent) maps to `parent_col`.
-
-**Inline stash placement**:
-- Place at `parent_col`.
-- Allocate a new `next_color` stored in `inline_stash_colors[oid]` — NOT in `lane_colors[col]` (that would overwrite the parent's color).
-- Do NOT add to `stash_lanes` (that would dash all edges in the column globally).
-- Track via `inline_stash_oids`.
-
-**Branched-right stash placement** (original / fallback):
-- Scan from `parent_col + 1` for first free, unreserved column.
-- Set `lane_colors[c] = next_color`.
-- Add `c` to `stash_lanes`.
+**Stashes use the exact same codepath as regular branch tips.** They get a free column,
+a new color via `lane_colors`, and are marked in `stash_lanes` so their edges render
+dashed. No special inline/branch-right logic — stashes are just branches with dashed visuals.
 
 #### Phase 2: Pass-through and fork-in detection
 
@@ -138,28 +114,26 @@ Iterate `active_lanes`. For each `other_col != col`:
 
 For the first parent:
 - If `pending_parents[parent_oid] == col` (same column, already reserved):
-  - **Inline stash**: emit dashed Straight edge using `inline_stash_colors[oid]`.
-  - **Normal**: emit non-dashed Straight edge using `lane_colors[col]`.
+  - Emit Straight edge using `lane_colors[col]`, `dashed` if `stash_lanes.contains(col)`.
   - Set `active_lanes[col] = Some(parent_oid)`, `col_reoccupied = true`.
 - If `pending_parents[parent_oid] != col` (different column):
   - Keep lane alive: `active_lanes[col] = Some(parent_oid)`, `col_reoccupied = true`.
-  - Emit Straight edge at `col` (non-dashed unless `stash_lanes.contains(col)`).
+  - Emit Straight edge at `col` (dashed if `stash_lanes.contains(col)`).
   - The parent, when later processed, detects this as a fork-in and emits ForkRight.
 - If parent not in `pending_parents`:
-  - Claim it: `active_lanes[col] = Some(parent_oid)`, `pending_parents[parent_oid] = col`.
+  - **Orphan stash guard**: if `is_stash` and parent not in `base_oid_set`, lane ends
+    here (don't keep alive — parent will never be processed).
+  - Otherwise: claim it: `active_lanes[col] = Some(parent_oid)`, `pending_parents[parent_oid] = col`.
 
 **Stash-specific**: stashes only have one logical parent (index `0`). Parents 1+ are
 internal git stash bookkeeping (index tree, untracked tree) and are ignored.
-
-**Orphan stash**: if parent OID not in `base_oid_set`, don't keep lane alive — the
-parent will never be processed to emit a fork-in, which would create a ghost lane.
 
 ### `GraphCommit` output fields
 
 | Field | Meaning |
 |---|---|
 | `column` | Swimlane index (0 = leftmost) |
-| `color_index` | Color for the dot and its ref pill. Inline stashes use `inline_stash_colors[oid]`; all others use `lane_colors[col]`. |
+| `color_index` | Color for the dot and its ref pill. Always `lane_colors[col]`. |
 | `edges` | All edges visible at this commit's row (pass-throughs, fork-in/out, straight continuation) |
 | `is_branch_tip` | `active_lanes[col]` was `None` when this commit was assigned its column |
 | `is_stash` | From stash OID set |
@@ -286,55 +260,26 @@ A git stash creates a commit with **2–3 parents**:
 The graph intentionally ignores parents 1+ — they are internal bookkeeping, not
 part of the history DAG.
 
-### Stash rendering: branched-right (original, always-on behavior)
+### Stash rendering
+
+A stash is treated as a **regular branch tip** with dashed visuals. No special column
+assignment, no inline placement — it flows through the exact same algorithm as any
+other commit that's not in `pending_parents`.
 
 ```
-    ┊ □        ← stash col=1, dashed square (hollow)
-    ┊╱
-────●──        ← parent col=0, ForkRight edge → col=1
+    ┊ □        ← stash at own col, dashed hollow rect
+    ┊╱         ← dashed ForkRight connection
+────●──        ← parent col=0, ForkRight edge → stash col
     │
 ```
 
 Algorithm:
-1. Stash placed at `parent_col + 1`.
-2. `stash_lanes.insert(stash_col)` → all pass-throughs at that col are dashed.
-3. Stash Phase 4: `active_lanes[stash_col] = Some(parent_oid)`, emit dashed Straight.
-4. Parent Phase 2: detects fork-in at `stash_col`, emits `ForkRight`.
+1. Stash gets a free column via the standard branch-tip scan (same as any new branch).
+2. `stash_lanes.insert(stash_col)` → all edges at that col are marked `dashed: true`.
+3. Stash Phase 4: `active_lanes[stash_col] = Some(parent_oid)`, `pending_parents[parent_oid] = stash_col`, emit dashed Straight.
+   - **Orphan stash guard**: if parent not in `base_oid_set`, lane ends here (no Straight, no `pending_parents` claim).
+4. Parent Phase 2: detects fork-in at `stash_col`, emits dashed `ForkRight`.
 5. Parent Phase 2 cleanup: `active_lanes[stash_col] = None`, `lane_colors.remove`, `stash_lanes.remove`.
-
-### Stash rendering: inline (desired, conditional)
-
-```
-    □          ← stash col=0 (same as parent), dashed hollow rect
-    ┊
-────●──        ← parent col=0, straight (non-dashed) continuation
-    │
-```
-
-Conditions for inline:
-1. Parent OID is in the graph (not orphan stash).
-2. Parent's column lane is truly unoccupied — meaning neither `active_lanes[parent_col]`
-   is `Some(...)` NOR any other `pending_parents` entry maps to `parent_col`.
-
-Algorithm (when inline):
-1. Stash placed at `parent_col`.
-2. Stash color stored in `inline_stash_colors[oid]` (NOT in `lane_colors[parent_col]`).
-3. Do NOT add to `stash_lanes`.
-4. Stash Phase 4: parent is in `pending_parents[parent_oid] == col` (same col) →
-   emit dashed Straight with `inline_stash_colors[oid]` as color.
-5. Parent Phase 2: NO fork-in detected (lane was cleaned up by stash's Phase 3).
-6. Parent emits only its own Straight continuation edge, non-dashed.
-
-### Known bug in `can_inline` check (as of this writing)
-
-The check only tests `active_lanes[parent_col].is_none()`. This misses the HEAD chain
-scenario: HEAD chain commits are reserved via `pending_parents` but `active_lanes[0]`
-stays `None` until the first HEAD chain commit is actually processed. A stash on any
-HEAD chain parent incorrectly gets `can_inline = true` even though column 0 is
-logically occupied by the entire HEAD chain above it.
-
-**Fix**: `can_inline` must also verify that `pending_parents` has no other entry
-(besides the stash's own parent) pointing to `parent_col`.
 
 ---
 
@@ -344,10 +289,14 @@ The lane algorithm has deeply coupled state. Changing any one thing cascades:
 
 | If you change... | ...it affects |
 |---|---|
-| Column assignment for stash | `lane_colors` (don't overwrite parent's color), `stash_lanes` (don't mark parent col as stash globally), `pending_parents` (HEAD chain already reserved that col), `active_lanes` (occupancy check is misleading — see bug above) |
-| `stash_lanes` | Every pass-through edge at that column gets dashed — including the parent branch's normal continuation |
+| `stash_lanes` | Every pass-through edge at that column gets dashed |
 | `pending_parents` removal timing | Fork-in detection in Phase 2 depends on `active_lanes` holding the child's oid until the parent is processed |
 | `active_lanes` layout | `max_columns` high-water mark, `is_branch_tip` detection, fork-in scan all use this |
+
+**Design principle**: stashes use the same algorithm as regular branches. The ONLY
+stash-specific code is: (1) parent filtering (only first parent), (2) `stash_lanes`
+marking for dashed visuals, (3) orphan stash guard in Phase 4, (4) `is_stash` flag
+on output.
 
 **Rule**: Never post-process graph output. If the visual output is wrong, fix the
 algorithm that produces it.
@@ -368,9 +317,10 @@ cargo tauri dev    # then open a repo with stashes
 ```
 
 Key test cases to maintain:
-- `stash_inline_when_lane_unoccupied` — stash at `parent_col`, own color, dashed, no ForkRight on parent
-- `multiple_stashes_on_same_parent` — first stash inline, second branches right, exactly 1 ForkRight on parent
-- `stash_branches_right_when_lane_occupied` — stash at `parent_col + N`, ForkRight on parent
+- `stash_branches_right_like_regular_branch` — stash at own col, own color, dashed edges, ForkRight on parent
+- `multiple_stashes_on_same_parent` — both stashes branch right at own columns, 2 ForkRight on parent
+- `stash_branches_right_when_head_chain_occupies_lane` — mid-chain stash branches right, ForkRight on parent
+- `stash_branches_right_with_topic_branch` — stash on HEAD branches right even with other branches present
 - Orphan stash — standalone dot, no connector, no ghost lane
 - WIP + stash coexist — dashed WIP line splits around inline stash nodes
 
