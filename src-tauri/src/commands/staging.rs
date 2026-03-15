@@ -461,7 +461,70 @@ mod tests {
         assert!(status.staged.is_empty(), "expected staged to be empty after unstage_all");
     }
 
-    // Test 9 — get_dirty_counts_includes_untracked
+    // Test 9 — discard_file_reverts_tracked
+    #[test]
+    fn discard_file_reverts_tracked() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Remember original content
+        let original = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
+
+        // Modify README.md (tracked file)
+        std::fs::write(dir.path().join("README.md"), "modified content for discard test").unwrap();
+
+        // Discard the file
+        super::discard_file_inner(&path, "README.md", &state_map).expect("discard_file_inner failed");
+
+        // Verify content reverted to original
+        let after = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
+        assert_eq!(after, original, "expected README.md to revert to original content after discard");
+    }
+
+    // Test 10 — discard_file_deletes_untracked
+    #[test]
+    fn discard_file_deletes_untracked() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Create a brand new untracked file
+        std::fs::write(dir.path().join("brand_new.txt"), "untracked content").unwrap();
+
+        // Discard the file
+        super::discard_file_inner(&path, "brand_new.txt", &state_map).expect("discard_file_inner failed");
+
+        // Verify file no longer exists
+        assert!(!dir.path().join("brand_new.txt").exists(), "expected brand_new.txt to be deleted after discard");
+    }
+
+    // Test 11 — discard_all_reverts_everything
+    #[test]
+    fn discard_all_reverts_everything() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Remember original content
+        let original = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
+
+        // Modify tracked file + create untracked file
+        std::fs::write(dir.path().join("README.md"), "modified for discard_all").unwrap();
+        std::fs::write(dir.path().join("brand_new.txt"), "untracked for discard_all").unwrap();
+
+        // Discard all
+        super::discard_all_inner(&path, &state_map).expect("discard_all_inner failed");
+
+        // Verify tracked file reverted
+        let after = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
+        assert_eq!(after, original, "expected README.md to revert after discard_all");
+
+        // Verify untracked file deleted
+        assert!(!dir.path().join("brand_new.txt").exists(), "expected brand_new.txt deleted after discard_all");
+    }
+
+    // Test 12 — get_dirty_counts_includes_untracked
     #[test]
     fn get_dirty_counts_includes_untracked() {
         let dir = make_test_repo();
