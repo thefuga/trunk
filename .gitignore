@@ -9,6 +9,5 @@
 node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-.claude/*
-!.claude/rules/
+.claude/settings.local.json
 .vscode

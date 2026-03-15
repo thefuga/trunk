@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(gsd:execute-phase)",
+      "Bash(bun run:*)",
+      "Bash(git add src/App.svelte)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
