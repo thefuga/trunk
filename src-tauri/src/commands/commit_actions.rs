@@ -82,6 +82,25 @@ pub fn create_tag_inner(
     graph::walk_commits(&mut repo2, 0, usize::MAX).map_err(TrunkError::from)
 }
 
+pub fn delete_tag_inner(
+    path: &str,
+    tag_name: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<GraphResult, TrunkError> {
+    let repo = open_repo(path, state_map)?;
+    let tag_ref_name = format!("refs/tags/{}", tag_name);
+    let mut reference = repo.find_reference(&tag_ref_name)?;
+    reference.delete()?;
+    drop(reference);
+    drop(repo);
+
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let mut repo2 = git2::Repository::open(path_buf)?;
+    graph::walk_commits(&mut repo2, 0, usize::MAX).map_err(TrunkError::from)
+}
+
 pub fn cherry_pick_inner(
     path: &str,
     oid: &str,
@@ -229,6 +248,28 @@ pub async fn create_tag(
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
         create_tag_inner(&path_clone, &oid, &tag_name, &message, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_tag(
+    path: String,
+    tag_name: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let graph_result = tauri::async_runtime::spawn_blocking(move || {
+        delete_tag_inner(&path_clone, &tag_name, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?

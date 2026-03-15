@@ -158,6 +158,65 @@ pub fn list_refs_inner(
     })
 }
 
+/// Delete a local branch. Rejects deletion of the currently checked-out (HEAD) branch.
+pub fn delete_branch_inner(
+    path: &str,
+    branch_name: &str,
+    state_map: &HashMap<String, PathBuf>,
+    cache_map: &mut HashMap<String, GraphResult>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+
+    // Check if this is the HEAD branch
+    let head_name = repo.head().ok().and_then(|h| h.shorthand().map(str::to_owned));
+    if head_name.as_deref() == Some(branch_name) {
+        return Err(TrunkError::new(
+            "cannot_delete_head",
+            "Cannot delete the currently checked-out branch",
+        ));
+    }
+
+    let mut branch = repo.find_branch(branch_name, BranchType::Local)?;
+    branch.delete()?;
+    drop(branch);
+    drop(repo);
+
+    // Rebuild graph cache
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let mut repo2 = git2::Repository::open(path_buf)?;
+    let graph_result = graph::walk_commits(&mut repo2, 0, usize::MAX)?;
+    cache_map.insert(path.to_owned(), graph_result);
+
+    Ok(())
+}
+
+/// Rename a local branch. Fails if `new_name` already exists.
+pub fn rename_branch_inner(
+    path: &str,
+    old_name: &str,
+    new_name: &str,
+    state_map: &HashMap<String, PathBuf>,
+    cache_map: &mut HashMap<String, GraphResult>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    let mut branch = repo.find_branch(old_name, BranchType::Local)?;
+    branch.rename(new_name, false)?; // false = no force (fail if new_name exists)
+    drop(branch);
+    drop(repo);
+
+    // Rebuild graph cache
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let mut repo2 = git2::Repository::open(path_buf)?;
+    let graph_result = graph::walk_commits(&mut repo2, 0, usize::MAX)?;
+    cache_map.insert(path.to_owned(), graph_result);
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn list_refs(
     path: String,
@@ -316,6 +375,55 @@ pub async fn create_branch(
 
     let _ = app.emit("repo-changed", path);
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_branch(
+    path: String,
+    branch_name: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let mut cache_map = cache.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        delete_branch_inner(&path_clone, &branch_name, &state_map, &mut cache_map)
+            .map(|_| cache_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    *cache.0.lock().unwrap() = result;
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rename_branch(
+    path: String,
+    old_name: String,
+    new_name: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let mut cache_map = cache.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        rename_branch_inner(&path_clone, &old_name, &new_name, &state_map, &mut cache_map)
+            .map(|_| cache_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    *cache.0.lock().unwrap() = result;
+    let _ = app.emit("repo-changed", path);
     Ok(())
 }
 
