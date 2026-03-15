@@ -38,6 +38,7 @@
     <div style="padding-left: 12px; overflow: hidden;">
       <BranchRow
         name={branch}
+        kind="remote"
         isLoading={checkingOut === remoteName + '/' + branch}
         isError={errorBranch === remoteName + '/' + branch}
         {errorText}

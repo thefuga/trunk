@@ -295,6 +295,7 @@
         {#each filteredLocal as branch (branch.name)}
           <BranchRow
             name={branch.name}
+            kind="local"
             isHead={branch.is_head}
             isLoading={checkingOutBranch === branch.name}
             isError={checkoutError?.branch === branch.name}
@@ -337,7 +338,7 @@
         ontoggle={() => (tagsExpanded = !tagsExpanded)}
       >
         {#each filteredTags as tag (tag.name)}
-          <BranchRow name={tag.short_name} />
+          <BranchRow name={tag.short_name} kind="tag" />
         {/each}
       </BranchSection>
     {/if}

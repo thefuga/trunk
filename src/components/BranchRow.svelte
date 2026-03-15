@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp } from '@lucide/svelte';
+  import { ArrowDown, ArrowUp, Laptop, Globe, Tag } from '@lucide/svelte';
 
   interface Props {
     name: string;
+    kind?: 'local' | 'remote' | 'tag';
     isHead?: boolean;
     isLoading?: boolean;
     isError?: boolean;
@@ -14,6 +15,7 @@
 
   let {
     name,
+    kind = 'local',
     isHead = false,
     isLoading = false,
     isError = false,
@@ -22,6 +24,9 @@
     behind = 0,
     onclick,
   }: Props = $props();
+
+  const kindIcon = { local: Laptop, remote: Globe, tag: Tag } as const;
+  const KindIcon = $derived(kindIcon[kind]);
 
   let hovered = $state(false);
 </script>
@@ -47,6 +52,9 @@
       font-size: 13px;
     "
   >
+    <span style="flex-shrink: 0; display: inline-flex; align-items: center; margin-right: 6px; color: var(--color-text-muted);">
+      <KindIcon size={12} />
+    </span>
     <span style="
       display: block;
       overflow: hidden;
