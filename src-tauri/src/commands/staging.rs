@@ -183,7 +183,11 @@ fn get_dirty_counts_inner(
     state_map: &std::collections::HashMap<String, std::path::PathBuf>,
 ) -> Result<DirtyCounts, TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
-    let statuses = repo.statuses(None).map_err(TrunkError::from)?;
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .include_ignored(false)
+        .recurse_untracked_dirs(true);
+    let statuses = repo.statuses(Some(&mut opts)).map_err(TrunkError::from)?;
     let mut staged = 0usize;
     let mut unstaged = 0usize;
     let mut conflicted = 0usize;
@@ -199,7 +203,8 @@ fn get_dirty_counts_inner(
             staged += 1;
         }
         if s.intersects(
-            Status::WT_MODIFIED
+            Status::WT_NEW
+                | Status::WT_MODIFIED
                 | Status::WT_DELETED
                 | Status::WT_RENAMED
                 | Status::WT_TYPECHANGE,
@@ -455,26 +460,6 @@ mod tests {
 
         assert!(status.staged.is_empty(), "expected staged to be empty after unstage_all");
     }
-
-    // Test 9 — get_dirty_counts_includes_untracked
-    #[test]
-    fn get_dirty_counts_includes_untracked() {
-        let dir = make_test_repo();
-        let path = dir.path().to_string_lossy().to_string();
-        let state_map = make_state_map(dir.path());
-
-        // Create a brand new file (never tracked)
-        std::fs::write(dir.path().join("untracked_new.txt"), "brand new").unwrap();
-
-        let counts = super::get_dirty_counts_inner(&path, &state_map).expect("get_dirty_counts_inner failed");
-
-        assert!(
-            counts.unstaged >= 1,
-            "expected unstaged >= 1 for untracked file, got {}",
-            counts.unstaged
-        );
-    }
-}
 
     // Test 9 — get_dirty_counts_includes_untracked
     #[test]
