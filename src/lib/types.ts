@@ -137,6 +137,7 @@ export interface GraphDisplaySettings {
   dotRadius: number;   // px radius of commit dots
   edgeStroke: number;  // px stroke width for rails / connections
   mergeStroke: number; // px stroke width for merge-commit circles
+  pillStroke: number;  // px stroke width for ref-pill connector lines
 }
 
 // Overlay types — global grid coordinate system for SVG overlay (Phase 20+)

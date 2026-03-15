@@ -5,6 +5,7 @@ export const ROW_HEIGHT = 26;
 export const DOT_RADIUS = 6;
 export const EDGE_STROKE = 1.5;
 export const MERGE_STROKE = 2;
+export const PILL_STROKE = 1;
 
 /** Default graph display settings. Pass to buildOverlayPaths / buildRefPillData.
  *  When a settings page is added, load user prefs and spread over these defaults. */
@@ -14,6 +15,7 @@ export const DEFAULT_GRAPH_SETTINGS: GraphDisplaySettings = {
   dotRadius: DOT_RADIUS,
   edgeStroke: EDGE_STROKE,
   mergeStroke: MERGE_STROKE,
+  pillStroke: PILL_STROKE,
 };
 
 // Ref pill constants

@@ -589,7 +589,7 @@
                     x2={refOffset + pill.dotCx}
                     y2={pill.dotCy}
                     stroke={laneColor(pill.commitColorIndex)}
-                    stroke-width={1}
+                    stroke-width={displaySettings.pillStroke}
                     opacity={pill.isRemoteOnly ? 0.67 : 1}
                     style={pill.isNonHead && !pill.isRemoteOnly ? 'filter: brightness(0.75)' : ''}
                   />
