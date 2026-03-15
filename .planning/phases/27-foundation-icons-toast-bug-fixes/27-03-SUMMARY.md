@@ -120,6 +120,13 @@ None - no external service configuration required.
 - Consistent icon vocabulary established across all UI components
 - Ready for remaining Phase 27 plans (toast system, bug fixes)
 
+## Self-Check: PASSED
+
+- ✅ SUMMARY.md exists at `.planning/phases/27-foundation-icons-toast-bug-fixes/27-03-SUMMARY.md`
+- ✅ Commit `be21a3c` exists (Task 1: install + Toolbar/PullDropdown)
+- ✅ Commit `9eefb07` exists (Task 2: FileRow/StagingPanel/BranchSection/BranchRow/TabBar)
+- ✅ Commit `c8aacc4` exists (docs: plan metadata)
+
 ---
 *Phase: 27-foundation-icons-toast-bug-fixes*
 *Completed: 2026-03-15*

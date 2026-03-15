@@ -36,8 +36,8 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 
 ### Bug Fixes
 
-- [ ] **FIX-01**: New untracked files included in dirty counts and trigger WIP row in graph
-- [ ] **FIX-02**: Last visible column header does not render a trailing resize divider
+- [x] **FIX-01**: New untracked files included in dirty counts and trigger WIP row in graph
+- [x] **FIX-02**: Last visible column header does not render a trailing resize divider
 
 ### Toast System
 
@@ -109,8 +109,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRAPH-01 | Phase 30 | Pending |
 | GRAPH-02 | Phase 30 | Pending |
 | GRAPH-03 | Phase 30 | Pending |
-| FIX-01 | Phase 27 | Pending |
-| FIX-02 | Phase 27 | Pending |
+| FIX-01 | Phase 27 | Complete |
+| FIX-02 | Phase 27 | Complete |
 | TOAST-01 | Phase 27 | Pending |
 | LAYOUT-01 | Phase 30 | Pending |
 | LAYOUT-02 | Phase 31 | Pending |
