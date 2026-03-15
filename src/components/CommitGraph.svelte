@@ -18,6 +18,7 @@
   import { ask, message } from '@tauri-apps/plugin-dialog';
   import CommitRow from './CommitRow.svelte';
   import InputDialog from './InputDialog.svelte';
+  import { Laptop, Globe, Tag, Archive } from '@lucide/svelte';
 
   interface Props {
     repoPath: string;
@@ -33,6 +34,14 @@
 
   const BATCH = 200;
   const SKELETON_COUNT = 10;
+
+  /** Icon map for commit graph pills — matches sidebar BranchRow icon vocabulary */
+  const PILL_ICONS: Record<string, typeof Laptop> = {
+    LocalBranch: Laptop,
+    RemoteBranch: Globe,
+    Tag: Tag,
+    Stash: Archive,
+  };
 
   // Graph display settings — will be wired to user preferences in a future settings page.
   // Change values here (or load from store) to adjust layout without touching any other file.
@@ -635,45 +644,33 @@
                   onmouseleave={pillMouseLeave}
                 />
 
-                <!-- SVG icon for Tag -->
-                {#if pill.refType === 'Tag'}
-                  <path
-                    d="M {pill.x + PILL_PADDING_X} {pill.y} l 4 -4 l 4 4 l -4 4 z"
-                    fill="white"
-                    opacity="0.9"
-                  />
-                {/if}
-
-                <!-- SVG icon for Stash -->
-                {#if pill.refType === 'Stash'}
-                  <path
-                    d="M {pill.x + PILL_PADDING_X} {pill.y + 4} v -8 h 5 v 4 h -5"
-                    fill="none"
-                    stroke="white"
-                    stroke-width="1.2"
-                    opacity="0.9"
-                  />
-                {/if}
-
-                <!-- Pill text (foreignObject for crisp HTML text rendering) -->
+                <!-- Pill icon + text (foreignObject for crisp HTML text rendering) -->
                 <foreignObject
-                  x={pill.x + PILL_PADDING_X + (pill.refType === 'Tag' || pill.refType === 'Stash' ? ICON_WIDTH : 0)}
+                  x={pill.x + PILL_PADDING_X}
                   y={pill.y - PILL_HEIGHT / 2}
-                  width={pill.width - PILL_PADDING_X * 2 - (pill.refType === 'Tag' || pill.refType === 'Stash' ? ICON_WIDTH : 0)}
+                  width={pill.width - PILL_PADDING_X * 2}
                   height={PILL_HEIGHT}
                 >
                   <span
                     style="
+                      display: flex;
+                      align-items: center;
+                      gap: 2px;
+                      height: {PILL_HEIGHT}px;
                       color: white;
                       font-size: {PILL_FONT_SIZE}px;
                       font-family: var(--font-sans);
                       font-weight: {pill.isHead ? 700 : 500};
-                      line-height: {PILL_HEIGHT}px;
-                      display: block;
                       overflow: hidden;
                       white-space: nowrap;
                     "
-                  >{pill.truncatedLabel}</span>
+                  >
+                    {#if PILL_ICONS[pill.refType]}
+                      {@const PillIcon = PILL_ICONS[pill.refType]}
+                      <PillIcon size={ICON_WIDTH} style="flex-shrink: 0; opacity: 0.9;" />
+                    {/if}
+                    <span style="overflow: hidden; text-overflow: ellipsis;">{pill.truncatedLabel}</span>
+                  </span>
                 </foreignObject>
 
                 <!-- Overflow +N badge -->
@@ -736,7 +733,11 @@
               onmouseleave={overlayMouseLeave}
             >
               {#each hoveredPill.allRefs as ref}
-                <div class="text-[11px] leading-5 font-medium text-white whitespace-nowrap">
+                <div style="display: flex; align-items: center; gap: 3px;" class="text-[11px] leading-5 font-medium text-white whitespace-nowrap">
+                  {#if PILL_ICONS[ref.ref_type]}
+                    {@const RefIcon = PILL_ICONS[ref.ref_type]}
+                    <RefIcon size={10} style="flex-shrink: 0; opacity: 0.85;" />
+                  {/if}
                   {ref.short_name}
                 </div>
               {/each}
@@ -761,7 +762,11 @@
               onmouseenter={overlayMouseEnter}
               onmouseleave={overlayMouseLeave}
             >
-              <span class="text-[11px] font-medium text-white whitespace-nowrap" style="font-weight: {hoveredPill.isHead ? 700 : 500};">
+              <span style="display: flex; align-items: center; gap: 2px; font-weight: {hoveredPill.isHead ? 700 : 500};" class="text-[11px] font-medium text-white whitespace-nowrap">
+                {#if PILL_ICONS[hoveredPill.refType]}
+                  {@const HoverIcon = PILL_ICONS[hoveredPill.refType]}
+                  <HoverIcon size={10} style="flex-shrink: 0; opacity: 0.9;" />
+                {/if}
                 {hoveredPill.label}
               </span>
             </div>
