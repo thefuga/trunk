@@ -104,6 +104,16 @@ Plans:
 - [ ] 27-04-PLAN.md — Bug fixes: FIX-01 untracked files in dirty counts, FIX-02 last-column resize handle
 - [ ] 27-05-PLAN.md — Gap closure: guard message column resize handle with lastVisibleColumn check
 
+### Phase 27.1: Add icons to commit graph pills (INSERTED)
+
+**Goal:** All four ref pill types (local branch, remote branch, tag, stash) in the commit graph SVG overlay display Lucide icons matching their sidebar/toolbar counterparts, replacing hand-drawn SVG path icons
+**Requirements**: PILL-ICON-01
+**Depends on:** Phase 27
+**Plans:** 1 plan
+
+Plans:
+- [ ] 27.1-01-PLAN.md — Add Lucide icons to all pill types, remove hand-drawn SVG paths
+
 ### Phase 28: Destructive Operations
 **Goal**: Users can perform common destructive git operations (discard, delete, rename, reset) with clear confirmation safeguards
 **Depends on**: Phase 27 (icons for buttons/menus, toast for operation feedback)
