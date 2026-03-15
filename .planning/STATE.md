@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
 status: completed
-stopped_at: Completed 28-03-PLAN.md
-last_updated: "2026-03-15T20:26:43.275Z"
-last_activity: 2026-03-15 - Completed 28-03 branch/tag frontend context menus
+stopped_at: Completed 28-04-PLAN.md
+last_updated: "2026-03-15T21:44:14.184Z"
+last_activity: 2026-03-15 - Completed 28-04 overflow pill context menus
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 ## Current Position
 
 Phase: 28 — Destructive Operations
-Plan: 3 of 3 complete
+Plan: 4 of 4 complete
 Status: Phase 28 complete
-Last activity: 2026-03-15 - Completed 28-03 branch/tag frontend context menus
+Last activity: 2026-03-15 - Completed 28-04 overflow pill context menus
 
 ```
 v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/5 phases
@@ -50,6 +50,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 | Phase 28-destructive-operations P01 | 4min | 2 tasks | 4 files |
 | Phase 28-destructive-operations P02 | 2min | 1 tasks | 2 files |
 | Phase 28-destructive-operations P03 | 3min | 2 tasks | 4 files |
+| Phase 28-destructive-operations P04 | 1min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 - [Phase 28-destructive-operations]: oncontextmenu prop wired only on unstaged FileRow instances — discard only applies to unstaged changes
 - [Phase 28-destructive-operations]: InputDialog gains backward-compatible defaultValue field for pre-filling rename input
 - [Phase 28-destructive-operations]: Pill context menus wired on rect, icon g, and text span for full click coverage
+- [Phase 28-destructive-operations]: showOverflowRefContextMenu as separate function from showPillContextMenu — uses RefLabel fields instead of OverlayRefPill to avoid union type refactor
 
 ### Roadmap Evolution
 
@@ -103,7 +105,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 
 ## Session Continuity
 
-Last session: 2026-03-15T20:22:34.987Z
-Stopped at: Completed 28-03-PLAN.md
+Last session: 2026-03-15T21:44:14.181Z
+Stopped at: Completed 28-04-PLAN.md
 Resume file: None
 Next action: Execute 28-02-PLAN.md
