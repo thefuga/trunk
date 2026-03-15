@@ -1,16 +1,23 @@
 ---
 phase: 28-destructive-operations
-verified: 2026-03-15T20:30:00Z
+verified: 2026-03-15T22:05:00Z
 status: passed
 score: 6/6 success criteria verified
+re_verification:
+  previous_status: passed
+  previous_score: 6/6
+  gaps_closed:
+    - "Overflow expansion ref items in CommitGraph.svelte now have context menus (showOverflowRefContextMenu)"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 28: Destructive Operations Verification Report
 
 **Phase Goal:** Users can perform common destructive git operations (discard, delete, rename, reset) with clear confirmation safeguards
-**Verified:** 2026-03-15T20:30:00Z
+**Verified:** 2026-03-15T22:05:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure (plan 28-04: overflow pill context menus)
 
 ## Goal Achievement
 
@@ -27,6 +34,15 @@ score: 6/6 success criteria verified
 
 **Score:** 6/6 truths verified
 
+### Gap Closure Verification (Plan 28-04)
+
+| # | Must-Have (from 28-04 PLAN) | Status | Evidence |
+|---|---------------------------|--------|----------|
+| 1 | Right-clicking a branch name in the overflow expansion pill shows Rename + Delete context menu | ✓ VERIFIED | `showOverflowRefContextMenu` at line 399 handles `ref.ref_type === 'LocalBranch'` with `Rename…` (line 407) and `Delete` (line 412) menu items. Calls `handleRenameBranch(ref.short_name)` and `handleDeleteBranch(ref.short_name)`. |
+| 2 | Right-clicking a tag name in the overflow expansion pill shows Delete context menu | ✓ VERIFIED | Same function handles `ref.ref_type === 'Tag'` at line 419 with `Delete` menu item calling `handleDeleteTag(ref.short_name)` at line 424. |
+| 3 | HEAD branch shows Delete disabled in overflow context menu (same as single pill) | ✓ VERIFIED | Line 413: `enabled: !ref.is_head` — mirrors single pill pattern at line 380 (`enabled: !pill.isHead`). |
+| 4 | Cursor changes to context-menu on hover over overflow ref items | ✓ VERIFIED | Line 859: `style="display: flex; align-items: center; gap: 3px; cursor: context-menu; border-radius: 4px;"` plus `class="... hover:bg-white/15 px-1 -mx-1"` for visual affordance. |
+
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
@@ -39,7 +55,7 @@ score: 6/6 success criteria verified
 | `src/components/StagingPanel.svelte` | Discard context menu, Discard All button, confirmation dialogs | ✓ VERIFIED | `handleDiscardFile` (line 72), `showFileContextMenu` (line 90), `handleDiscardAll` (line 104), "Discard All" button (line 219), `safeInvoke('discard_file')` (line 81), `safeInvoke('discard_all')` (line 114). Differentiated warnings: "Delete File" vs "Discard Changes" (line 78). |
 | `src/components/BranchRow.svelte` | oncontextmenu prop | ✓ VERIFIED | `oncontextmenu?: (e: MouseEvent) => void` in Props (line 14), destructured (line 27), wired on outer div (line 42). |
 | `src/components/BranchSidebar.svelte` | Branch/tag context menus, InputDialog | ✓ VERIFIED | `handleDeleteBranch` (line 236), `handleRenameBranch` (line 254), `handleDeleteTag` (line 275), `showBranchContextMenu` (line 293), `showTagContextMenu` (line 312). `enabled: !isHead` (line 304). InputDialog rendered (lines 499-506). oncontextmenu on local BranchRow (line 406) and tag BranchRow (line 445). |
-| `src/components/CommitGraph.svelte` | Pill context menus for branch/tag delete/rename | ✓ VERIFIED | `showPillContextMenu` (line 366), `handleDeleteBranch` (line 317), `handleRenameBranch` (line 332), `handleDeleteTag` (line 351). `enabled: !pill.isHead` (line 380). oncontextmenu on pill rect (line 730), icon g (line 736), text span (line 761). |
+| `src/components/CommitGraph.svelte` | Pill context menus for branch/tag delete/rename + overflow expansion context menus | ✓ VERIFIED | `showPillContextMenu` (line 366), `showOverflowRefContextMenu` (line 399), `handleDeleteBranch` (line 317), `handleRenameBranch` (line 332), `handleDeleteTag` (line 351). Single pills: oncontextmenu on rect (line 763), icon g (line 769), text span (line 794). Overflow refs: oncontextmenu on each ref div (line 861). |
 | `src/components/InputDialog.svelte` | defaultValue support | ✓ VERIFIED | `defaultValue?: string` in Field interface (line 8), used in $effect initialization (line 32). |
 
 ### Key Link Verification
@@ -52,7 +68,8 @@ score: 6/6 success criteria verified
 | BranchSidebar.svelte | delete_branch IPC | `safeInvoke('delete_branch', { path, branchName })` | ✓ WIRED | Line 244: `await safeInvoke('delete_branch', { path: repoPath, branchName })` — calls IPC, refreshes refs + shows toast. |
 | BranchSidebar.svelte | rename_branch IPC | `safeInvoke('rename_branch', { path, oldName, newName })` | ✓ WIRED | Line 263: `await safeInvoke('rename_branch', { path: repoPath, oldName: branchName, newName })` — calls IPC, refreshes refs + shows toast. |
 | BranchSidebar.svelte | delete_tag IPC | `safeInvoke('delete_tag', { path, tagName })` | ✓ WIRED | Line 283: `await safeInvoke('delete_tag', { path: repoPath, tagName })` — calls IPC, refreshes refs + shows toast. |
-| CommitGraph.svelte | Pill context menu | oncontextmenu → showPillContextMenu | ✓ WIRED | Line 730 (rect), 736 (icon g), 761 (text span): all invoke `showPillContextMenu(e, pill)` which dispatches by refType to delete/rename handlers. |
+| CommitGraph.svelte | Pill context menu | oncontextmenu → showPillContextMenu | ✓ WIRED | Line 763 (rect), 769 (icon g), 794 (text span): all invoke `showPillContextMenu(e, pill)` which dispatches by refType to delete/rename handlers. |
+| CommitGraph.svelte (overflow) | Overflow ref context menu | oncontextmenu → showOverflowRefContextMenu | ✓ WIRED | Line 861: `oncontextmenu={(e) => showOverflowRefContextMenu(e, ref)}` inside `{#each hoveredPill.allRefs as ref}` block. Function at line 399 dispatches to `handleRenameBranch`/`handleDeleteBranch`/`handleDeleteTag` based on `ref.ref_type`. |
 | staging.rs | git2 Repository | open_repo_from_state + checkout/remove | ✓ WIRED | `discard_file_inner` opens repo (line 139), checks status (line 146), uses `checkout_head` for tracked (line 169) or `fs::remove_file` for untracked (line 160). |
 | branches.rs | git2 Branch API | find_branch + delete/rename | ✓ WIRED | `delete_branch_inner` calls `repo.find_branch()` (line 179) then `branch.delete()` (line 180). `rename_branch_inner` calls `branch.rename()` (line 205). Both rebuild graph cache. |
 
@@ -62,9 +79,9 @@ score: 6/6 success criteria verified
 |-------------|------------|-------------|--------|----------|
 | GITOP-01 | 28-01, 28-02 | User can discard changes for an individual unstaged file with confirmation dialog | ✓ SATISFIED | Backend: `discard_file_inner` in staging.rs (tested). Frontend: context menu on unstaged FileRow → `handleDiscardFile` with `ask()` confirmation → `safeInvoke('discard_file')`. |
 | GITOP-02 | 28-01, 28-02 | User can discard all unstaged changes at once with confirmation dialog | ✓ SATISFIED | Backend: `discard_all_inner` in staging.rs (tested). Frontend: "Discard All" button in unstaged header → `handleDiscardAll` with count-based `ask()` → `safeInvoke('discard_all')`. |
-| GITOP-03 | 28-01, 28-03 | User can delete a local branch via right-click context menu with confirmation | ✓ SATISFIED | Backend: `delete_branch_inner` with HEAD protection (tested). Frontend: sidebar `showBranchContextMenu` + graph `showPillContextMenu` both show Delete (disabled for HEAD) with `ask()` confirmation. |
-| GITOP-04 | 28-01, 28-03 | User can delete a tag via right-click context menu with confirmation | ✓ SATISFIED | Backend: `delete_tag_inner` in commit_actions.rs (tested). Frontend: sidebar `showTagContextMenu` + graph pill menu for Tags, both with `ask()` confirmation. |
-| GITOP-05 | 28-01, 28-03 | User can rename a local branch via right-click context menu | ✓ SATISFIED | Backend: `rename_branch_inner` in branches.rs (tested). Frontend: sidebar + graph pill menus show "Rename…" → opens InputDialog with defaultValue pre-fill → `safeInvoke('rename_branch')`. |
+| GITOP-03 | 28-01, 28-03, 28-04 | User can delete a local branch via right-click context menu with confirmation | ✓ SATISFIED | Backend: `delete_branch_inner` with HEAD protection (tested). Frontend: sidebar `showBranchContextMenu` + graph `showPillContextMenu` + overflow `showOverflowRefContextMenu` all show Delete (disabled for HEAD) with `ask()` confirmation. |
+| GITOP-04 | 28-01, 28-03, 28-04 | User can delete a tag via right-click context menu with confirmation | ✓ SATISFIED | Backend: `delete_tag_inner` in commit_actions.rs (tested). Frontend: sidebar `showTagContextMenu` + graph pill menu + overflow ref menu for Tags, all with `ask()` confirmation. |
+| GITOP-05 | 28-01, 28-03, 28-04 | User can rename a local branch via right-click context menu | ✓ SATISFIED | Backend: `rename_branch_inner` in branches.rs (tested). Frontend: sidebar + graph pill + overflow ref menus show "Rename…" → opens InputDialog with defaultValue pre-fill → `safeInvoke('rename_branch')`. |
 | GITOP-06 | 28-03 (pre-existing) | User can reset current branch to any commit (soft/mixed/hard) via context menu | ✓ SATISFIED | Pre-existing from Phase 12. `handleReset` in CommitGraph.svelte (lines 216-233) with confirmation dialog, mode selection submenu (Soft/Mixed/Hard), calls `safeInvoke('reset_to_commit')`. Backend `reset_to_commit_inner` in commit_actions.rs (lines 162-190). |
 
 No orphaned requirements — all 6 GITOP requirements from REQUIREMENTS.md mapped to Phase 28 are accounted for.
@@ -114,17 +131,28 @@ No TODOs, FIXMEs, placeholders, empty implementations, or stub patterns found in
 **Expected:** Submenu appears with three modes, confirmation dialog explains the mode
 **Why human:** Submenu rendering and dialog text need visual verification
 
+### 8. Overflow expansion ref context menus (NEW — gap closure)
+**Test:** Find a commit with multiple refs (e.g., branch + tag, or 3+ branches), hover to expand overflow popup, right-click a branch name
+**Expected:** Context menu shows "Rename…" + "Delete" (Delete disabled if HEAD); right-click a tag → shows "Delete"
+**Why human:** Overflow popup hover + context menu interaction needs runtime verification
+
+### 9. Overflow ref hover affordance (NEW — gap closure)
+**Test:** Hover over individual ref items within the overflow expansion popup
+**Expected:** Cursor changes to context-menu icon; subtle white highlight appears on hovered item
+**Why human:** CSS hover state needs visual confirmation
+
 ### Gaps Summary
 
-No gaps found. All 6 success criteria are fully verified:
+No gaps found. All 6 success criteria are fully verified, including the gap closure from plan 28-04:
 
 1. **Backend layer complete:** 5 new Rust inner functions with unit tests, all registered in lib.rs
 2. **Frontend discard UI complete:** FileRow oncontextmenu, StagingPanel context menu + Discard All button with differentiated warnings
 3. **Frontend branch/tag UI complete:** BranchSidebar and CommitGraph both wire context menus for delete/rename with confirmation dialogs
-4. **Cross-cutting concerns:** Toast notifications on all operations, InputDialog defaultValue for rename pre-fill, HEAD branch protection on both sidebar and graph pills
-5. **Reset (GITOP-06):** Pre-existing and fully functional with soft/mixed/hard modes
+4. **Overflow expansion context menus (28-04):** `showOverflowRefContextMenu` function handles LocalBranch (Rename+Delete) and Tag (Delete) with HEAD protection, wired to each ref div in the `{#each}` block with hover affordance
+5. **Cross-cutting concerns:** Toast notifications on all operations, InputDialog defaultValue for rename pre-fill, HEAD branch protection on sidebar, single pills, and overflow expansion
+6. **Reset (GITOP-06):** Pre-existing and fully functional with soft/mixed/hard modes
 
 ---
 
-_Verified: 2026-03-15T20:30:00Z_
+_Verified: 2026-03-15T22:05:00Z_
 _Verifier: Claude (gsd-verifier)_
