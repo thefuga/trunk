@@ -1,5 +1,23 @@
 # Milestones
 
+## v0.5 Graph Overlay (Shipped: 2026-03-15)
+
+**Phases:** 7 | **Plans:** 12 | **Commits:** 111 | **Timeline:** 2 days
+**LOC:** ~6,038 Rust / ~4,417 Svelte / ~1,102 TypeScript / ~1,463 Tests
+**Git range:** 1144693 (feat(20-01)) → 85af781 (test: complete UAT)
+
+**Delivered:** Single SVG overlay architecture replacing per-row viewBox-clipped SVGs, with cubic bezier curve rendering, TypeScript active lanes transformation with edge coalescing, virtualized element filtering, Canvas-measured SVG ref pills with hover expansion, and full interaction preservation.
+
+**Key accomplishments:**
+1. Single SVG overlay spanning full graph height with native scroll sync and pointer-events passthrough — zero JS scroll synchronization
+2. TypeScript Active Lanes transformation with edge coalescing reducing edge count from O(commits x lanes) to O(lanes + merge_edges)
+3. Cubic bezier curve rendering with adaptive corner radius replacing Manhattan routing, three-layer z-ordered SVG (rails → edges → dots)
+4. Virtualized SVG element filtering with O(1) viewport range-intersection via minRow/maxRow metadata
+5. SVG ref pills with Canvas-based text measurement, capsule shapes, lane colors, connector lines, remote dimming, and overflow +N hover expansion
+6. Clean integration: unified constants (16px lanes, 36px rows), ~1,000 lines dead code removed, all click/context-menu interactions preserved
+
+---
+
 ## v0.3 Actions (Shipped: 2026-03-12)
 
 **Phases:** 4 | **Plans:** 14 | **Commits:** 88 | **Timeline:** 3 days

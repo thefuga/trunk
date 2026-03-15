@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Trunk is a fast, native, cross-platform desktop Git GUI built with Tauri 2 + Svelte 5 + Rust. It provides a visual commit graph, branch management, staging workflow, and file diffs — without the performance penalties or licensing costs of existing tools like GitKraken or Fork.
+Trunk is a fast, native, cross-platform desktop Git GUI built with Tauri 2 + Svelte 5 + Rust. It provides a GitKraken-quality visual commit graph with cubic bezier curves and SVG overlay architecture, branch management, staging workflow, remote operations, and file diffs — without the performance penalties or licensing costs of existing tools like GitKraken or Fork.
 
 ## Core Value
 
@@ -36,22 +36,16 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ Click and context menu interactions preserved through SVG overlay architecture — v0.5
 - ✓ Selected commit row persistent visual highlight — v0.5
 - ✓ Stash-specific context menu routing (Pop/Apply/Drop) in graph — v0.5
-
-## Current Milestone: v0.5 Graph Overlay
-
-**Goal:** Replace per-row viewBox-clipped SVGs with a single SVG overlay architecture. Rust keeps the lane algorithm; a new TypeScript transformation layer computes global grid coordinates (`GraphNode[]`, `GraphEdge[]`) from Rust output. Rendering moves to continuous SVG `<path>` elements with cubic bezier curves spanning the entire virtualized list. Includes ref pill migration and interaction preservation carried from v0.4.
-
-**Target changes:**
-- Single SVG overlay spanning entire graph height (not per-row fragments)
-- TypeScript "Active Lanes" transformation: ingests Rust `RawCommit[]`, outputs `GraphData` with integer grid coordinates (`x` = swimlane, `y` = row index)
-- Continuous `<path>` elements per edge from parent commit to child commit
-- Cubic bezier curves for GitKraken-style waterfall routing (replacing Manhattan routing)
-- Tuned dimensions: taller rows, wider lanes
-- Ref pills as SVG elements with lane-colored backgrounds
-- All click and context menu interactions preserved
-- Carried from v0.4: ref pill migration (Phase 18) and interaction preservation (Phase 19)
+- ✓ Single SVG overlay spanning full graph height with native scroll sync — v0.5
+- ✓ TypeScript Active Lanes transformation with edge coalescing — v0.5
+- ✓ Cubic bezier curves replacing Manhattan routing — v0.5
+- ✓ Virtualized SVG element filtering with DOM node cap — v0.5
+- ✓ SVG ref pills with Canvas text measurement, lane colors, connectors, dimming, overflow badges — v0.5
+- ✓ Three-layer z-ordered SVG rendering (rails → edges → dots) — v0.5
 
 ### Active
+
+(None — between milestones, run `/gsd-new-milestone` to define next)
 
 ### Planned
 
@@ -70,10 +64,10 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.3 with ~5,009 LOC Rust, ~3,553 LOC Svelte, ~345 LOC TypeScript. 14 phases complete across 3 milestones.
+- **Current state**: Shipped v0.5 with ~6,038 LOC Rust, ~4,417 LOC Svelte, ~1,102 LOC TypeScript, ~1,463 LOC Tests. 26 phases complete across 5 milestones.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
-- **Graph rendering (v0.2-v0.3)**: Three-layer inline SVG per row (rails -> edges -> dots) with virtual scrolling. Lane algorithm runs in Rust — O(n), ~5ms for 10k commits. Manhattan-routed merge/fork edges with 8-color vivid palette. GraphResult wraps commits + max_columns for consistent SVG widths. **v0.4 rework**: replacing per-row SVG with full-height SVG where each branch line and merge edge is a single continuous path.
+- **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
 - **Graph UI**: 6-column resizable layout (ref, graph, message, author, date, SHA) with LazyStore-persisted widths, native Tauri context menu for column visibility, lane-colored ref pills
 - **Patterns established**: inner-fn pattern for testable Tauri commands, safeInvoke<T> for all IPC, sequence counter for stale async guard, cache-repopulate-before-emit for mutation commands, LazyStore for UI state persistence, sentinel oid ('__wip__', '__stash_N__') for synthetic virtual list items, $derived.by() for imperative reactive computations, shared $state rune modules for cross-component communication, InputDialog $state dialogConfig pattern
 - **Motivation**: Personal learning project (Tauri/Rust/Svelte) + building a better tool for personal use + eventual open source release
@@ -120,8 +114,10 @@ A developer can open any Git repository, browse its full commit history as a vis
 | isUndoing/isRedoing flags for redo stack | Prevents clearRedoStack during undo/redo-triggered repo-changed events | ✓ Good — eliminated race condition |
 | Shared $state rune module (remote-state.svelte.ts) | Cross-component state for StatusBar/Toolbar without props/bindings | ✓ Good — clean Svelte 5 pattern |
 | Unicode symbols for toolbar icons | Simple, no SVG assets needed, consistent with dark theme | ✓ Good — minimal complexity |
-| Reverse "no full-height SVG" (v0.4 out-of-scope) | v0.4 per-row viewBox clipping worked but limited; single overlay enables continuous bezier paths, eliminates row-boundary seams | — Pending |
-| Rust lane algorithm stays, TS transformation added | Rust O(n) algorithm is proven (~5ms/10k commits); TS layer transforms output into global grid coords for SVG rendering | — Pending |
+| Reverse "no full-height SVG" (v0.4 out-of-scope) | v0.4 per-row viewBox clipping worked but limited; single overlay enables continuous bezier paths, eliminates row-boundary seams | ✓ Good — single overlay cleaner than per-row, native scroll sync eliminated JS sync code |
+| Rust lane algorithm stays, TS transformation added | Rust O(n) algorithm is proven (~5ms/10k commits); TS layer transforms output into global grid coords for SVG rendering | ✓ Good — edge coalescing reduces O(commits x lanes) to O(lanes + merge_edges) |
+| Canvas measureText for SVG ref pills | OffscreenCanvas for DOM-free text measurement with injectable mock for testing | ✓ Good — deterministic tests, accurate text sizing |
+| SVG ref pills with HTML hover overlay | SVG handles static pills, HTML sibling handles hover expansion for reliable multi-ref display | ✓ Good — avoids SVG text layout complexity |
 
 ---
-*Last updated: 2026-03-14 after Phase 25*
+*Last updated: 2026-03-15 after v0.5 milestone*

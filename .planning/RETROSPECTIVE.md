@@ -127,6 +127,74 @@
 
 ---
 
+## Milestone: v0.4 — Graph Rework
+
+**Shipped:** 2026-03-13
+**Phases:** 3 | **Plans:** 5 | **Commits:** ~30 | **Timeline:** 1 day
+
+### What Was Built
+- GraphSvgData computing one SVG path per commit-to-commit edge with Manhattan routing
+- ViewBox-clipped per-row rendering of full SVG paths (no per-row seams)
+- Commit dot rendering as individual SVG elements (filled for regular, hollow for merges)
+- WIP row with dashed connector and stash rows with square dots in new SVG model
+
+### What Worked
+- **Per-row viewBox approach**: Quick to implement, validated that continuous paths look better than per-row fragments
+- **Clean phase scoping**: 3 focused phases (data engine, rendering, synthetic rows) with clear boundaries
+- **Decision to carry phases forward**: Phases 18-19 (ref pills, interactions) correctly deferred to v0.5 rather than forcing into v0.4
+
+### What Was Inefficient
+- **Architecture replaced in next milestone**: Per-row viewBox clipping worked but was immediately superseded by the single SVG overlay in v0.5 — the intermediate step added code that was deleted 1 day later
+- **Short-lived milestone**: v0.4 lasted 1 day before v0.5 planning began — could have been folded into v0.5
+
+### Key Lessons
+1. **Intermediate architectural steps can be wasteful**: v0.4's per-row approach was functional but immediately replaced — sometimes it's better to invest in the final architecture directly
+2. **Decision gates are valuable**: Phase 20's decision gate in v0.5 validated the overlay approach before full investment — this should be standard for architectural changes
+
+---
+
+## Milestone: v0.5 — Graph Overlay
+
+**Shipped:** 2026-03-15
+**Phases:** 7 | **Plans:** 12 | **Commits:** 111 | **Timeline:** 2 days
+
+### What Was Built
+- Single SVG overlay spanning full graph height with native scroll sync (zero JS)
+- TypeScript Active Lanes transformation with edge coalescing (O(commits x lanes) → O(lanes + merge_edges))
+- Cubic bezier curve rendering with adaptive corner radius replacing Manhattan routing
+- Three-layer z-ordered SVG (rails → edges → dots) with virtualized element filtering
+- SVG ref pills with Canvas-based text measurement, connector lines, remote dimming, overflow +N hover expansion
+- Clean integration: unified constants, ~1,000 lines dead code removed, all interactions preserved
+
+### What Worked
+- **Decision gate (Phase 20)**: Validating scroll sync and pointer-events passthrough before investing 5 more phases avoided a potential full rework
+- **TDD throughout**: buildGraphData, buildOverlayPaths, getVisibleOverlayElements, buildRefPillData, measureTextWidth all built test-first — tests caught regressions during integration
+- **Parallel phase design**: Phases 21+22 could execute in parallel (both depend only on Phase 20 types), and Phases 25+26 both depend on Phase 24 — well-structured dependency graph
+- **Injectable measureFn**: OffscreenCanvas for production, mock function for tests — deterministic text measurement tests
+- **Edge coalescing**: Reducing edge count made the overlay performant on large repos without explicit optimization
+- **Gap closure plans scoped tightly**: 23-03 and 23-04 were small, targeted fixes (positioning, test constants) — resolved quickly
+
+### What Was Inefficient
+- **OVERLAY_ROW_HEIGHT confusion**: Initially set to 36px, then corrected to 26px (Phase 23-03), then 11 tests broke because they hardcoded 36 (Phase 23-04) — constants should have been settled before test-writing
+- **Some ROADMAP plan checkboxes still unchecked**: Phases 22, 23, 25, 26 have `[ ]` in ROADMAP despite having SUMMARYs — persistent issue from v0.1
+- **HTML hover overlay for ref pills**: SVG-only approach couldn't handle multi-ref expansion elegantly — needed a hybrid SVG+HTML solution, adding complexity
+
+### Patterns Established
+- **SVG overlay architecture**: Single SVG in scroll container with pointer-events:none, HTML handles interactions beneath
+- **Pure transformation pipeline**: GraphCommit[] → buildGraphData → buildOverlayPaths → getVisibleOverlayElements → SVG rendering — each step is a pure function
+- **Injectable dependencies for testing**: measureFn pattern for Canvas text measurement — can mock in tests
+- **Range-intersection filtering**: minRow/maxRow metadata on paths enables O(1) visibility checks
+- **translate-based multi-column SVG**: SVG spans ref+graph columns, existing graph groups offset via translate()
+
+### Key Lessons
+1. **Decision gates before architectural investment**: Phase 20's POC validation saved potentially wasted effort — make this standard for any architecture change
+2. **Settle constants early**: OVERLAY_ROW_HEIGHT changing mid-milestone caused cascading test fixes — lock dimensions before writing tests
+3. **Pure function pipelines are testable**: Every step in the overlay pipeline (data, paths, visibility, pills) was independently testable because they're pure functions with no side effects
+4. **Edge coalescing is a performance multiplier**: Reducing O(commits x lanes) edges to O(lanes + merge_edges) made virtualization almost unnecessary — but having both is defense in depth
+5. **12 plans in 2 days**: Fastest pace yet — established patterns from 4 prior milestones enabled rapid execution
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -136,10 +204,14 @@
 | v0.1 | 7 | 6 | 27 | First milestone — established all patterns |
 | v0.2 | 2 | 4 | 9 | Focused visual milestone — gap closure plans for UAT findings |
 | v0.3 | 3 | 4 | 14 | Largest plan count — subprocess pattern for remote/cherry-pick/revert |
+| v0.4 | 1 | 3 | 5 | Intermediate architecture — per-row viewBox SVG (superseded by v0.5) |
+| v0.5 | 2 | 7 | 12 | Pure function pipeline — decision gate, TDD, SVG overlay architecture |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. **Gap closure plans are a recurring pattern**: All 3 milestones needed additional plans for UAT findings — budget 1-2 per phase
-2. **ROADMAP checkboxes get stale**: All 3 milestones had this issue — should automate or remove
-3. **Test suite protects against regressions**: Rust tests caught zero regressions across all milestones
-4. **Visual rendering is the riskiest area**: v0.1 needed 3 graph iterations, v0.2 needed 3 gap closures for connectors, v0.3 had a full plan redo (11-02) — visual features need more upfront design or spike plans
+1. **Gap closure plans are a recurring pattern**: All 5 milestones needed additional plans for UAT findings — budget 1-2 per phase
+2. **ROADMAP checkboxes get stale**: All 5 milestones had this issue — should automate or remove
+3. **Test suite protects against regressions**: Tests caught zero regressions across all milestones — TDD investment pays dividends
+4. **Visual rendering is the riskiest area**: v0.1 needed 3 graph iterations, v0.2 needed 3 gap closures for connectors, v0.3 had a full plan redo (11-02), v0.5 had constant confusion — visual features need more upfront design or spike plans
+5. **Decision gates prevent wasted work**: v0.4's architecture was superseded in 1 day; v0.5's Phase 20 decision gate validated the approach before committing — gates should be standard for architecture changes
+6. **Pure function pipelines scale**: v0.5's pipeline (data → paths → visibility → rendering) was independently testable and composable — prefer this over stateful approaches
