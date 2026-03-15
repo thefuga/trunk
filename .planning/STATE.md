@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
-status: planning
-stopped_at: Phase 29 context gathered
-last_updated: "2026-03-15T22:17:32.609Z"
-last_activity: 2026-03-15 - Phase 28 complete (gap closure verified)
+status: executing
+stopped_at: Completed 29-02-PLAN.md
+last_updated: "2026-03-15T22:36:17.452Z"
+last_activity: 2026-03-15 - Completed 29-02 (button colors & 50/50 layout)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 ## Current Position
 
 Phase: 29 — Staging & Commit UX
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-15 - Phase 28 complete (gap closure verified)
+Plan: 02 complete, next 03
+Status: In Progress
+Last activity: 2026-03-15 - Completed 29-02 (button colors & 50/50 layout)
 
 ```
 v0.6 Progress: [████████████░░░░░░░░] 3/5 phases
@@ -51,6 +51,7 @@ v0.6 Progress: [████████████░░░░░░░░] 3/
 | Phase 28-destructive-operations P02 | 2min | 1 tasks | 2 files |
 | Phase 28-destructive-operations P03 | 3min | 2 tasks | 4 files |
 | Phase 28-destructive-operations P04 | 1min | 1 tasks | 1 files |
+| Phase 29-staging-commit-ux P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ v0.6 Progress: [████████████░░░░░░░░] 3/
 - [Phase 28-destructive-operations]: InputDialog gains backward-compatible defaultValue field for pre-filling rename input
 - [Phase 28-destructive-operations]: Pill context menus wired on rect, icon g, and text span for full click coverage
 - [Phase 28-destructive-operations]: showOverflowRefContextMenu as separate function from showPillContextMenu — uses RefLabel fields instead of OverlayRefPill to avoid union type refactor
+- [Phase 29-staging-commit-ux]: Used inline conditional flex: 1 for 50/50 split instead of CSS classes
 
 ### Roadmap Evolution
 
@@ -105,7 +107,7 @@ v0.6 Progress: [████████████░░░░░░░░] 3/
 
 ## Session Continuity
 
-Last session: 2026-03-15T22:17:32.606Z
-Stopped at: Phase 29 context gathered
-Resume file: .planning/phases/29-staging-commit-ux/29-CONTEXT.md
+Last session: 2026-03-15T22:36:17.449Z
+Stopped at: Completed 29-02-PLAN.md
+Resume file: None
 Next action: Discuss Phase 29
