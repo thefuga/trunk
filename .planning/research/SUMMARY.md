@@ -1,191 +1,179 @@
 # Project Research Summary
 
-**Project:** Trunk v0.5 — Single SVG Overlay Graph
-**Domain:** Git GUI — commit graph visualization (Tauri 2 + Svelte 5 + Rust)
-**Researched:** 2026-03-13
+**Project:** Trunk v0.6 — UI Polish & Core Ops
+**Domain:** Desktop Git GUI (Tauri 2 + Svelte 5 + Rust/git2)
+**Researched:** 2026-03-15
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Trunk v0.5 replaces the per-row viewBox-clipped SVG rendering model (v0.3–v0.4) with a single SVG overlay spanning the entire virtualized commit list. This is a rendering architecture change — not a dependency change. **Zero new npm packages or Rust crates are needed.** Every required capability (cubic bezier paths, SVG overlay positioning, pointer event passthrough, text measurement) is built into browser primitives and Svelte's native SVG handling. The Rust backend lane algorithm is unchanged; a new TypeScript transformation layer ("Active Lanes") bridges Rust's per-row edge descriptors into continuous multi-row edge spans suitable for the overlay.
+Trunk v0.6 is a polish milestone that bridges the gap between "functional prototype" and "daily driver." The core architecture (commit graph, staging, commits, remotes) is proven from v0.5. This release adds the missing everyday operations users expect from any Git GUI — discard changes, branch/tag delete — while replacing amateur Unicode symbols with proper icons throughout the UI, unifying the commit/amend/stash workflow, and fixing visual bugs. The research confirms that **zero new Rust crates and only one new npm package (`@lucide/svelte`)** are needed. All new git operations use existing `git2 = "0.19"` APIs, and the dialog/notification system extends existing `@tauri-apps/plugin-dialog` patterns plus a lightweight custom toast (~30 LOC).
 
-The recommended approach is to place the SVG inside the virtual list's scroll container (`.virtual-list-content` div) so it scrolls natively — eliminating all scroll synchronization code. The transformation is a single pure function wired via `$derived.by()`, matching the existing codebase pattern. Cubic bezier curves replace Manhattan routing for a GitKraken-style waterfall aesthetic, using the SVG `C` command with vertical tangent control points. Ref pills migrate from HTML `<span>` elements to SVG `<rect>` + `<text>` inside the overlay.
+The recommended approach is to build in dependency order: icon system first (it's referenced by every subsequent UI change), then new Rust commands for destructive operations (discard, branch delete, tag delete), then staging UX improvements (three-way selector, button styling), then graph polish and bug fixes. Each new backend command follows the established `*_inner()` pattern with `state_map` and cache rebuild. The critical insight from architecture research is that this is an **integration milestone** — every feature plugs into existing patterns rather than requiring new architecture. The risk profile is "will additions break what works" rather than "will the architecture hold."
 
-The primary risk is the v0.4 reversal: v0.4 explicitly scoped out the single SVG overlay, citing "DOM explosion at scale." v0.5 bets that SVG virtualization (rendering only visible-range elements) resolves this concern. This must be validated in Phase 1 before investing in curve rendering. Secondary risks include bezier curve aesthetics at adjacent rows (1-2 row gaps produce kinked curves without per-distance tension tuning) and WebKit performance differences in production Tauri builds. A graceful fallback exists: if the overlay approach fails, bezier curves and dimension tuning work equally well with enhanced per-row viewBox clipping.
+The top risks are: (1) discard implementation must branch by file status type — `checkout_head()` silently ignores untracked files, requiring `std::fs::remove_file()` as a separate path; (2) `git2::Branch::delete()` has NO merge-safety check (unlike `git branch -d`), so unmerged work can be silently lost without UI guardrails; (3) CSS `position: sticky` does not work inside the virtual list's `transform: translateY()` container, so the graph overflow feature must use flex/overflow layout instead; (4) the custom title bar merge is platform-specific and high-risk — defer full implementation, do CSS-only unification first.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies. The existing stack covers all v0.5 requirements. This is purely an architecture and algorithm change within the current technology surface.
+One new dependency, zero Rust crate changes. The existing stack handles everything v0.6 needs.
 
-**Core technologies (unchanged):**
-- **Svelte 5** (`^5.0.0`): Reactive SVG rendering via `$derived.by()`, native SVG element support in templates
-- **@humanspeak/svelte-virtual-list** (`^0.4.2`): Drives commit row virtualization; overlay syncs via DOM placement inside its scroll viewport
-- **TypeScript** (`~5.6.2`): Active Lanes transformation, bezier path generation, new `GraphNode`/`GraphEdge`/`GraphData` types
-- **Rust git2** (`0.19`): Lane algorithm unchanged — already returns `GraphCommit[]` with column/edges/refs
-- **vitest** (`^4.1.0`): Unit tests for transformation and path functions (established pattern)
-- **SVG `C` command**: Cubic bezier curves — W3C spec primitive, no library needed
-- **Canvas `measureText()`**: Synchronous text width measurement for ref pill sizing
+**Core technologies:**
+- **`@lucide/svelte@^0.577.0`**: SVG icon components — Svelte 5-native (`$props()` runes), 1500+ icons, tree-shakable, offline-compatible (critical for desktop app). Replaces inconsistent Unicode symbols across toolbar, sidebar, staging panel, and commit form.
+- **`git2 = "0.19"` (existing)**: All new operations — `Branch::delete()`, `Repository::tag_delete()`, `checkout_head()` with `CheckoutBuilder::force().path()` for discard, `std::fs::remove_file()` for untracked files.
+- **`@tauri-apps/plugin-dialog` (existing)**: `ask()` for destructive confirmations (discard, delete). Already used in 9+ places. Extend pattern, don't replace.
+- **Custom `<Toast>` component (build it, ~30 LOC)**: Non-blocking feedback ("Branch deleted", "Changes discarded"). Uses existing `$state` rune + shared module pattern from `remote-state.svelte.ts`. Not worth a dependency.
 
-**What NOT to add:** D3.js (108KB, unused features), SVG.js/Snap.svg (conflicts with Svelte), Canvas rendering (loses CSS vars + pointer events), Dagre/ELK (we already have a graph layout from Rust), any scroll sync library (SVG inside viewport scrolls natively).
+**What NOT to add:** `svelte-sonner`/`svelte-french-toast` (SSR-oriented, overkill), `@iconify/svelte` (fetches from remote API — fails offline), `lucide-svelte` without `@lucide/` scope (Svelte 4, not 5), any animation library (built-in `svelte/transition` suffices), `tauri-plugin-notification` (too heavy for in-app feedback).
 
 ### Expected Features
 
-**Must have (table stakes — regression if missing):**
-- Single SVG overlay with native scrolling inside virtual list viewport
-- TypeScript Active Lanes transformation (`GraphCommit[]` → `GraphData`)
-- Cubic bezier waterfall curves replacing Manhattan routing
-- Continuous vertical rail lines (one `<path>` per lane run)
-- Commit dots (solid/hollow/dashed for normal/merge/stash)
-- WIP + stash synthetic rows with dashed connectors
-- Three-layer z-ordering (rails → edges → dots)
-- SVG ref pills (`<rect>` + `<text>`) with connector lines
-- Click-to-select and right-click context menu preservation
-- Lane coloring (8-color CSS custom property palette)
-- Column resize + visibility reactivity
-- Tuned dimensions: `ROW_HEIGHT` 26→36px, `LANE_WIDTH` 12→16px
+**Must have (table stakes):**
+- **Icon system throughout UI** — Every competitor uses icons; Unicode symbols look unpolished and render inconsistently cross-platform. Single highest-impact visual polish item (~35 icon placements).
+- **Discard changes (file-level + all)** — GitKraken, Fork, Tower, Sublime Merge all have it. Most common "missing feature" for staging workflows. Must confirm before executing — destructive and unrecoverable.
+- **Branch delete** — Context menu → confirmation → delete. Every Git GUI supports it. Must prevent deleting HEAD branch.
+- **Tag delete** — Same pattern as branch delete. Table stakes for any GUI with tag display.
+- **Confirmation dialogs for destructive ops** — Already partially implemented (stash drop). Extend to discard and delete.
+- **Stage All / Unstage All with clear visual affordance** — Colored icon buttons replacing text-only buttons.
 
-**Should have (differentiators — free or natural follow-ons):**
-- Zero row-boundary seams (inherent to overlay architecture)
-- Reduced DOM element count (~50-80 SVG elements vs ~800 per-row)
-- Smooth sub-pixel anti-aliased curves
+**Should have (differentiators):**
+- **Three-way commit/amend/stash selector** — GitKraken's best UX pattern. Unifies "save my work" in one location. Replaces amend checkbox + separate stash action.
+- **Click refs in sidebar → navigate graph** — Every competitor does this (double-click branch scrolls to its HEAD commit). Requires `scrollToIndex` on virtual list + OID lookup.
+- **Graph overflow with clipped graph column** — Right-side columns (message, author, date) never scroll off-screen.
+- **Right pane auto-opens on content change** — Prevents "I clicked but nothing happened" confusion.
+- **Merged top bar (tab + actions)** — Saves 36px vertical space.
 
-**Defer (v0.6+):**
-- Hover-highlight entire branch (architecture enables it but out of scope)
-- Click-to-select branch flow
-- Path draw-on animations
-- Ref pill hover expansion (complex SVG text layout — do last or defer)
+**Defer (v0.7+):**
+- Hunk-level discard (ships with hunk staging)
+- Remote branch/tag delete (too destructive, affects collaborators)
+- Branch rename (separate feature with edge cases)
+- Toast notification queue with animations (over-engineering for v0.6)
+- Custom title bar with native window controls (high-risk, platform-specific)
 
 ### Architecture Approach
 
-The target architecture introduces a TypeScript transformation layer between Rust output and SVG rendering. Rust's `GraphCommit[]` flows through `buildGraphData()` (Active Lanes algorithm) to produce `GraphData` with integer grid coordinates, which `graph-overlay-paths.ts` converts to SVG `d` strings. The `GraphOverlay.svelte` component renders a single `<svg>` with three `<g>` layers (edges, dots, ref pills) positioned absolutely inside the virtual list's `.virtual-list-content` div. CommitRow is simplified to a spacer div + text columns — no more GraphCell or HTML RefPill.
+v0.6 is an integration milestone — features plug into the existing three-layer architecture (Svelte 5 frontend → IPC via `safeInvoke` → Rust/git2 backend with managed state). No new architectural patterns needed. New Rust commands follow the established `*_inner()` + `state_map` + `cache_map` + `app.emit('repo-changed')` pattern. New frontend state uses the proven `$state` rune shared module pattern. The icon system is a centralized `icons.ts` module with an `Icon.svelte` wrapper — raw SVG path data for maximum flexibility across HTML and SVG overlay contexts.
 
-**Major components:**
-1. **`active-lanes.ts`** — Pure TS transformation: `GraphCommit[]` → `GraphData` (nodes, edges, ref pills, maxLanes). Edge coalescing reduces O(commits × lanes) to O(lanes + merge_edges).
-2. **`graph-overlay-paths.ts`** — Converts grid coordinates to SVG path `d` strings. Cubic bezier for cross-lane edges, vertical lines for same-lane rails.
-3. **`GraphOverlay.svelte`** — Single SVG overlay component. `pointer-events: none` root, three `<g>` layers, positioned inside virtual list content div via `$effect` DOM injection.
-4. **`SvgRefPill.svelte`** — SVG `<rect>` + `<text>` ref pill. Canvas `measureText()` for width calculation.
-5. **`CommitGraph.svelte` (modified)** — Orchestrator. Replaces `computeGraphSvgData` with `buildGraphData`, injects SVG into virtual list DOM.
+**New Rust commands (4):**
+1. `discard_file` / `discard_all_unstaged` in `staging.rs` — revert working tree files via `checkout_head(force)` or `fs::remove_file()`
+2. `delete_branch` in `branches.rs` — `Branch::delete()` with HEAD guard and cache rebuild
+3. `delete_tag` in `commit_actions.rs` — `Repository::tag_delete(short_name)` with cache rebuild
 
-**Files deleted:** `GraphCell.svelte`, `LaneSvg.svelte`, `graph-svg-data.ts`, `graph-svg-data.test.ts`, `RefPill.svelte` (from graph context; kept for sidebar).
+**New frontend components (2):**
+1. `Icon.svelte` — thin SVG wrapper using centralized `ICONS` path data
+2. `Toast.svelte` — fixed-position notification stack, auto-dismiss
+
+**New modules (2):**
+1. `src/lib/icons.ts` — centralized icon SVG path data
+2. `src/lib/toast-state.svelte.ts` — shared reactive toast state
+
+**Modified components (10):** Toolbar, FileRow, StagingPanel, CommitForm, BranchSidebar, BranchRow, BranchSection, CommitGraph, TabBar, App.svelte
+
+**Bug fixes (3, Rust):**
+1. Add `WT_NEW` to `get_dirty_counts` unstaged bitmask (1-line fix)
+2. Add `include_untracked(true)` to `diff_unstaged` options (1-line fix)
+3. SVG `overflow="visible"` for ref pill overflow badge
 
 ### Critical Pitfalls
 
-1. **SVG DOM explosion (P1)** — Single SVG with 10k+ commits could contain 20-50k child elements. **Prevention:** SVG virtualization — render only visible range + buffer, hard limit of 500 SVG children regardless of total commits. Pre-compute paths, filter on scroll. **This is the make-or-break risk.**
+1. **Discard silently ignores untracked files** — `checkout_head()` restores tracked files but does nothing for `WT_NEW` files. Must branch by file status: tracked → `checkout_head(force, path)`, untracked → `std::fs::remove_file()`. Never use `remove_untracked(true)` without `path()` filtering. Always use `force()` not `safe()`.
 
-2. **Scroll synchronization drift (P2)** — Overlay and virtual list fall out of sync. **Prevention:** Place SVG inside `.virtual-list-content` so it scrolls natively. Zero JS scroll sync code. DOM injection via `$effect` + `querySelector('.virtual-list-content')`.
+2. **`Branch::delete()` has no merge safety check** — Unlike `git branch -d`, git2's `Branch::delete()` always succeeds for non-HEAD branches, silently deleting unmerged work. Must check `is_head()` before delete. Should verify merge status via `graph_descendant_of()` and warn user about unmerged commits.
 
-3. **Pointer events swallowed (P3)** — SVG overlay captures all clicks in graph column. **Prevention:** `pointer-events: none` on SVG root, `pointer-events: auto` only on interactive elements (ref pills, optionally dots). All row interactions fire on HTML beneath.
+3. **`tag_delete()` requires short name, not full ref** — Passing `refs/tags/v1.0.0` causes double-prefix error. Always use `short_name` from frontend. Add defensive `strip_prefix("refs/tags/")` in backend.
 
-4. **Ugly bezier curves at adjacent rows (P4)** — Cubic bezier degenerates to kinked diagonals when commits are 1-2 rows apart (the most common case). **Prevention:** Per-distance tension tuning with minimum control point offset. Visual testbed before shipping.
+4. **`position: sticky` broken inside virtual list** — The virtual list's `transform: translateY()` creates a new containing block, breaking sticky positioning. Use `overflow: hidden` on graph column + flex layout instead.
 
-5. **Ref pill SVG migration complexity (P5)** — SVG `<text>` has no `text-overflow`, no flexbox, no `clientWidth`. Hover-expand animation won't port. **Prevention:** Build ref pills last. Have HTML fallback ready. Consider `foreignObject` escape hatch.
+5. **Custom title bar breaks macOS traffic lights and drag** — `decorations: false` removes traffic lights entirely. Use `titleBarStyle: "overlay"` instead, add `data-tauri-drag-region`, add 70px left padding. Start macOS-only, defer Windows/Linux. **Recommend CSS-only bar merge for v0.6.**
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Foundation — Types, Constants, and Overlay Container
-**Rationale:** The overlay positioning inside the virtual list is the highest-risk architectural decision. Validate it works before writing any transformation code. Also establishes types that all subsequent phases depend on.
-**Delivers:** `graph-overlay-types.ts` with all new interfaces, updated `graph-constants.ts` (new ROW_HEIGHT/LANE_WIDTH/DOT_RADIUS), empty `GraphOverlay.svelte` proving SVG-inside-viewport scroll sync works, `pointer-events: none` passthrough verified.
-**Addresses:** Feature dependency root (types/constants), virtual list integration.
-**Avoids:** P1 (DOM explosion — establish virtualization strategy), P2 (scroll sync — prove native scroll works), P3 (pointer events — verify passthrough).
-**Decision gate:** If scroll sync or pointer passthrough fails here, evaluate fallback to enhanced per-row viewBox before proceeding.
+### Phase 1: Foundation — Icons, Toast System & Bug Fixes
+**Rationale:** Icon system is referenced by every subsequent UI change. Toast system is needed for feedback across all new features. WIP bug fix is trivial and high-value. These have zero dependencies on other v0.6 work.
+**Delivers:** Consistent visual vocabulary across the entire app; non-blocking notification infrastructure; fix for missing WIP rows with untracked files.
+**Addresses:** Icon system (table stakes), dialog/notification system, untracked files WIP bug.
+**Avoids:** P7 (icon inconsistency) — migrating ALL Unicode symbols in one pass prevents mix of old and new styles.
 
-### Phase 2: Data Layer — Active Lanes Transformation
-**Rationale:** The transformation is a pure function with zero UI dependencies — fully testable in isolation. All rendering phases depend on it.
-**Delivers:** `active-lanes.ts` implementing `buildGraphData()`, comprehensive unit tests ported from existing `graph-svg-data.test.ts` scenarios. Handles WIP, stash, branch tips, all edge types. Edge coalescing for DOM count reduction.
-**Addresses:** Table stakes: Active Lanes transformation, edge coalescing.
-**Avoids:** P6 (data sync bugs — single pure function, no mutable state), P15 ($derived scope — minimal reactive dependencies).
+### Phase 2: Destructive Operations — Discard, Branch Delete, Tag Delete
+**Rationale:** These are the highest-value missing features (table stakes). All are independent Rust commands that follow established patterns. Each needs confirmation dialogs (from Phase 1 toast/dialog infrastructure). Should be built backend-first then wired to frontend.
+**Delivers:** Discard file/all, branch delete with HEAD guard, tag delete with short-name handling.
+**Addresses:** Discard changes, branch delete, tag delete, confirmation dialogs (all table stakes).
+**Avoids:** P1 (discard untracked handling), P2 (HEAD branch guard + merge check), P3 (tag name format), P10 (discard confirmation required).
 
-### Phase 3: Path Builder — Bezier Curve Generation
-**Rationale:** Can be built in parallel with Phase 2 (depends only on Phase 1 types). Separating path math from transformation logic keeps both testable.
-**Delivers:** `graph-overlay-paths.ts` with `buildBezierPath()`, straight-line paths for same-lane edges, per-distance tension tuning for adjacent/nearby/distant rows. Unit tests for all edge distance cases.
-**Addresses:** Table stakes: cubic bezier waterfall curves, continuous rail lines.
-**Avoids:** P4 (ugly adjacent-row curves — per-distance tension), P9 (lane overlap — z-ordered `<g>` groups, accepted controlled overlap), P8 (GC pressure — pre-compute all `d` strings once).
+### Phase 3: Staging & Commit UX
+**Rationale:** Depends on icons (Phase 1). The three-way selector is the highest-complexity frontend change and needs dedicated focus. Staging button improvements and equal-height lists are natural companions.
+**Delivers:** Unified commit/amend/stash workflow, polished staging panel with colored buttons, stash name auto-fill.
+**Addresses:** Three-way selector (differentiator), staging button improvements, equal-height lists, stash name defaults.
+**Avoids:** P8 (state machine complexity — model as explicit discriminated state with 6 transition handlers), P11 (equal-height empty list — collapse empty sections to header-only).
 
-### Phase 4: SVG Rendering — GraphOverlay Component
-**Rationale:** With transformation and paths ready, build the actual SVG rendering. This is where the architecture proves itself visually.
-**Delivers:** `GraphOverlay.svelte` rendering three `<g>` layers (edges, dots, rails). SVG virtualization filtering by visible row range. Keyed `{#each}` loops for stable DOM identity. Visual verification against real repos.
-**Addresses:** Table stakes: three-layer z-ordering, commit dots, lane coloring, virtual scrolling with overlay.
-**Avoids:** P1 (DOM explosion — virtualization filter active), P12 (Svelte keying — stable edge/dot IDs), P7 (path duplication — eliminated by single SVG).
+### Phase 4: Graph Polish & Navigation
+**Rationale:** Independent of Phases 2-3. Graph changes are CSS/layout-focused with some SVG work. Ref navigation requires adding `oid` to `BranchInfo` (Rust + TypeScript type change).
+**Delivers:** Graph padding, graph overflow handling, sidebar ref → graph navigation, better tag icon, overflow badge z-index fix.
+**Addresses:** Graph overflow/sticky columns (differentiator), click refs → navigate (differentiator), graph padding, tag pill icon, overflow pill z-index bug.
+**Avoids:** P4 (no sticky positioning — use flex overflow), P9 (SVG overflow="visible" for badges), P13 (ref nav to unloaded commits — load in batches with progress).
 
-### Phase 5: Integration — CommitGraph + CommitRow Refactor
-**Rationale:** Replace the old rendering pipeline. CommitGraph switches from `computeGraphSvgData` to `buildGraphData`, injects overlay. CommitRow drops GraphCell for a spacer div.
-**Delivers:** Modified `CommitGraph.svelte` and `CommitRow.svelte`. Deletion of `GraphCell.svelte`, `LaneSvg.svelte`, `graph-svg-data.ts`. End-to-end working graph with bezier curves.
-**Addresses:** Table stakes: column resize reactivity, dimension tuning.
-**Avoids:** P11 (pagination seams — full-array recomputation), P13 (column resize desync — reactive SVG width binding), P10 (WebKit perf — test production build here).
-
-### Phase 6: Interaction Preservation
-**Rationale:** With rendering working, verify all v0.3/v0.4 interactions are preserved. This is a verification + wiring phase.
-**Delivers:** Click-to-select via HTML rows, right-click context menu, row hover highlighting, WIP row click, stash context menu. SVG dot/pill click handlers if needed.
-**Addresses:** Table stakes: click → commit detail, right-click → context menu.
-**Avoids:** P3 (pointer events — comprehensive interaction testing).
-
-### Phase 7: SVG Ref Pills
-**Rationale:** Highest-risk SVG element due to HTML feature dependencies. Build last so everything else is stable. Have HTML fallback ready.
-**Delivers:** `SvgRefPill.svelte` with `<rect>` + `<text>`, Canvas `measureText()` for sizing, connector lines as SVG `<line>` elements. Removal of HTML ref pill from CommitRow graph column.
-**Addresses:** Table stakes: SVG ref pills, ref pill connector lines.
-**Avoids:** P5 (HTML capability loss — simplify hover-expand or defer it), P14 (coordinate mismatch — both endpoints in SVG coordinates).
+### Phase 5: Layout & Remaining Polish
+**Rationale:** Lowest priority, highest risk (title bar is platform-specific). Do last so it doesn't block other work. Bug fixes can be interleaved throughout.
+**Delivers:** Merged top bar (CSS-only for v0.6), right pane auto-open, trailing header divider fix.
+**Addresses:** Merged top bar (differentiator), right pane auto-open (differentiator), trailing divider bug.
+**Avoids:** P5 (title bar merge — CSS-only approach avoids platform-specific breakage), P6 (dialog focus context — keep native dialogs for confirmations, only add toasts for feedback).
 
 ### Phase Ordering Rationale
 
-- **Foundation first (Phase 1):** The overlay-inside-viewport pattern is the riskiest bet. Validate before investing in data/rendering code. This is the v0.4 reversal — prove it works or fail fast.
-- **Data before rendering (Phases 2-3 before 4):** Pure functions are testable without UI. Path builder can run in parallel with Active Lanes since both depend only on types.
-- **Integration after components (Phase 5 after 4):** Get the overlay rendering correctly in isolation before wiring it into the existing component tree.
-- **Interactions after integration (Phase 6):** Can only verify interactions with the full component stack in place.
-- **Ref pills last (Phase 7):** Highest risk of HTML→SVG migration issues. Everything else must be solid before tackling this. If it fails, fall back to HTML pills with SVG connector lines.
+- **Icons first** because every subsequent UI change references the icon system. Doing icons later means double-touching every component.
+- **Destructive operations before UX polish** because they're the highest-value missing features and have well-established patterns across all competitor GUIs.
+- **Three-way selector gets dedicated Phase 3** because it has 6 mode transition paths, each with different form-state semantics — highest frontend complexity.
+- **Graph polish is independent** and can be parallelized with Phase 3 if resources allow.
+- **Title bar merge is last** because it's the only feature with platform-specific risk. A CSS-only approach de-risks it; full custom title bar deferred to v0.7.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (Foundation):** Needs validation of SVG-inside-virtual-list DOM injection. The `$effect` + `querySelector('.virtual-list-content')` approach couples to library internals. May need alternative if library updates.
-- **Phase 3 (Bezier Curves):** Adjacent-row curve aesthetics require visual tuning. GitKraken may use piecewise "waterfall" routing (vertical + bezier + vertical) rather than single cubic bezier. Needs visual testbed.
-- **Phase 7 (Ref Pills):** SVG text layout limitations are well-documented but the specific hover-expand interaction port is uncharted. May need `foreignObject` research.
+- **Phase 4 (Graph Overflow):** CSS interaction between virtual list, SVG overlay, and flex layout is non-trivial. May need experimentation with `overflow: hidden` vs `clip-path` approaches. Test with 8+ parallel branches.
+- **Phase 4 (Ref Navigation):** Pagination interaction — target commit may not be loaded. Need to design load-until-found behavior with progress indicator for old tags.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (Active Lanes):** Straightforward O(n) data transformation. Pure function, established testing pattern. Well-understood algorithm.
-- **Phase 4 (SVG Rendering):** Standard Svelte SVG templating with `{#each}` loops. No unknowns.
-- **Phase 5 (Integration):** Follows existing `CommitGraph.svelte` patterns. Replace one derivation, inject one component.
-- **Phase 6 (Interactions):** `pointer-events` CSS property is fully specified. Verification phase, not implementation.
+- **Phase 1 (Icons):** Well-documented `@lucide/svelte` API, straightforward component migration.
+- **Phase 2 (Destructive Ops):** All git2 APIs verified, established `*_inner()` pattern, existing `ask()` dialog pattern.
+- **Phase 3 (Staging UX):** Clear competitor patterns (GitKraken three-way selector). Implementation path is known, just needs careful state machine design.
+- **Phase 5 (Layout):** CSS-only bar merge is low risk. Right pane auto-open is a simple `$effect`.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Zero new dependencies. All capabilities map to browser primitives verified against W3C specs and library source code. |
-| Features | HIGH | Feature list grounded in existing codebase analysis and PROJECT.md scope. Clear table stakes vs differentiators. |
-| Architecture | HIGH | Virtual list DOM structure verified from library source. Data flow follows established `$derived.by()` pattern. SVG overlay inside scroll container is standard. |
-| Pitfalls | HIGH | Based on direct codebase analysis, v0.4 retrospective, and SVG/WebKit performance knowledge. v0.4 reversal risk explicitly acknowledged. |
+| Stack | HIGH | One new dep (`@lucide/svelte`) verified on npm. All git2 APIs verified in 0.19.0 docs. Zero Rust crate changes. |
+| Features | HIGH | All table-stakes features have clear competitor patterns (GitKraken, Fork, Sublime Merge, Tower). Feature scope well-defined. |
+| Architecture | HIGH | Full codebase audit performed. All integration points mapped to existing files. Every new command follows established patterns. |
+| Pitfalls | HIGH | 13 pitfalls identified with concrete prevention strategies. All based on direct codebase analysis + git2 API behavior. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **SVG virtualization performance threshold:** The 500-element hard limit is a heuristic. Actual threshold for WebKit jank needs empirical profiling with `cargo tauri build` on macOS. Profile at Phase 4 milestone.
-- **Adjacent-row bezier aesthetics:** The control point formula (`midY` approach) is theoretical. Real-world appearance with Trunk's lane layout needs visual testing against GitKraken. May require piecewise waterfall routing instead of single cubic bezier.
-- **WebKit vs Blink SVG performance:** WebKit bezier rasterization cost relative to Blink is training-data inference, not benchmarked. Test in production build at every phase milestone.
-- **Virtual list DOM injection stability:** `querySelector('.virtual-list-content')` couples to library internals. The `id="virtual-list-content"` fallback exists, but any library update could break this. Pin version and document coupling.
-- **Ref pill hover-expand in SVG:** No known implementation of CSS `clip-path` animation on SVG `<g>` groups. May need completely different UX (tooltip/popover) or `foreignObject` wrapper.
+- **Graph overflow CSS approach:** MEDIUM confidence on exact implementation. `overflow: hidden` on graph column is the leading approach, but interaction with SVG overlay width needs testing with a high-lane-count repo (8+ parallel branches). Validate during Phase 4 planning.
+- **Ref navigation for unloaded commits:** Need to design the load-until-found UX. How many batches to load before giving up? Show a spinner? This is a UX decision, not a technical blocker.
+- **Three-way selector visual design:** The state machine is clear, but the exact Svelte component design (segmented control vs tabs vs dropdown) needs iteration. GitKraken uses icons, Tower uses a dropdown.
+- **macOS title bar inset:** Hardcoded 70px padding for traffic lights is fragile. Investigate whether Tauri 2 exposes the actual inset value. May need `@tauri-apps/plugin-os` platform detection.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- **Codebase analysis:** `CommitGraph.svelte`, `CommitRow.svelte`, `GraphCell.svelte`, `graph-svg-data.ts`, `graph-constants.ts`, `types.ts`, `graph.rs`, `types.rs`
-- **Library source:** `@humanspeak/svelte-virtual-list` v0.4.2 — DOM structure (4-layer: container→viewport→content→items), `debugFunction` callback, full API surface
-- **Project docs:** `.planning/PROJECT.md` v0.5 scope, `.planning/RETROSPECTIVE.md` risk patterns
+- [git2 0.19.0 Repository docs](https://docs.rs/git2/0.19.0/git2/struct.Repository.html) — `tag_delete()`, `checkout_head()`, `status_file()`
+- [git2 0.19.0 Branch docs](https://docs.rs/git2/0.19.0/git2/struct.Branch.html) — `Branch::delete()`, `find_branch()`, `is_head()`
+- [git2 0.19.0 CheckoutBuilder docs](https://docs.rs/git2/0.19.0/git2/build/struct.CheckoutBuilder.html) — `force()`, `path()`, `remove_untracked()`
+- [Lucide Svelte docs](https://lucide.dev/guide/packages/lucide-svelte) — `@lucide/svelte` for Svelte 5
+- [npm: @lucide/svelte@0.577.0](https://www.npmjs.com/package/@lucide/svelte) — confirmed on npm, 308K weekly downloads
+- Trunk v0.5 codebase — full audit of all components, commands, types, and tests
 
 ### Secondary (MEDIUM confidence)
-- [MDN SVG Paths — cubic bezier](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths#curve_commands) — `C` command specification
-- [MDN pointer-events](https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events) — `none`/`auto` values
-- [MDN Canvas measureText](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/measureText) — synchronous text width
-- [SVG Performance — O'Reilly Using SVG](https://oreillymedia.github.io/Using_SVG/extras/ch19-performance.html) — DOM node count thresholds
-
-### Tertiary (LOW confidence)
-- WebKit SVG bezier rasterization cost — training data only, needs empirical profiling
-- GitKraken curve rendering specifics — closed source, externally observed. "Waterfall" piecewise routing is inference.
+- GitKraken Desktop documentation — staging, stashing, tags, branching UX patterns
+- Fork, Sublime Merge, Tower — feature patterns from domain knowledge (no docs fetched)
+- CSS spec — `position: sticky` + `transform` interaction (containing block creation)
 
 ---
-*Research completed: 2026-03-13*
+*Research completed: 2026-03-15*
 *Ready for roadmap: yes*

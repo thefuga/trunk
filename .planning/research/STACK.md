@@ -1,309 +1,252 @@
-# Stack Research: Single SVG Overlay Graph Rendering (v0.5)
+# Stack Research
 
-**Domain:** Git GUI — commit graph visualization
-**Researched:** 2026-03-13
-**Confidence:** HIGH (all claims grounded in existing codebase inspection, library source code reading, and SVG specification)
+**Domain:** v0.6 UI Polish & Core Ops additions to Tauri 2 + Svelte 5 Git GUI
+**Researched:** 2026-03-15
+**Confidence:** HIGH
 
-## Core Finding: No New Dependencies — Architecture + Algorithm Change Only
+## Core Finding: One New npm Package + Zero New Rust Crates
 
-The v0.5 milestone requires **zero new npm packages or Rust crates**, same as v0.4. This is a rendering architecture change (per-row SVG → single overlay SVG) combined with a new TypeScript transformation layer and curve math replacement.
-
-**Rationale:** Every capability needed — SVG overlay positioning, cubic bezier path strings, `<rect>`/`<text>` elements, pointer events on SVG — is built into the browser's SVG spec and Svelte's native SVG handling. No library wraps these better than direct use.
+v0.6 needs exactly **one new dependency** (`@lucide/svelte` for icons). All git operations (discard, branch delete, tag delete) use existing `git2 = "0.19"` APIs. The dialog/notification system uses existing `@tauri-apps/plugin-dialog` plus a custom ~30 LOC toast component.
 
 ---
 
-## Existing Stack (Unchanged)
+## Recommended Stack Additions
 
-| Technology | Version | Role in v0.5 | Notes |
-|------------|---------|--------------|-------|
-| Svelte 5 | ^5.0.0 | Reactive SVG rendering, `$derived.by()` for graph transformation | SVG elements work natively in Svelte templates |
-| @humanspeak/svelte-virtual-list | ^0.4.2 | Still drives commit row rendering + scroll | Overlay syncs with its scroll via DOM access |
-| TypeScript | ~5.6.2 | Active Lanes transformation, bezier path generation, SVG data types | `strict: true` already enabled |
-| Tailwind CSS v4 | ^4.2.1 | Layout utilities, no SVG styling changes | No version change needed |
-| Rust (git2 0.19) | — | Lane algorithm unchanged | Already returns `GraphCommit[]` with column/edges |
-| vitest | ^4.1.0 | Unit tests for Active Lanes + bezier path functions | Established pattern in `graph-svg-data.test.ts` |
+### Icon Library: `@lucide/svelte`
 
----
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `@lucide/svelte` | `^0.577.0` | SVG icon components throughout the app | Svelte 5-native package (separate from `lucide-svelte` which targets Svelte 4). 1500+ icons, fully tree-shakable, renders inline SVG matching the app's existing SVG-heavy architecture. Each icon is a Svelte component with `size`, `color`, `strokeWidth` props. |
 
-## New Capabilities: How Each Is Achieved
+**Why `@lucide/svelte` over alternatives:**
 
-### 1. Single SVG Overlay Spanning Virtual List
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `@lucide/svelte` | `lucide-svelte` | `lucide-svelte` is the Svelte 4 compatible version. `@lucide/svelte` is the official Svelte 5 package using `$props()` runes natively. Same icon set, different component internals. |
+| `@lucide/svelte` | `@iconify/svelte` | Iconify fetches icons from a remote API at runtime by default — unacceptable for a desktop app that must work offline. Offline mode requires importing individual icon packages which adds complexity. Also, 216 KB unpacked vs Lucide's per-icon tree-shaking. |
+| `@lucide/svelte` | `svelte-radix` | Only ~310 Radix icons. Lucide has 1500+. Radix icons have a distinct minimal style that doesn't include git-specific icons (no git-branch, git-commit, tag, etc.). |
+| `@lucide/svelte` | Unicode symbols (current) | Current toolbar uses `&#8617;`, `&#8595;`, `&#128230;` etc. These render inconsistently across platforms, can't be sized/colored independently, and look amateur. Lucide provides proper visual consistency. |
 
-**What:** One `<svg>` element positioned absolutely over the graph column, full height of the virtualized content, scrolling in sync with the virtual list.
+**Relevant Lucide icons for v0.6 features:**
+- Toolbar: `Undo2`, `Redo2`, `ArrowDown` (pull), `ArrowUp` (push), `GitBranch`, `Package` (stash), `PackageOpen` (pop)
+- Staging: `Plus` / `Minus` (stage/unstage), `CirclePlus` / `CircleMinus` (stage all/unstage all), `Trash2` (discard)
+- Refs: `GitBranch`, `Tag`, `FolderGit2` (remote), `Layers` (stash)
+- Commit form: `GitCommit`, `PenLine` (amend), `Package` (stash) — for 3-way selector
+- Dialog/toast: `AlertTriangle`, `Info`, `CheckCircle`, `XCircle`
+- Navigation: `ChevronDown`, `ChevronRight` (section expand/collapse, replacing `▼`/`▶`)
+- Tag pill: `Tag` icon (addresses "find a better icon for the tag pill" requirement)
 
-**How (no library needed):**
-- The virtual list's DOM structure (verified in source) is:
-  ```
-  div#virtual-list-container  (position: relative; overflow: hidden)
-    div#virtual-list-viewport  (overflow-y: scroll)
-      div#virtual-list-content (height: {totalContentHeight}px)
-        div#virtual-list-items (transform: translateY)
-  ```
-- The SVG overlay is placed **inside** `#virtual-list-viewport` (via a Svelte wrapper that renders a sibling to the content div, or as an absolutely-positioned element inside the graph column).
-- SVG height = `totalCommits * ROW_HEIGHT` (same as content height).
-- Because SVG is inside the viewport's scroll container, it scrolls natively — no JS scroll sync needed.
-- `pointer-events: none` on the SVG root, `pointer-events: auto` on interactive elements (dots, ref pills).
-- viewBox is set to the full graph dimensions: `viewBox="0 0 {graphWidth} {totalHeight}"`.
-
-**Integration with virtual list:**
-- The SVG overlay does NOT use the virtual list's `renderItem` snippet — it's a separate Svelte component rendered as a sibling.
-- Access to the viewport element: `document.querySelector('#virtual-list-viewport')` or bind to wrapper div. The `debugFunction` callback provides `startIndex`/`endIndex` for optional SVG element culling, but SVG path elements outside viewport are not rendered by the browser (GPU culling handles this natively for path elements).
-
-**Performance:**
-- SVG with 10k `<path>` elements where only ~40 are visible: browsers cull non-visible paths during rasterization. No visible performance impact. This is standard SVG behavior — the DOM nodes exist but only visible ones are painted.
-- If profiling shows DOM node count matters (unlikely with `<path>`), visible-range culling using `startIndex`/`endIndex` from `debugFunction` is ~10 lines of filter logic.
-
-[Confidence: HIGH — verified virtual list DOM structure, standard SVG viewport culling behavior]
-
-### 2. TypeScript Active Lanes Transformation
-
-**What:** A pure TypeScript function that transforms Rust `GraphCommit[]` (with per-row edges) into global `GraphData` (continuous edges spanning multiple rows).
-
-**Stack needed:** Only TypeScript. No libraries.
-
-**Type design (new types in `types.ts` or `graph-overlay-types.ts`):**
-
-```typescript
-// Input: comes from Rust backend (existing type)
-// GraphCommit[] with per-row edges
-
-// Output: global graph data for SVG overlay
-interface GraphNode {
-  oid: string;
-  x: number;       // grid column (swimlane index)
-  y: number;       // row index
-  colorIndex: number;
-  isMerge: boolean;
-  isStash: boolean;
-  isBranchTip: boolean;
-  isWip: boolean;
-  refs: RefLabel[];
-}
-
-interface GraphEdge {
-  parentOid: string;
-  childOid: string;
-  colorIndex: number;
-  dashed: boolean;
-  path: string;     // SVG path d-string (cubic bezier)
-}
-
-interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  maxColumns: number;
-  totalRows: number;
-}
-```
-
-**Algorithm:** The "Active Lanes" algorithm iterates once through commits (O(n)), tracking which lanes are active at each row. For each commit, it emits a `GraphNode` and connects parent↔child with `GraphEdge`s. The edge path string is computed during this pass using the bezier curve function.
-
-**Testing:** Pure functions — tested with vitest exactly like existing `graph-svg-data.test.ts`. No DOM needed.
-
-[Confidence: HIGH — straightforward data transformation, established testing pattern]
-
-### 3. Cubic Bezier Curve Path Generation
-
-**What:** Replace Manhattan routing (`H`→`A`→`V` paths) with cubic bezier curves (`C` command) for GitKraken-style waterfall edges.
-
-**Stack needed:** SVG `<path>` `C` command. No libraries.
-
-**Math:** A cubic bezier `C` command takes two control points and an endpoint:
-```
-M x1 y1 C cx1 cy1, cx2 cy2, x2 y2
-```
-
-For a merge/fork edge connecting `(x1, y1)` to `(x2, y2)`:
-```typescript
-function bezierEdgePath(
-  x1: number, y1: number,  // child commit position
-  x2: number, y2: number,  // parent commit position
-): string {
-  // Control points: vertical tangent at both ends (waterfall curve)
-  const midY = (y1 + y2) / 2;
-  return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-}
-```
-
-This creates the smooth S-curve that GitKraken uses: the line leaves the child vertically, curves toward the parent lane, and arrives at the parent vertically. The control points ensure tangent continuity at endpoints.
-
-**For straight edges (same column):** Still `M x y1 V y2` — no bezier needed for vertical lines.
-
-**Key constants (adjusted from v0.2-v0.3):**
-
-| Constant | Current | Proposed | Why |
-|----------|---------|----------|-----|
-| `ROW_HEIGHT` | 26px | 36px | Taller rows give bezier curves room to breathe; matches GitKraken proportions |
-| `LANE_WIDTH` | 12px | 16px | Wider lanes prevent curve overlapping at high column counts |
-| `DOT_RADIUS` | 6px | 4px | Slightly smaller dots with wider lanes maintain visual balance |
-
-[Confidence: HIGH — SVG cubic bezier is a W3C spec primitive, no library needed]
-
-### 4. SVG Ref Pills (rect + text)
-
-**What:** Migrate ref pills from HTML `<span>` elements in CommitRow to SVG `<rect>` + `<text>` elements inside the overlay SVG.
-
-**Stack needed:** SVG `<rect>`, `<text>`, `<g>` elements. Canvas `measureText()` API for text width measurement. No libraries.
-
-**Text measurement (established in v0.4 research):**
-```typescript
-const offscreenCanvas = document.createElement('canvas');
-const ctx = offscreenCanvas.getContext('2d')!;
-ctx.font = '600 11px system-ui, -apple-system, sans-serif';
-
-function measurePillText(label: string): number {
-  return ctx.measureText(label).width;
-}
-```
-
-**SVG pill structure:**
+**Usage pattern:**
 ```svelte
-<g transform="translate({pillX}, {pillY})" class="ref-pill" onclick={handleRefClick}>
-  <rect rx="8" ry="8" width={pillWidth} height={pillHeight}
-    fill="var(--lane-{colorIndex % 8})" />
-  <text x={paddingX} y={textBaseline} fill="white"
-    font-size="11" font-weight="600" font-family="system-ui">
-    {label}
-  </text>
-</g>
+<script lang="ts">
+  import { GitBranch, Tag, Trash2 } from '@lucide/svelte';
+  // Or for faster builds, direct imports:
+  import GitBranch from '@lucide/svelte/icons/git-branch';
+</script>
+
+<GitBranch size={14} color="currentColor" strokeWidth={2} />
 ```
 
-**Positioning:** Ref pills are placed at `(pillX, nodeY)` where `pillX` is to the left of the graph column (or after the node dot, depending on layout). Connector lines from pill to node dot are simple `<line>` elements.
-
-**Overflow behavior:** When multiple refs exist on one commit, stack vertically or show "+N" badge — same UX as current HTML RefPill, but in SVG.
-
-[Confidence: HIGH — standard SVG primitives, Canvas measureText is synchronous and well-supported]
-
-### 5. Click/Context Menu Interaction on SVG Overlay
-
-**What:** Preserve click-to-select and right-click context menu on graph elements (dots, ref pills).
-
-**Stack needed:** SVG pointer events (native browser behavior). Tauri Menu API (already in use). No libraries.
-
-**How it works:**
-- SVG root: `pointer-events="none"` — clicks pass through to CommitRow divs beneath.
-- Interactive SVG elements (dots, ref pills): `pointer-events="auto"` — these capture clicks.
-- Right-click: use existing `showCommitContextMenu` from CommitGraph.svelte, invoked from SVG element's `oncontextmenu` handler.
-- Click: invoke `oncommitselect` callback same as today.
-
-**SVG event binding in Svelte:**
-```svelte
-<circle cx={node.cx} cy={node.cy} r={DOT_RADIUS}
-  fill={laneColor(node.colorIndex)}
-  pointer-events="auto"
-  onclick={() => oncommitselect?.(node.oid)}
-  oncontextmenu={(e) => showCommitContextMenu(e, node)}
-  style="cursor: pointer;"
-/>
+**TypeScript support:**
+```typescript
+import { type Icon as IconType } from '@lucide/svelte';
+// Use `typeof IconType` for component type references in menus/configs
 ```
 
-SVG elements receive the same DOM events as HTML elements — `onclick`, `oncontextmenu`, `onmouseenter`, etc. Svelte handles SVG event binding identically to HTML.
-
-**Hit area:** For thin elements (lines), use invisible wider `<path>` elements with `stroke-width="12"` and `opacity="0"` behind the visible path to expand the clickable area, if needed.
-
-[Confidence: HIGH — SVG pointer events are a fundamental browser capability, Tauri Menu API already used]
+**Confidence:** HIGH — Official Lucide docs explicitly document `@lucide/svelte` as the Svelte 5 package. Version 0.577.0 confirmed on npm (2026-03-04). 308K weekly downloads for the lucide-svelte ecosystem.
 
 ---
 
-## Virtual List Integration Strategy
+### Dialog / Notification System: No New Dependencies
 
-### Scroll Synchronization: Not Needed
+The app already has everything needed. **Do not add a toast/notification library.**
 
-The key insight: the SVG overlay lives **inside** the virtual list's scroll viewport. It scrolls natively. No JavaScript scroll sync code is required.
+| Approach | What to Use | Why |
+|----------|-------------|-----|
+| **Destructive confirmations** | `@tauri-apps/plugin-dialog` `ask()` | Already used for stash drop (BranchSidebar.svelte:207). Native OS dialog, correct for "are you sure?" prompts (discard, branch delete, tag delete). |
+| **Error messages** | `@tauri-apps/plugin-dialog` `message()` | Already used for 9+ error cases in CommitGraph.svelte. Native modal, blocks until dismissed, appropriate for errors. |
+| **In-app notifications/toasts** | Custom Svelte component (build it) | For non-blocking feedback ("Branch deleted", "Changes discarded"). Build a simple `<Toast>` component using the existing `$state` rune pattern. ~30 LOC. Not worth a dependency. |
+| **Input dialogs** | Existing `InputDialog.svelte` | Already handles branch/tag creation with field validation, Escape/Enter handling, backdrop click. Extend for any future input needs. |
 
-**Implementation:**
-1. Wrap the virtual list with a `position: relative` container.
-2. Inside the container, place the SVG overlay as `position: absolute; top: 0; left: 0; pointer-events: none;`.
-3. The SVG's height matches the virtual list's content height.
-4. The SVG is clipped by the viewport's `overflow: hidden` — only visible portions are painted.
+**Why not add a toast library:**
+- The app has ~4,400 LOC Svelte. A toast is ~30 LOC.
+- Libraries like `svelte-sonner` or `svelte-french-toast` add SSR handling, portal management, and animation systems designed for web apps — unnecessary overhead for a Tauri desktop app.
+- The existing `$state` rune + shared module pattern (see `remote-state.svelte.ts`) is the proven cross-component state pattern.
 
-**Alternative approach (if wrapper is complex):**
-Use `debugFunction` callback to get `startIndex` + `endIndex`, then set SVG `viewBox` to clip to visible range. This avoids needing to position the SVG inside the viewport DOM.
+**Recommended toast implementation pattern:**
+```typescript
+// lib/toast-state.svelte.ts
+type Toast = { id: number; message: string; kind: 'success' | 'error' | 'info'; };
+export const toastState = $state<{ toasts: Toast[] }>({ toasts: [] });
+export function showToast(message: string, kind: Toast['kind'] = 'info') {
+  const id = Date.now();
+  toastState.toasts = [...toastState.toasts, { id, message, kind }];
+  setTimeout(() => {
+    toastState.toasts = toastState.toasts.filter(t => t.id !== id);
+  }, 3000);
+}
+```
 
-### Accessing Virtual List Internals
-
-| Need | Approach | Risk |
-|------|----------|------|
-| Total content height | `displayItems.length * ROW_HEIGHT` (fixed row height) | None — we set height |
-| Scroll position | Not needed if SVG is inside viewport | — |
-| Visible range | `debugFunction` callback → `startIndex`, `endIndex` | None — stable API |
-| Scroll container DOM | `querySelector('#virtual-list-viewport')` | Low — ID is stable in library |
-
-[Confidence: HIGH — verified library DOM structure and API surface]
-
----
-
-## Rust Backend: No Changes Required
-
-Same conclusion as v0.4 research. The lane algorithm returns all data needed:
-
-| Rust Data | Frontend Use |
-|-----------|-------------|
-| `GraphCommit.column` | `GraphNode.x` (swimlane index) |
-| `GraphCommit.color_index` | `GraphNode.colorIndex` |
-| `GraphCommit.edges[]` | Source for `GraphEdge` construction |
-| `GraphCommit.is_branch_tip` | Where branch lines start |
-| `GraphCommit.is_merge` | Hollow dot styling |
-| `GraphCommit.is_stash` | Dashed line styling |
-| `GraphCommit.refs[]` | SVG ref pill data |
-| `GraphResult.max_columns` | SVG width calculation |
-
-The TypeScript Active Lanes transformation consumes this data and produces the overlay graph. No new IPC commands, no Rust type changes.
-
-[Confidence: HIGH — direct comparison of Rust types.rs with required GraphNode/GraphEdge fields]
+**Confidence:** HIGH — existing patterns verified in codebase. `@tauri-apps/plugin-dialog` already in Cargo.toml and package.json with 9+ existing usage sites.
 
 ---
 
-## File Impact Summary
+### git2 APIs for New Operations
 
-| File | Change | Description |
-|------|--------|-------------|
-| `graph-overlay.ts` | **New** | Active Lanes transformation: `GraphCommit[]` → `GraphData` |
-| `graph-bezier.ts` | **New** | Cubic bezier path generation functions |
-| `graph-overlay.test.ts` | **New** | Unit tests for Active Lanes algorithm |
-| `graph-bezier.test.ts` | **New** | Unit tests for bezier path functions |
-| `GraphOverlay.svelte` | **New** | Single SVG overlay component (replaces GraphCell + LaneSvg) |
-| `SvgRefPill.svelte` | **New** | SVG ref pill component (`<g>` with `<rect>` + `<text>`) |
-| `graph-constants.ts` | Modify | Updated ROW_HEIGHT, LANE_WIDTH, DOT_RADIUS |
-| `types.ts` | Modify | Add `GraphNode`, `GraphEdge`, `GraphData` interfaces |
-| `CommitGraph.svelte` | Major refactor | Integrate overlay, remove GraphCell context, add SVG event handlers |
-| `CommitRow.svelte` | Simplify | Remove GraphCell, remove ref pill connector line, remove ref pill HTML |
-| `GraphCell.svelte` | **Delete** | Replaced by GraphOverlay |
-| `LaneSvg.svelte` | **Delete** | Already superseded by GraphCell; now fully replaced |
-| `RefPill.svelte` | **Delete** | Replaced by SvgRefPill |
-| `graph-svg-data.ts` | **Delete** | Replaced by graph-overlay.ts |
-| `graph-svg-data.test.ts` | **Delete** | Replaced by graph-overlay.test.ts |
+No new Rust crate dependencies needed. All operations use existing `git2 = "0.19"`.
+
+#### Discard Changes (revert working tree files)
+
+**Two cases, two approaches:**
+
+| File State | git2 API | Equivalent git command |
+|------------|----------|----------------------|
+| **Tracked modified/deleted** | `repo.checkout_head()` with `CheckoutBuilder::force().path(file)` | `git checkout -- <file>` |
+| **Untracked new files** | `std::fs::remove_file()` / `std::fs::remove_dir_all()` | `rm <file>` |
+
+**Implementation sketch:**
+```rust
+pub fn discard_file_inner(
+    path: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    let status = repo.status_file(std::path::Path::new(file_path))?;
+
+    if status.contains(git2::Status::WT_NEW) {
+        // Untracked file — just delete it
+        let full_path = repo.workdir()
+            .ok_or_else(|| TrunkError::new("bare_repo", "Cannot discard in bare repo"))?
+            .join(file_path);
+        if full_path.is_dir() {
+            std::fs::remove_dir_all(&full_path)
+                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+        } else {
+            std::fs::remove_file(&full_path)
+                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+        }
+    } else {
+        // Tracked file — checkout from HEAD
+        repo.checkout_head(Some(
+            git2::build::CheckoutBuilder::new()
+                .force()
+                .path(file_path)
+        ))?;
+    }
+    Ok(())
+}
+```
+
+**Key APIs (all confirmed in git2 0.19.0 docs):**
+- `repo.status_file(path)` — returns `Status` bitflags for one file
+- `repo.checkout_head(opts)` — already used in `create_branch_inner` (branches.rs:279)
+- `CheckoutBuilder::force()` — "take any action necessary to get the working directory to match"
+- `CheckoutBuilder::path(file)` — scopes checkout to a single file instead of entire tree
+
+**Discard all:** Same pattern but use `checkout_head(force)` without path filter (discards all tracked), then iterate `get_status_inner` result to delete remaining `WT_NEW` files.
+
+**Confidence:** HIGH — `checkout_head`, `CheckoutBuilder::force()`, and `CheckoutBuilder::path()` all verified in git2 0.19.0 docs.
+
+#### Branch Delete
+
+**API:** `Branch::delete(&mut self) -> Result<(), Error>`
+
+```rust
+pub fn delete_branch_inner(
+    path: &str,
+    branch_name: &str,
+    force: bool,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    let mut branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
+
+    if branch.is_head() {
+        return Err(TrunkError::new(
+            "cannot_delete_head",
+            "Cannot delete the currently checked out branch",
+        ));
+    }
+
+    // Optional: check if merged (for non-force delete)
+    if !force {
+        if let (Ok(head_ref), Some(branch_oid)) = (repo.head(), branch.get().target()) {
+            if let Ok(head_oid) = head_ref.target()
+                .ok_or(())
+                .and_then(|h| repo.merge_base(branch_oid, h).map_err(|_| ())) {
+                if head_oid != branch_oid {
+                    return Err(TrunkError::new(
+                        "branch_not_merged",
+                        format!("Branch '{}' is not fully merged. Use force delete.", branch_name),
+                    ));
+                }
+            }
+        }
+    }
+
+    branch.delete()?;
+    Ok(())
+}
+```
+
+**Key details:**
+- `repo.find_branch(name, BranchType::Local)` — already used in test code (branches.rs)
+- `Branch::delete()` takes `&mut self` — directly deletes the ref
+- Must check `branch.is_head()` to prevent deleting the current branch
+- Merge check is optional — let the frontend decide via `ask()` dialog whether to force
+
+**Confidence:** HIGH — `Branch::delete()` verified in git2 0.19.0 docs. `find_branch()` already used in existing tests.
+
+#### Tag Delete
+
+**API:** `Repository::tag_delete(&self, name: &str) -> Result<(), Error>`
+
+```rust
+pub fn delete_tag_inner(
+    path: &str,
+    tag_name: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    repo.tag_delete(tag_name)?;
+    Ok(())
+}
+```
+
+**Key details:**
+- `tag_delete` takes the short name (e.g., "v1.0.0"), NOT the full ref ("refs/tags/v1.0.0")
+- Already have `repo.tag()` in `create_tag_inner` (commit_actions.rs:75) — symmetric operation
+- Confirmation dialog in frontend before calling (tags may be pushed to remotes)
+
+**Confidence:** HIGH — `Repository::tag_delete()` verified in git2 0.19.0 docs.
 
 ---
 
 ## What NOT to Add
 
-| Temptation | Why Not | What to Do Instead |
-|------------|---------|-------------------|
-| D3.js | 108KB min+gz. The geometry is lines + bezier curves + rectangles. D3's force layouts, scales, axes are unused. | Plain TypeScript path string functions |
-| SVG.js / Snap.svg | DOM manipulation libraries that conflict with Svelte's reactive rendering. Svelte IS the SVG DOM library here. | Svelte template `<path>`, `<circle>`, `<rect>`, `<text>` |
-| Canvas rendering | Loses CSS custom properties (`var(--lane-N)`), loses native pointer events, requires imperative draw calls instead of declarative Svelte templates. | SVG with pointer-events |
-| Dagre / ELK / graph layout library | We already HAVE a graph layout (Rust lane algorithm). These solve a different problem (generic DAG layout). | Use existing column/row data |
-| `@floating-ui` / Popper.js | For ref pill overflow popover. SVG `<g>` transforms + Svelte `{#if}` handle this without a positioning library. | Manual SVG positioning |
-| Web Workers for transformation | Active Lanes is O(n) — sub-millisecond for 10k commits. The expensive work (lane algorithm) already runs in Rust. | Main thread `$derived.by()` |
-| `requestAnimationFrame` scroll sync | SVG lives inside the scroll container. It scrolls natively. No sync needed. | Position SVG inside viewport |
-| Path smoothing / interpolation libraries | Cubic bezier `C` command is a single SVG primitive. No library can improve on `M x1 y1 C cx1 cy1, cx2 cy2, x2 y2`. | Direct `C` path command |
-| Fork @humanspeak/svelte-virtual-list | To expose scroll events. Not needed — SVG inside viewport scrolls natively; `debugFunction` provides visible range. | Use existing API + DOM access |
-| Any animation library | Graph transitions are not in scope. Static path rendering with Svelte's native transitions if ever needed. | Defer to v0.6+ if desired |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `svelte-sonner` / `svelte-french-toast` | SSR-oriented, portal complexity, overkill for desktop app | Custom `<Toast>` with `$state` rune (~30 LOC) |
+| `@iconify/svelte` | Fetches icons from remote API by default — fails offline in desktop app | `@lucide/svelte` (bundled, tree-shakable) |
+| `lucide-svelte` (without @lucide scope) | Targets Svelte 4, not Svelte 5 runes-native | `@lucide/svelte` (Svelte 5 native) |
+| Any animation library | Existing CSS transitions + Svelte `transition:fade` sufficient for toast | `svelte/transition` (built-in) |
+| Any new Rust crates | All git operations covered by existing `git2 = "0.19"` | `Branch::delete()`, `tag_delete()`, `checkout_head()` with `force().path()` |
+| Custom icon font | Adds build complexity, can't tree-shake, can't color individual strokes | SVG icon components from `@lucide/svelte` |
+| `tauri-plugin-notification` | System-level notifications are too heavy for in-app feedback | Custom toast or `message()` dialog |
 
 ---
 
-## Alternatives Considered
+## Installation
 
-| Category | Recommended | Alternative | When to Use Alternative |
-|----------|-------------|-------------|-------------------------|
-| Rendering | Single SVG overlay | Per-row SVG with viewBox (v0.2-v0.3 approach) | Never — overlay enables continuous paths, eliminates seam artifacts |
-| Curve type | Cubic bezier (`C`) | Quadratic bezier (`Q`) | If edges always have exactly one bend; cubic is more flexible for S-curves |
-| Curve type | Cubic bezier (`C`) | Manhattan routing (`H`+`A`+`V`) | If you want angular look (current v0.3). Bezier is strictly better for this use case. |
-| Text measurement | Canvas `measureText` | Character-width heuristic | If pills don't need pixel-perfect sizing (saves one canvas allocation) |
-| SVG culling | Let browser handle (GPU cull) | Manual `{#if}` visible range filter | Only if profiling shows 10k+ `<path>` DOM nodes cause layout performance issues |
-| Overlay position | Inside viewport (native scroll) | Outside viewport (JS scroll sync) | Never — inside is simpler and avoids all sync bugs |
-| Ref pill rendering | SVG `<rect>` + `<text>` | Keep HTML `<span>` pills in CommitRow | If SVG text rendering quality is unacceptable (unlikely with system font) |
+```bash
+# One new npm dependency (icons)
+npm install @lucide/svelte
+
+# No new Rust dependencies — all operations use existing git2 = "0.19"
+# No Cargo.toml changes
+# No tauri.conf.json changes (dialog plugin already configured)
+```
 
 ---
 
@@ -311,63 +254,76 @@ The TypeScript Active Lanes transformation consumes this data and produces the o
 
 | Package | Compatible With | Notes |
 |---------|-----------------|-------|
-| svelte ^5.0.0 | SVG elements, pointer events, `$derived.by()` | All SVG features work natively |
-| @humanspeak/svelte-virtual-list ^0.4.2 | SVG overlay inside viewport | No API changes needed; DOM structure verified |
-| typescript ~5.6.2 | New interfaces, strict typing | No version change needed |
-| vitest ^4.1.0 | New test files for bezier + overlay | Established pattern works |
-| tailwindcss ^4.2.1 | Overlay positioning utilities | No version change needed |
+| `@lucide/svelte@^0.577.0` | `svelte@^5.0.0` | Explicitly designed for Svelte 5. Uses `$props()` runes internally. |
+| `@lucide/svelte@^0.577.0` | `vite@^6.0.0` | Pure ES modules, works with Vite's tree-shaking out of the box. |
+| `git2@0.19` | Existing — no changes | `Branch::delete()`, `tag_delete()`, `checkout_head(force)` all in 0.19.0. |
+| `@tauri-apps/plugin-dialog@^2.6.0` | Existing — no changes | `ask()`, `message()` already used for confirmations and errors. |
 
 ---
 
-## Installation
+## Integration Points
 
-```bash
-# No new packages needed
-# The existing stack covers all v0.5 requirements
+### Icon Integration with Existing Components
+
+| Component | Current Icons | Replace With |
+|-----------|--------------|--------------|
+| `Toolbar.svelte` | Unicode: `↩ ↪ ↓ ↑ ⏗ 📦 📥` | Lucide: `Undo2`, `Redo2`, `ArrowDown`, `ArrowUp`, `GitBranch`, `Package`, `PackageOpen` |
+| `FileRow.svelte` | Text symbols: `+`, `✎`, `−`, `→`, `⇄`, `!` | **Keep as-is** — these are single-character status badges, not icons. Text symbols are the correct convention for file status indicators (Git, VS Code, and GitKraken all use similar). |
+| `StagingPanel.svelte` | Text: "Stage All Changes", "Unstage All" with `▼`/`▶` chevrons | Add Lucide `ChevronDown`/`ChevronRight` for expand toggles. Add `Plus`/`Minus` icons to "Stage All" / "Unstage All" buttons. |
+| `BranchSection.svelte` | No icons, `▶`/`▼` for expand | Add section header icons: `GitBranch` (Local), `Globe` (Remote), `Tag` (Tags), `Layers` (Stashes). Replace `▶`/`▼` with `ChevronRight`/`ChevronDown`. |
+| `CommitForm.svelte` | No icons, checkbox for amend | Replace checkbox with 3-way selector using icons: `GitCommit` (commit), `PenLine` (amend), `Package` (stash) |
+| `TabBar.svelte` | `×` text close button | Lucide `X` icon (14px, consistent with other icons) |
+| SVG ref pills | Text-only tag pill | Lucide `Tag` icon rendered as inline SVG `<path>` data (not as component — pills are in SVG overlay, need raw path data) |
+| `WelcomeScreen.svelte` | No icons | Lucide `FolderOpen` for the "Open Repository" button |
+
+### Dialog Integration for New Operations
+
+| Operation | Dialog Type | Existing Pattern |
+|-----------|-------------|------------------|
+| Discard single file | `ask()` — "Discard changes to {file}?" | Same as stash drop in BranchSidebar.svelte |
+| Discard all files | `ask()` with `kind: 'warning'` — "Discard all changes?" | Same pattern |
+| Delete branch | `ask()` — "Delete branch {name}?"; warn if unmerged | Same pattern |
+| Delete tag | `ask()` — "Delete tag {name}?" | Same pattern |
+| Success feedback | Custom `<Toast>` — "Branch deleted" | New pattern (described above) |
+| Error feedback | `message()` with `kind: 'error'` | 9+ existing usages in CommitGraph.svelte |
+
+### Rust Command Pattern for New Operations
+
+Follow the established `inner-fn` pattern (e.g., `create_tag_inner` → `create_tag`):
+
+```
+discard_file_inner   → discard_file    (Tauri command)
+discard_all_inner    → discard_all     (Tauri command)
+delete_branch_inner  → delete_branch   (Tauri command)
+delete_tag_inner     → delete_tag      (Tauri command)
 ```
 
----
+Each new command should:
+1. Clone `state_map` from `RepoState` (established pattern)
+2. Run in `tauri::async_runtime::spawn_blocking` (established pattern)
+3. Rebuild graph cache after mutation for branch/tag delete (changes ref labels in graph)
+4. Emit `repo-changed` event via `app.emit()` (established pattern)
+5. Return `Result<(), String>` with `TrunkError` serialization (established pattern)
 
-## Confidence Assessment
-
-| Area | Confidence | Reason |
-|------|------------|--------|
-| No new dependencies | HIGH | Every capability maps to browser primitives (SVG, Canvas measureText, DOM events) |
-| SVG overlay approach | HIGH | SVG inside scroll container is standard pattern; verified virtual list DOM structure |
-| Cubic bezier curves | HIGH | SVG `C` command is W3C spec; simple control point math |
-| Active Lanes algorithm | HIGH | O(n) transformation of existing data; pure function, easily tested |
-| SVG ref pills | HIGH | `<rect>` + `<text>` in SVG is basic; Canvas measureText for sizing is synchronous |
-| SVG interactions | HIGH | `pointer-events` CSS property + DOM event handlers are standard |
-| Virtual list integration | HIGH | Verified DOM structure, debugFunction API, ID-based querySelector |
+**Where to place new commands:**
+- `discard_file` / `discard_all` → `staging.rs` (alongside stage/unstage)
+- `delete_branch` → `branches.rs` (alongside create/checkout branch)
+- `delete_tag` → `commit_actions.rs` (alongside create_tag)
 
 ---
 
 ## Sources
 
-### Library Source Code (HIGH confidence)
-- `node_modules/@humanspeak/svelte-virtual-list/dist/SvelteVirtualList.svelte` — DOM structure (4-layer: container → viewport → content → items), `debugFunction` callback, no scroll position prop
-- `node_modules/@humanspeak/svelte-virtual-list/dist/types.d.ts` — full API surface
-
-### Existing Codebase (HIGH confidence)
-- `src/lib/graph-svg-data.ts` — current Manhattan routing path generation (being replaced)
-- `src/lib/graph-svg-data.test.ts` — testing pattern for path functions (19 tests)
-- `src/lib/graph-constants.ts` — `LANE_WIDTH=12`, `ROW_HEIGHT=26`, `DOT_RADIUS=6`
-- `src/lib/types.ts` — `GraphCommit`, `GraphEdge`, `SvgPathData`, `RefLabel` interfaces
-- `src/components/GraphCell.svelte` — per-row SVG with viewBox clipping (being replaced)
-- `src/components/LaneSvg.svelte` — original per-row SVG (already superseded)
-- `src/components/CommitRow.svelte` — HTML ref pill connector line, graph column layout
-- `src/components/RefPill.svelte` — HTML `<span>` ref pills (being replaced by SVG)
-- `src/components/CommitGraph.svelte` — virtual list integration, context menu, `$derived.by()` usage
-- `src-tauri/src/git/types.rs` — Rust types confirming all needed data is serialized
-- `tsconfig.json` — `strict: true`, `moduleResolution: bundler`, `target: ESNext`
-
-### SVG Specification (HIGH confidence)
-- [MDN SVG path — cubic bezier](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths#curve_commands)
-- [MDN pointer-events](https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events)
-- [MDN Canvas measureText](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/measureText)
-- [SVG text element](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/text)
+- [git2 0.19.0 Repository docs](https://docs.rs/git2/0.19.0/git2/struct.Repository.html) — `tag_delete()`, `checkout_head()`, `status_file()` (HIGH confidence)
+- [git2 0.19.0 Branch docs](https://docs.rs/git2/0.19.0/git2/struct.Branch.html) — `Branch::delete()`, `find_branch()`, `is_head()` (HIGH confidence)
+- [git2 0.19.0 CheckoutBuilder docs](https://docs.rs/git2/0.19.0/git2/build/struct.CheckoutBuilder.html) — `force()`, `path()` (HIGH confidence)
+- [Lucide Svelte docs](https://lucide.dev/guide/packages/lucide-svelte) — `@lucide/svelte` for Svelte 5, import patterns, props API (HIGH confidence)
+- [npm: @lucide/svelte](https://www.npmjs.com/package/@lucide/svelte) — version 0.577.0, confirmed on npm (HIGH confidence)
+- [npm: lucide-svelte](https://www.npmjs.com/package/lucide-svelte) — Svelte 4 version, 308K weekly downloads (HIGH confidence)
+- [npm: @iconify/svelte](https://www.npmjs.com/package/@iconify/svelte) — API-dependent, not suitable for offline desktop (HIGH confidence)
+- [npm: svelte-radix](https://www.npmjs.com/package/svelte-radix) — Only 310 icons, no git-specific icons (HIGH confidence)
+- Existing codebase: `branches.rs`, `commit_actions.rs`, `staging.rs`, `Toolbar.svelte`, `BranchSidebar.svelte`, `CommitGraph.svelte`, `InputDialog.svelte`, `FileRow.svelte`, `CommitForm.svelte`, `StagingPanel.svelte` (HIGH confidence)
 
 ---
-
-*Stack research for: Trunk v0.5 — Single SVG overlay graph with cubic bezier curves*
-*Researched: 2026-03-13*
+*Stack research for: Trunk v0.6 UI Polish & Core Ops*
+*Researched: 2026-03-15*
