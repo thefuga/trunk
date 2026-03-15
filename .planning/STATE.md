@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
 status: completed
-stopped_at: Completed 28-04-PLAN.md
+stopped_at: Phase 28 complete, ready to plan Phase 29
 last_updated: "2026-03-15T21:49:55.992Z"
 last_activity: 2026-03-15 - Completed 28-04 overflow pill context menus
 progress:
@@ -24,13 +24,13 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 
 ## Current Position
 
-Phase: 28 — Destructive Operations
-Plan: 4 of 4 complete
-Status: Phase 28 complete
-Last activity: 2026-03-15 - Completed 28-04 overflow pill context menus
+Phase: 29 — Staging & Commit UX
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-03-15 - Phase 28 complete (gap closure verified)
 
 ```
-v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/5 phases
+v0.6 Progress: [████████████░░░░░░░░] 3/5 phases
 ```
 
 ## Performance Metrics
@@ -105,7 +105,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 
 ## Session Continuity
 
-Last session: 2026-03-15T21:44:14.181Z
-Stopped at: Completed 28-04-PLAN.md
+Last session: 2026-03-15
+Stopped at: Phase 28 complete, ready to plan Phase 29
 Resume file: None
-Next action: Execute 28-02-PLAN.md
+Next action: Discuss Phase 29
