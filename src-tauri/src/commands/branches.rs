@@ -564,6 +564,63 @@ mod tests {
     }
 
     #[test]
+    fn delete_branch_removes_ref() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+        let mut cache_map = std::collections::HashMap::new();
+
+        // Create a branch to delete
+        create_branch_inner(&path, "to-delete", None, &state_map, &mut cache_map).unwrap();
+        // Switch back to main so to-delete isn't HEAD
+        checkout_branch_inner(&path, "main", &state_map, &mut cache_map).unwrap();
+
+        // Delete the branch
+        let result = super::delete_branch_inner(&path, "to-delete", &state_map, &mut cache_map);
+        assert!(result.is_ok(), "delete_branch should succeed: {:?}", result.err());
+
+        // Verify branch no longer exists
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        let branch = repo.find_branch("to-delete", git2::BranchType::Local);
+        assert!(branch.is_err(), "to-delete branch should no longer exist");
+    }
+
+    #[test]
+    fn delete_head_branch_fails() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+        let mut cache_map = std::collections::HashMap::new();
+
+        // Try to delete main (which is HEAD)
+        let result = super::delete_branch_inner(&path, "main", &state_map, &mut cache_map);
+        assert!(result.is_err(), "deleting HEAD branch should fail");
+        assert_eq!(result.unwrap_err().code, "cannot_delete_head");
+    }
+
+    #[test]
+    fn rename_branch_changes_name() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+        let mut cache_map = std::collections::HashMap::new();
+
+        // Create a branch to rename
+        create_branch_inner(&path, "old-name", None, &state_map, &mut cache_map).unwrap();
+        // Switch back to main so old-name isn't HEAD (optional, rename should work on non-HEAD)
+        checkout_branch_inner(&path, "main", &state_map, &mut cache_map).unwrap();
+
+        // Rename the branch
+        let result = super::rename_branch_inner(&path, "old-name", "new-name", &state_map, &mut cache_map);
+        assert!(result.is_ok(), "rename_branch should succeed: {:?}", result.err());
+
+        // Verify old name gone, new name exists
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        assert!(repo.find_branch("old-name", git2::BranchType::Local).is_err(), "old-name should be gone");
+        assert!(repo.find_branch("new-name", git2::BranchType::Local).is_ok(), "new-name should exist");
+    }
+
+    #[test]
     fn create_branch_from_oid_dirty_workdir() {
         let dir = make_test_repo();
         let path = dir.path().to_string_lossy().to_string();

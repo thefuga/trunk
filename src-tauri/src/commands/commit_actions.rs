@@ -719,6 +719,30 @@ mod tests {
         assert_eq!(result.unwrap_err().code, "merge_commit");
     }
 
+    // --- delete_tag tests ---
+
+    #[test]
+    fn delete_tag_removes_ref() {
+        let (dir, state_map, _first_oid, second_oid) = make_test_repo_two_commits();
+        let path = dir.path().to_str().unwrap();
+
+        // Create a tag first
+        create_tag_inner(path, &second_oid, "v-del", "to delete", &state_map).unwrap();
+
+        // Verify it exists
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        assert!(repo.find_reference("refs/tags/v-del").is_ok(), "tag v-del should exist before delete");
+        drop(repo);
+
+        // Delete the tag
+        let result = super::delete_tag_inner(path, "v-del", &state_map);
+        assert!(result.is_ok(), "delete_tag should succeed: {:?}", result.err());
+
+        // Verify tag no longer exists
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        assert!(repo.find_reference("refs/tags/v-del").is_err(), "tag v-del should no longer exist");
+    }
+
     // --- revert_commit tests ---
 
     #[test]
