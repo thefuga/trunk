@@ -5,7 +5,7 @@ milestone_name: UI Polish & Core Ops
 status: defining_requirements
 stopped_at: Defining requirements
 last_updated: "2026-03-15"
-last_activity: "2026-03-15 - Milestone v0.6 started"
+last_activity: "2026-03-15 - Completed quick task 10: make the pill line thinner"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
 Phase: Not started (defining requirements)
 Plan: —
 Status: Defining requirements
-Last activity: 2026-03-15 — Milestone v0.6 started
+Last activity: 2026-03-15 - Completed quick task 10: make the pill line thinner
 
 ## Performance Metrics
 
