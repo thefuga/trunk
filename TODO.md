@@ -51,3 +51,11 @@
 
 ## Benchmarks
 - Build a robust set of benchmarks covering core algorithms and critical paths so we can measure baseline performance, identify bottlenecks, and iterate on optimizations to make the application feel snappier
+
+# CI/CD & Releases
+
+## Continuous Integration
+- Set up a full CI system on GitHub (GitHub Actions) to run tests, linting, and builds on every push and pull request
+
+## Release Publishing
+- Publish releases with builds to GitHub Releases, targeting macOS (primary), Linux, and Windows
