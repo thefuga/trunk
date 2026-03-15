@@ -175,7 +175,7 @@ Plans:
 | 24. Integration | v0.5 | 1/1 | Complete | 2026-03-14 |
 | 25. Interaction Preservation | v0.5 | 1/1 | Complete | 2026-03-14 |
 | 26. SVG Ref Pills | v0.5 | 2/2 | Complete | 2026-03-14 |
-| 27. Foundation — Icons, Toast & Bug Fixes | 2/4 | In Progress|  | - |
+| 27. Foundation — Icons, Toast & Bug Fixes | 3/4 | In Progress|  | - |
 | 28. Destructive Operations | v0.6 | 0/? | Not started | - |
 | 29. Staging & Commit UX | v0.6 | 0/? | Not started | - |
 | 30. Graph Polish & Navigation | v0.6 | 0/? | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: UI Polish & Core Ops
 status: planning
-stopped_at: Completed 27-foundation-icons-toast-bug-fixes-27-04-PLAN.md
-last_updated: "2026-03-15T04:26:12.011Z"
+stopped_at: Completed 27-foundation-icons-toast-bug-fixes 27-02-PLAN.md
+last_updated: "2026-03-15T04:27:43.349Z"
 last_activity: 2026-03-15 - v0.6 roadmap created (phases 27-31)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -43,6 +43,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 | Days | 7 | 2 | 3 | 1 | 2 | — |
 | Phase 27-foundation-icons-toast-bug-fixes P03 | 3min | 2 tasks | 9 files |
 | Phase 27-foundation-icons-toast-bug-fixes P04 | 8min | 2 tasks | 2 files |
+| Phase 27-foundation-icons-toast-bug-fixes P02 | 6min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -56,6 +57,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 - [Phase 27-foundation-icons-toast-bug-fixes]: Used @lucide/svelte (Svelte 5 package) not lucide-svelte for Svelte 5 compatibility — Svelte 5 requires @lucide/svelte; lucide-svelte causes SvelteComponent type errors
 - [Phase 27-foundation-icons-toast-bug-fixes]: Extracted get_dirty_counts_inner as sync fn for testability (mirrors get_status_inner pattern) — Enables unit tests to call inner fn directly without Tauri async runtime
 - [Phase 27-foundation-icons-toast-bug-fixes]: message column resize handle is never guarded by lastVisibleColumn — It targets author column width from the left edge; suppressing it would break author column resizing
+- [Phase 27-foundation-icons-toast-bug-fixes]: _resetToasts() helper added to toast store for Vitest test isolation of Svelte 5 module-level state
 
 ### Pending Todos
 
@@ -82,7 +84,7 @@ v0.6 Progress: [░░░░░░░░░░░░░░░░░░░░] 0/
 
 ## Session Continuity
 
-Last session: 2026-03-15T04:26:12.004Z
-Stopped at: Completed 27-foundation-icons-toast-bug-fixes-27-04-PLAN.md
+Last session: 2026-03-15T04:27:30.518Z
+Stopped at: Completed 27-foundation-icons-toast-bug-fixes 27-02-PLAN.md
 Resume file: None
 Next action: `/gsd-plan-phase 27`

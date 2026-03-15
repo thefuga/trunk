@@ -41,7 +41,7 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 
 ### Toast System
 
-- [ ] **TOAST-01**: App displays toast notifications for operation success and error feedback
+- [x] **TOAST-01**: App displays toast notifications for operation success and error feedback
 
 ### Layout
 
@@ -111,7 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRAPH-03 | Phase 30 | Pending |
 | FIX-01 | Phase 27 | Complete |
 | FIX-02 | Phase 27 | Complete |
-| TOAST-01 | Phase 27 | Pending |
+| TOAST-01 | Phase 27 | Complete |
 | LAYOUT-01 | Phase 30 | Pending |
 | LAYOUT-02 | Phase 31 | Pending |
 
