@@ -2,6 +2,7 @@
   import { safeInvoke } from '../lib/invoke.js';
   import type { HeadCommitMessage } from '../lib/types.js';
   import { clearRedoStack } from '../lib/undo-redo.svelte.js';
+  import { showToast } from '../lib/toast.svelte.js';
 
   interface Props {
     repoPath: string;
@@ -13,22 +14,30 @@
 
   let subject = $state('');
   let body = $state('');
-  let amend = $state(false);
+  let mode = $state<'commit' | 'amend' | 'stash'>('commit');
   let committing = $state(false);
   let subjectError = $state('');
   let stagedError = $state('');
 
-  // Clear stagedError when stagedCount changes or amend changes
+  let buttonLabel = $derived.by(() => {
+    if (committing) {
+      return mode === 'commit' ? 'Committing...' : mode === 'amend' ? 'Amending...' : 'Stashing...';
+    }
+    return mode === 'commit' ? 'Commit' : mode === 'amend' ? 'Amend' : 'Stash';
+  });
+
+  // Clear stagedError when stagedCount changes or mode changes
   $effect(() => {
     // access reactive values to track them
     const _staged = stagedCount;
-    const _amend = amend;
+    const _mode = mode;
     stagedError = '';
   });
 
-  async function handleAmendToggle(checked: boolean) {
-    amend = checked;
-    if (checked) {
+  async function handleModeSwitch(newMode: 'commit' | 'amend' | 'stash') {
+    if (newMode === mode) return;
+    mode = newMode;
+    if (newMode === 'amend') {
       try {
         const msg = await safeInvoke<HeadCommitMessage>('get_head_commit_message', { path: repoPath });
         subject = msg.subject;
@@ -36,35 +45,45 @@
       } catch (e) {
         console.error('Failed to get HEAD commit message:', e);
       }
-    } else {
-      subject = '';
-      body = '';
     }
+    // Switching away from amend or between commit/stash: keep current values (don't clear)
   }
 
   async function handleSubmit() {
-    clearRedoStack();
     subjectError = '';
     stagedError = '';
 
-    if (!subject.trim()) {
+    // Stash mode: subject is optional (stash name). Commit/amend: subject required.
+    if (mode !== 'stash' && !subject.trim()) {
       subjectError = 'Subject is required';
       return;
     }
 
-    if (!amend && stagedCount === 0) {
+    // All modes require staged files (except amend which can amend message-only)
+    if (mode !== 'amend' && stagedCount === 0) {
       stagedError = 'No files staged';
       return;
     }
 
+    // clearRedoStack only for commit/amend (modifies history), not stash
+    if (mode !== 'stash') {
+      clearRedoStack();
+    }
+
     committing = true;
     try {
-      if (amend) {
+      if (mode === 'amend') {
         await safeInvoke('amend_commit', {
           path: repoPath,
           subject: subject.trim(),
           body: body.trim() || null,
         });
+      } else if (mode === 'stash') {
+        await safeInvoke('stash_save', {
+          path: repoPath,
+          message: subject.trim(),
+        });
+        showToast('Stash created', 'success');
       } else {
         await safeInvoke('create_commit', {
           path: repoPath,
@@ -75,9 +94,14 @@
       subject = '';
       onsubjectchange?.('');
       body = '';
-      amend = false;
+      mode = 'commit'; // Always reset to commit mode after any successful operation
     } catch (e) {
-      console.error('Commit failed:', e);
+      const err = e as { message?: string };
+      const action = mode === 'commit' ? 'Commit' : mode === 'amend' ? 'Amend' : 'Stash';
+      console.error(`${action} failed:`, e);
+      if (mode === 'stash') {
+        showToast(err.message ?? 'Stash failed', 'error');
+      }
     } finally {
       committing = false;
     }
@@ -91,11 +115,34 @@
   gap: 6px;
   flex-shrink: 0;
 ">
+  <!-- Mode tab selector -->
+  <div style="display: flex; gap: 0; border-bottom: 1px solid var(--color-border); margin-bottom: 2px;">
+    {#each [['commit', 'Commit'], ['amend', 'Amend'], ['stash', 'Stash']] as [tab, label]}
+      <button
+        onclick={() => handleModeSwitch(tab as 'commit' | 'amend' | 'stash')}
+        disabled={committing}
+        style="
+          flex: 1;
+          padding: 6px 0 4px;
+          font-size: 11px;
+          background: none;
+          border: none;
+          border-bottom: 2px solid {mode === tab ? 'var(--color-accent)' : 'transparent'};
+          color: {mode === tab ? 'var(--color-text)' : 'var(--color-text-muted)'};
+          cursor: {committing ? 'default' : 'pointer'};
+          text-transform: none;
+        "
+      >
+        {label}
+      </button>
+    {/each}
+  </div>
+
   <!-- Subject field -->
   <input
     type="text"
     bind:value={subject}
-    placeholder="Summary (required)"
+    placeholder={mode === 'stash' ? 'Stash name (optional)' : 'Summary (required)'}
     oninput={(e) => { if (subjectError) subjectError = ''; onsubjectchange?.((e.target as HTMLInputElement).value); }}
     style="
       width: 100%;
@@ -130,19 +177,6 @@
     "
   ></textarea>
 
-  <!-- Amend checkbox row -->
-  <div style="display: flex; align-items: center; gap: 6px;">
-    <input
-      id="amend-checkbox"
-      type="checkbox"
-      checked={amend}
-      oninput={(e) => handleAmendToggle((e.target as HTMLInputElement).checked)}
-    />
-    <label for="amend-checkbox" style="font-size: 12px; color: var(--color-text-muted);">
-      Amend previous commit
-    </label>
-  </div>
-
   <!-- Staged error -->
   {#if stagedError}
     <span style="font-size: 11px; color: #f87171;">{stagedError}</span>
@@ -164,6 +198,6 @@
       opacity: {committing ? 0.6 : 1};
     "
   >
-    {committing ? 'Committing...' : amend ? 'Amend Commit' : 'Commit'}
+    {buttonLabel}
   </button>
 </div>
