@@ -1,9 +1,9 @@
 ---
-status: complete
+status: resolved
 phase: 27-foundation-icons-toast-bug-fixes
 source: 27-01-SUMMARY.md, 27-02-SUMMARY.md, 27-03-SUMMARY.md, 27-04-SUMMARY.md
 started: 2026-03-15T14:00:00Z
-updated: 2026-03-15T14:10:00Z
+updated: 2026-03-15T14:20:00Z
 ---
 
 ## Current Test
@@ -54,11 +54,14 @@ skipped: 0
 ## Gaps
 
 - truth: "Last visible column in commit graph header has no trailing resize divider/handle on its right edge"
-  status: failed
+  status: resolved
   reason: "User reported: still there"
   severity: major
   test: 7
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "The message column's col-resize-handle div in CommitGraph.svelte has no {#if} guard. Every other column checks `col !== lastVisibleColumn` before rendering its handle; message does not. A misleading comment rationalized skipping the guard by calling it 'the left edge of the author column', but the element sits on message's right edge and must be suppressed when message is the last visible column."
+  artifacts:
+    - path: "src/components/CommitGraph.svelte"
+      issue: "message column resize handle missing lastVisibleColumn guard (line ~492)"
+  missing:
+    - "Wrap the message col-resize-handle div in {#if 'message' !== lastVisibleColumn}...{/if}"
   debug_session: ""
