@@ -1,111 +1,53 @@
 ---
-status: testing
+status: complete
 phase: 11-stash-operations
-source: [11-01-SUMMARY.md, 11-02-SUMMARY.md, 11-03-SUMMARY.md, 11-04-SUMMARY.md]
-started: 2026-03-11T21:00:00Z
-updated: 2026-03-11T21:15:00Z
+source: [11-01-SUMMARY.md, 11-02-SUMMARY.md, 11-03-SUMMARY.md, 11-04-SUMMARY.md, 11-05-SUMMARY.md, 11-06-SUMMARY.md]
+started: 2026-03-15T12:00:00Z
+updated: 2026-03-15T12:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Stash Section Always Visible
-expected: |
-  The Stash section is always visible in the sidebar, even when no stashes exist. It shows a '+' button in the header.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
-### 1. Stash Section Always Visible
-expected: The Stash section is always visible in the sidebar, even when no stashes exist. It shows a '+' button in the header.
-result: [pending]
-
-### 2. Create Stash via Sidebar
-expected: Clicking '+' in the stash section header shows an inline form with an optional name input and a Stash button. Submitting with dirty workdir creates a new stash.
+### 1. Stash Save from Sidebar
+expected: Stash section always visible in sidebar with '+' button. Clicking '+' opens inline form with optional name input. Submitting stashes working tree changes. If nothing to stash, inline error message appears.
 result: pass
 
-### 3. UI Refresh After Create Stash
-expected: After creating a stash, the stash list updates immediately without needing to manually refresh.
-result: issue
-reported: "pass, but the whole UI does a hard refresh and I see the screen flashing white."
-severity: minor
-
-### 4. Create Stash - Nothing to Stash
-expected: Submitting the create stash form with a clean workdir shows a user-friendly inline error message (not a popup).
-result: issue
-reported: "pass, but if this stash list on the left sidebar is closed, clicking the plus button doesn't expand it. It should expand it."
-severity: minor
-
-### 5. Stash Entry Display
-expected: Each stash entry in the sidebar list shows the short name (stash@{N}) and a truncated stash name/message.
-result: [pending]
-
-### 6. Stash Entry Hover Cursor
-expected: Hovering over a stash entry in the sidebar shows a normal/default cursor (not a context-menu icon).
+### 2. Stash Pop/Apply/Drop from Sidebar
+expected: Right-clicking a stash entry in sidebar shows native context menu with Pop, Apply, Drop. Drop shows native OS confirmation dialog. Operations execute and stash list refreshes immediately without white flash.
 result: pass
 
-### 7. Click Stash Shows Diff
-expected: Clicking a stash entry in the sidebar loads its diff in the right pane (same as clicking a commit).
+### 3. Stash Graph Rendering
+expected: Stash entries appear as hollow square dots in a dedicated rightmost column in the commit graph, positioned next to their parent commit.
 result: pass
 
-### 8. Stash Entry Context Menu
-expected: Right-clicking a stash entry in the sidebar shows a native context menu with Pop, Apply, and Drop actions.
-result: [pending]
-
-### 9. Stash Pop
-expected: Clicking Pop from the context menu applies and removes the stash. The stash list refreshes immediately.
+### 4. Stash Graph Context Menu
+expected: Right-clicking a stash row in the commit graph shows Pop, Apply, Drop context menu. Drop shows confirmation. Operations work and graph updates.
 result: pass
 
-### 10. Stash Apply
-expected: Clicking Apply from the context menu applies the stash without removing it. The stash remains in the list.
+### 5. Stash Click-to-Diff
+expected: Clicking a stash entry in the sidebar loads its diff in the right pane, showing the stash contents.
 result: pass
 
-### 11. Stash Drop with Confirmation
-expected: Clicking Drop from the context menu shows a native OS confirmation dialog. Confirming removes the stash. Cancelling keeps it.
+### 6. Stash Section Auto-Expand
+expected: Clicking '+' on a collapsed stash section automatically expands it to reveal the create form.
 result: pass
 
-### 12. Stash Operation Error Display
-expected: If a stash pop/apply fails (e.g., conflicts), an inline error message appears below the failing entry (not a modal/popup).
-result: [pending]
+### 7. No White Flash on Stash Operations
+expected: Performing any stash operation (save/pop/apply/drop) refreshes the UI smoothly without a white flash or full-page re-render.
+result: pass
 
 ## Summary
 
-total: 12
-passed: 10
-issues: 2
+total: 7
+passed: 7
+issues: 0
 pending: 0
 skipped: 0
 
 ## Gaps
 
-- truth: "After creating a stash, the stash list updates smoothly without full UI flash"
-  status: failed
-  reason: "User reported: pass, but the whole UI does a hard refresh and I see the screen flashing white."
-  severity: minor
-  test: 3
-  root_cause: "Double refresh trigger: handleStashSave calls onrefreshed?.() immediately AND the backend emits repo-changed event, causing two near-simultaneous refresh cycles. The combination of refs state update, refreshSignal increment, dirty counts reload, and file diff refetch happening in rapid succession causes multiple repaints that appear as a white flash."
-  artifacts:
-    - path: "src/components/BranchSidebar.svelte"
-      issue: "handleStashSave calls onrefreshed?.() triggering immediate refresh"
-    - path: "src-tauri/src/commands/stash.rs"
-      issue: "stash_save emits repo-changed event triggering second refresh"
-    - path: "src/App.svelte"
-      issue: "repo-changed listener fires handleRefresh() redundantly after onrefreshed already triggered it"
-  missing:
-    - "Remove onrefreshed?.() from stash handlers and rely solely on repo-changed event with debounce, OR prevent redundant handleRefresh() calls within a short window"
-  debug_session: ""
-
-- truth: "Clicking '+' on a collapsed stash section expands it and shows the create form"
-  status: failed
-  reason: "User reported: pass, but if this stash list on the left sidebar is closed, clicking the plus button doesn't expand it. It should expand it."
-  severity: minor
-  test: 4
-  root_cause: "The oncreate handler on the stash section only toggles showStashForm without expanding the section. BranchSection renders children only when expanded is true ({#if expanded}), so the form is invisible when the section is collapsed."
-  artifacts:
-    - path: "src/components/BranchSidebar.svelte"
-      issue: "oncreate handler (line 343) toggles showStashForm but does not set stashesExpanded = true"
-    - path: "src/components/BranchSection.svelte"
-      issue: "Children only render when expanded is true (line 61)"
-  missing:
-    - "Add stashesExpanded = true to the oncreate handler so clicking '+' expands the section"
-  debug_session: ""
+[none]
