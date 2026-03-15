@@ -2,6 +2,7 @@
   import VirtualList from './VirtualList.svelte';
   import { tick, untrack } from 'svelte';
   import { safeInvoke, type TrunkError } from '../lib/invoke.js';
+  import { showToast } from '../lib/toast.svelte.js';
   import { clearRedoStack } from '../lib/undo-redo.svelte.js';
   import type { GraphCommit, GraphResponse, EdgeType, StashEntry } from '../lib/types.js';
   import { getColumnWidths, setColumnWidths, type ColumnWidths, getColumnVisibility, setColumnVisibility, type ColumnVisibility } from '../lib/store.js';
@@ -132,7 +133,7 @@
   // InputDialog state
   interface DialogConfig {
     title: string;
-    fields: { key: string; label: string; placeholder?: string; multiline?: boolean; required?: boolean }[];
+    fields: { key: string; label: string; placeholder?: string; multiline?: boolean; required?: boolean; defaultValue?: string }[];
     onsubmit: (values: Record<string, string>) => void;
   }
   let dialogConfig = $state<DialogConfig | null>(null);
@@ -308,6 +309,90 @@
       showStashContextMenu(e, commit);
     } else {
       showCommitContextMenu(e, commit);
+    }
+  }
+
+  // Pill context menu actions (branch delete/rename, tag delete)
+
+  async function handleDeleteBranch(branchName: string) {
+    const confirmed = await ask(
+      `Delete branch '${branchName}'? This cannot be undone.`,
+      { title: 'Delete Branch', kind: 'warning' }
+    );
+    if (!confirmed) return;
+    try {
+      await safeInvoke('delete_branch', { path: repoPath, branchName });
+      showToast(`Deleted branch ${branchName}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      await message(err.message ?? 'Failed to delete branch', { title: 'Delete Branch Error', kind: 'error' });
+    }
+  }
+
+  function handleRenameBranch(branchName: string) {
+    dialogConfig = {
+      title: 'Rename Branch',
+      fields: [{ key: 'name', label: 'New name', required: true, defaultValue: branchName }],
+      onsubmit: async (values) => {
+        closeDialog();
+        const newName = values.name.trim();
+        if (!newName || newName === branchName) return;
+        try {
+          await safeInvoke('rename_branch', { path: repoPath, oldName: branchName, newName });
+          showToast(`Renamed branch to ${newName}`, 'success');
+        } catch (e) {
+          const err = e as TrunkError;
+          await message(err.message ?? 'Failed to rename branch', { title: 'Rename Error', kind: 'error' });
+        }
+      },
+    };
+  }
+
+  async function handleDeleteTag(tagName: string) {
+    const confirmed = await ask(
+      `Delete tag '${tagName}'? This cannot be undone.`,
+      { title: 'Delete Tag', kind: 'warning' }
+    );
+    if (!confirmed) return;
+    try {
+      await safeInvoke('delete_tag', { path: repoPath, tagName });
+      showToast(`Deleted tag ${tagName}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      await message(err.message ?? 'Failed to delete tag', { title: 'Delete Tag Error', kind: 'error' });
+    }
+  }
+
+  async function showPillContextMenu(e: MouseEvent, pill: OverlayRefPill) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (pill.refType === 'LocalBranch') {
+      const menu = await Menu.new({
+        items: [
+          await MenuItem.new({
+            text: 'Rename…',
+            action: () => { handleRenameBranch(pill.label); },
+          }),
+          await PredefinedMenuItem.new({ item: 'Separator' }),
+          await MenuItem.new({
+            text: 'Delete',
+            enabled: !pill.isHead,
+            action: () => { handleDeleteBranch(pill.label).catch(() => {}); },
+          }),
+        ],
+      });
+      await menu.popup();
+    } else if (pill.refType === 'Tag') {
+      const menu = await Menu.new({
+        items: [
+          await MenuItem.new({
+            text: 'Delete',
+            action: () => { handleDeleteTag(pill.label).catch(() => {}); },
+          }),
+        ],
+      });
+      await menu.popup();
     }
   }
 
@@ -642,12 +727,13 @@
                   pointer-events="auto"
                   onmouseenter={() => pillMouseEnter(pill)}
                   onmouseleave={pillMouseLeave}
+                  oncontextmenu={(e) => showPillContextMenu(e, pill)}
                 />
 
                 <!-- Icon rendered directly in SVG at a fixed position (no CSS layout) -->
                 {#if PILL_ICONS[pill.refType]}
                   {@const PillIcon = PILL_ICONS[pill.refType]}
-                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9">
+                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9" style="pointer-events: auto; cursor: context-menu;" oncontextmenu={(e) => showPillContextMenu(e, pill)}>
                     <PillIcon size={ICON_WIDTH} />
                   </g>
                 {/if}
@@ -670,7 +756,9 @@
                       font-weight: {pill.isHead ? 700 : 500};
                       white-space: nowrap;
                       overflow: hidden;
+                      cursor: context-menu;
                     "
+                    oncontextmenu={(e) => showPillContextMenu(e, pill)}
                   >{pill.truncatedLabel}</span>
                 </foreignObject>
 
