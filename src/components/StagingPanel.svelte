@@ -177,10 +177,16 @@
     {/if}
   </div>
 
-  <!-- Scrollable file sections wrapper -->
-  <div style="flex: 1; overflow-y: auto; min-height: 0;">
+  <!-- File sections flex container (50/50 split when both expanded) -->
+  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
     <!-- Unstaged Files section -->
-    <div>
+    <div style="
+      {unstaged_expanded && staged_expanded ? 'flex: 1;' : unstaged_expanded ? 'flex: 1;' : ''}
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    ">
       <div
         role="button"
         tabindex="0"
@@ -194,6 +200,7 @@
           align-items: center;
           cursor: pointer;
           user-select: none;
+          flex-shrink: 0;
         "
       >
         <span style="color: var(--color-text-muted); display: inline-flex; align-items: center; margin-right: 4px;">
@@ -240,7 +247,7 @@
       </div>
 
       {#if unstaged_expanded}
-        <div role="list">
+        <div style="flex: 1; overflow-y: auto; min-height: 0;" role="list">
           {#each status?.unstaged ?? [] as f (f.path)}
             <FileRow
               file={f}
@@ -266,7 +273,13 @@
     </div>
 
     <!-- Staged Files section -->
-    <div>
+    <div style="
+      {staged_expanded && unstaged_expanded ? 'flex: 1;' : staged_expanded ? 'flex: 1;' : ''}
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    ">
       <div
         role="button"
         tabindex="0"
@@ -280,6 +293,7 @@
           align-items: center;
           cursor: pointer;
           user-select: none;
+          flex-shrink: 0;
         "
       >
         <span style="color: var(--color-text-muted); display: inline-flex; align-items: center; margin-right: 4px;">
@@ -309,7 +323,7 @@
       </div>
 
       {#if staged_expanded}
-        <div role="list">
+        <div style="flex: 1; overflow-y: auto; min-height: 0;" role="list">
           {#each status?.staged ?? [] as f (f.path)}
             <FileRow
               file={f}
