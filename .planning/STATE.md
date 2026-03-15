@@ -4,7 +4,7 @@ milestone: v0.6
 milestone_name: UI Polish & Core Ops
 status: completed
 stopped_at: Completed 28-04-PLAN.md
-last_updated: "2026-03-15T21:44:14.184Z"
+last_updated: "2026-03-15T21:49:55.992Z"
 last_activity: 2026-03-15 - Completed 28-04 overflow pill context menus
 progress:
   total_phases: 6
