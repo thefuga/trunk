@@ -635,7 +635,7 @@
                   onmouseleave={pillMouseLeave}
                 />
 
-                <!-- SVG icon for Tag -->
+                <!-- SVG icon for Tag: diamond -->
                 {#if pill.refType === 'Tag'}
                   <path
                     d="M {pill.x + PILL_PADDING_X} {pill.y} l 4 -4 l 4 4 l -4 4 z"
@@ -655,11 +655,36 @@
                   />
                 {/if}
 
+                <!-- SVG icon for LocalBranch: monitor screen + stand -->
+                {#if pill.refType === 'LocalBranch'}
+                  {@const ix = pill.x + PILL_PADDING_X}
+                  {@const iy = pill.y}
+                  <!-- screen -->
+                  <rect x={ix} y={iy - 4} width={8} height={5} rx={1} ry={1} fill="none" stroke="white" stroke-width="1.2" opacity="0.9" />
+                  <!-- stand stem -->
+                  <line x1={ix + 4} y1={iy + 1} x2={ix + 4} y2={iy + 3} stroke="white" stroke-width="1.2" opacity="0.9" />
+                  <!-- stand base -->
+                  <line x1={ix + 1.5} y1={iy + 3} x2={ix + 6.5} y2={iy + 3} stroke="white" stroke-width="1.2" opacity="0.9" stroke-linecap="round" />
+                {/if}
+
+                <!-- SVG icon for RemoteBranch: globe (circle + h-line + ellipse arc) -->
+                {#if pill.refType === 'RemoteBranch'}
+                  {@const ix = pill.x + PILL_PADDING_X + 4}
+                  {@const iy = pill.y}
+                  <!-- outer circle -->
+                  <circle cx={ix} cy={iy} r={4} fill="none" stroke="white" stroke-width="1.2" opacity="0.9" />
+                  <!-- horizontal equator -->
+                  <line x1={ix - 4} y1={iy} x2={ix + 4} y2={iy} stroke="white" stroke-width="1.0" opacity="0.9" />
+                  <!-- vertical meridian ellipse -->
+                  <ellipse cx={ix} cy={iy} rx={2.2} ry={4} fill="none" stroke="white" stroke-width="1.0" opacity="0.9" />
+                {/if}
+
                 <!-- Pill text (foreignObject for crisp HTML text rendering) -->
+                {@const hasRefIcon = pill.refType === 'Tag' || pill.refType === 'Stash' || pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch'}
                 <foreignObject
-                  x={pill.x + PILL_PADDING_X + (pill.refType === 'Tag' || pill.refType === 'Stash' ? ICON_WIDTH : 0)}
+                  x={pill.x + PILL_PADDING_X + (hasRefIcon ? ICON_WIDTH : 0)}
                   y={pill.y - PILL_HEIGHT / 2}
-                  width={pill.width - PILL_PADDING_X * 2 - (pill.refType === 'Tag' || pill.refType === 'Stash' ? ICON_WIDTH : 0)}
+                  width={pill.width - PILL_PADDING_X * 2 - (hasRefIcon ? ICON_WIDTH : 0)}
                   height={PILL_HEIGHT}
                 >
                   <span

@@ -46,9 +46,9 @@ export function isRemoteOnlyRef(ref: RefLabel, allRefs: RefLabel[]): boolean {
   );
 }
 
-/** Whether a ref type should show an icon (Tag, Stash) */
+/** Whether a ref type should show an icon (all ref types get one) */
 function hasIcon(refType: string): boolean {
-  return refType === 'Tag' || refType === 'Stash';
+  return refType === 'Tag' || refType === 'Stash' || refType === 'LocalBranch' || refType === 'RemoteBranch';
 }
 
 /** Estimate "+N" badge width based on character count */
