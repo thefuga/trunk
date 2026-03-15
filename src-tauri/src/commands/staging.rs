@@ -131,6 +131,89 @@ pub fn unstage_file_inner(
     Ok(())
 }
 
+pub fn discard_file_inner(
+    path: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+
+    let mut opts = StatusOptions::new();
+    opts.pathspec(file_path)
+        .include_untracked(true)
+        .include_ignored(false);
+
+    let statuses = repo.statuses(Some(&mut opts))?;
+
+    if statuses.is_empty() {
+        return Err(TrunkError::new(
+            "file_not_found",
+            format!("File not in working tree changes: {}", file_path),
+        ));
+    }
+
+    let status = statuses.get(0).unwrap().status();
+
+    if status.contains(Status::WT_NEW) {
+        // Untracked file — delete from disk
+        let full_path = repo.workdir().unwrap().join(file_path);
+        std::fs::remove_file(&full_path).map_err(|e| {
+            TrunkError::new("io_error", format!("Failed to delete {}: {}", file_path, e))
+        })?;
+    } else if status.intersects(
+        Status::WT_MODIFIED | Status::WT_DELETED | Status::WT_RENAMED | Status::WT_TYPECHANGE,
+    ) {
+        // Tracked file with working tree changes — checkout from HEAD
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.path(file_path).force();
+        repo.checkout_head(Some(&mut checkout))?;
+    } else {
+        return Err(TrunkError::new(
+            "file_not_found",
+            format!("File not in working tree changes: {}", file_path),
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn discard_all_inner(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .include_ignored(false)
+        .recurse_untracked_dirs(true);
+
+    let statuses = repo.statuses(Some(&mut opts))?;
+
+    // Collect untracked file paths before checkout
+    let untracked_paths: Vec<PathBuf> = statuses
+        .iter()
+        .filter(|entry| entry.status().contains(Status::WT_NEW))
+        .filter_map(|entry| entry.path().map(|p| repo.workdir().unwrap().join(p)))
+        .collect();
+
+    // Force checkout HEAD to restore all tracked modifications
+    let mut checkout = git2::build::CheckoutBuilder::new();
+    checkout.force();
+    repo.checkout_head(Some(&mut checkout))?;
+
+    // Delete untracked files
+    for file_path in &untracked_paths {
+        let _ = std::fs::remove_file(file_path);
+        // Try to remove empty parent directories
+        if let Some(parent) = file_path.parent() {
+            let _ = std::fs::remove_dir(parent);
+        }
+    }
+
+    Ok(())
+}
+
 pub fn stage_all_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
@@ -216,6 +299,31 @@ fn get_dirty_counts_inner(
         }
     }
     Ok(DirtyCounts { staged, unstaged, conflicted })
+}
+
+#[tauri::command]
+pub async fn discard_file(
+    path: String,
+    file_path: String,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || discard_file_inner(&path, &file_path, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn discard_all(
+    path: String,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || discard_all_inner(&path, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
 #[tauri::command]
