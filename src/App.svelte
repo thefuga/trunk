@@ -92,6 +92,16 @@
     selectedCommitFile = null;
   }
 
+  /** WIP row clicked — switch to staging view and auto-open right pane if collapsed. */
+  function handleWipClick() {
+    clearCommit();
+    // Auto-open right pane if collapsed (LAYOUT-01)
+    if (rightPaneCollapsed) {
+      rightPaneCollapsed = false;
+      setRightPaneCollapsed(false);
+    }
+  }
+
   function handleDiffClose() {
     if (selectedFile) clearStagingDiff();
     else clearCommitFileDiff();
@@ -382,7 +392,7 @@
         {#if showDiff}
           <DiffPanel fileDiffs={currentDiffFiles} commitDetail={null} onclose={handleDiffClose} />
         {:else}
-          <CommitGraph bind:this={commitGraphRef} {repoPath} oncommitselect={handleCommitSelect} {wipCount} wipMessage={wipSubject.trim() || 'WIP'} onWipClick={clearCommit} {refreshSignal} {selectedCommitOid} />
+          <CommitGraph bind:this={commitGraphRef} {repoPath} oncommitselect={handleCommitSelect} {wipCount} wipMessage={wipSubject.trim() || 'WIP'} onWipClick={handleWipClick} {refreshSignal} {selectedCommitOid} />
         {/if}
       </div>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
