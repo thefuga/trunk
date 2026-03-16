@@ -229,6 +229,31 @@ pub async fn list_refs(
         .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
+/// Inner implementation of resolve_ref — separated for testability.
+pub fn resolve_ref_inner(
+    path: &str,
+    ref_name: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<String, TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    let obj = repo.revparse_single(ref_name).map_err(TrunkError::from)?;
+    let commit = obj.peel_to_commit().map_err(TrunkError::from)?;
+    Ok(commit.id().to_string())
+}
+
+#[tauri::command]
+pub async fn resolve_ref(
+    path: String,
+    ref_name: String,
+    state: State<'_, RepoState>,
+) -> Result<String, String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || resolve_ref_inner(&path, &ref_name, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
 /// Inner implementation of checkout_branch — separated for testability.
 pub fn checkout_branch_inner(
     path: &str,
@@ -807,5 +832,40 @@ mod tests {
         assert!(main.upstream.is_some(), "main should have upstream tracking");
         assert_eq!(main.ahead, 1, "main should be 1 ahead of remote");
         assert_eq!(main.behind, 0, "main should be 0 behind remote");
+    }
+
+    #[test]
+    fn test_resolve_ref_inner() {
+        use git2::Signature;
+
+        let work_dir = tempfile::TempDir::new().unwrap();
+        let repo = git2::Repository::init(work_dir.path()).unwrap();
+        let sig = Signature::now("Test", "test@example.com").unwrap();
+        let tree_oid = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let commit_oid = repo
+            .commit(None, &sig, &sig, "init", &tree, &[])
+            .unwrap();
+        repo.branch("main", &repo.find_commit(commit_oid).unwrap(), false).unwrap();
+
+        let path = work_dir.path().to_string_lossy().to_string();
+        let mut state_map = std::collections::HashMap::new();
+        state_map.insert(path.clone(), work_dir.path().to_path_buf());
+
+        // Test resolving a valid branch ref
+        let result = super::resolve_ref_inner(&path, "main", &state_map);
+        assert!(result.is_ok(), "resolve_ref_inner should succeed for valid branch");
+        assert_eq!(
+            result.unwrap(),
+            commit_oid.to_string(),
+            "resolved OID should match the branch tip commit"
+        );
+
+        // Test resolving a nonexistent ref
+        let bad_result = super::resolve_ref_inner(&path, "refs/heads/nonexistent", &state_map);
+        assert!(bad_result.is_err(), "resolve_ref_inner should fail for nonexistent ref");
     }
 }

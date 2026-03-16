@@ -50,7 +50,7 @@
 
   <!-- Column 2: Graph -->
   {#if columnVisibility.graph}
-    <div class="relative z-[1] flex items-center flex-shrink-0" style="width: {columnWidths.graph}px; min-width: {Math.max(maxColumns, commit.column + 1) * LANE_WIDTH}px;">
+    <div class="relative z-[1] flex items-center flex-shrink-0 overflow-hidden" style="width: {columnWidths.graph}px;">
     </div>
   {/if}
 

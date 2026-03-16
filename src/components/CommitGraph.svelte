@@ -99,7 +99,7 @@
     const startWidth = columnWidths[column];
     const minWidths: Record<keyof ColumnWidths, number> = {
       ref: 60,
-      graph: Math.max(maxColumns, 1) * displaySettings.laneWidth,
+      graph: 20, // GRAPH-02: allow graph column to shrink below lane content width
       author: 60,
       date: 60,
       sha: 50,
@@ -976,5 +976,11 @@
   }
   .col-resize-handle:hover {
     background: linear-gradient(to right, transparent 1px, var(--color-accent) 1px, var(--color-accent) 3px, transparent 3px);
+  }
+  /* GRAPH-01: visible padding above first and below last commit row */
+  :global(.virtual-list-viewport) {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    box-sizing: border-box;
   }
 </style>
