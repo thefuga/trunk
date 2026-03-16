@@ -1,5 +1,22 @@
 # Milestones
 
+## v0.6 UI Polish & Core Ops (Shipped: 2026-03-16)
+
+**Phases:** 6 (incl. 27.1) | **Plans:** 16 | **Commits:** ~129 | **Timeline:** 2 days
+**Git range:** 9ff6c95 (feat(27-01)) → b1ef642 (fix: root commit branch tip + scroll)
+
+**Delivered:** Lucide icon set replacing Unicode symbols across all components, toast notification system for operation feedback, discard/delete/rename/reset destructive operations with confirmation dialogs, three-way commit/amend/stash selector, graph polish (padding, column shrink, sticky dots), sidebar ref navigation, unified title bar, and two bug fixes from TODO.md.
+
+**Key accomplishments:**
+1. Icon system: @lucide/svelte replacing all Unicode symbols in Toolbar, FileRow, StagingPanel, CommitForm, BranchSidebar, TabBar, and SVG overlay pills
+2. Toast notification system with Svelte 5 $state store, auto-dismiss, fly transition, and per-kind styling (error/success)
+3. Destructive operations: discard file/all (git2 checkout + fs::remove_file), delete branch/tag, rename branch, reset — all with confirmation dialogs and toast feedback
+4. Three-way commit/amend/stash selector replacing amend checkbox; stash mode auto-populates subject as stash name
+5. Graph CSS polish: viewport padding, column overflow-hidden with fixed minimum, sidebar click scrolls to ref commit with resolve_ref backend command
+6. Unified title bar: decorations:false + drag region + traffic light padding; right pane auto-opens on commit/ref click
+
+---
+
 ## v0.5 Graph Overlay (Shipped: 2026-03-15)
 
 **Phases:** 7 | **Plans:** 12 | **Commits:** 111 | **Timeline:** 2 days

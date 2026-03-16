@@ -195,6 +195,50 @@
 
 ---
 
+## Milestone: v0.6 — UI Polish & Core Ops
+
+**Shipped:** 2026-03-16
+**Phases:** 6 (incl. 27.1) | **Plans:** 16 | **Commits:** ~129 | **Timeline:** 2 days
+
+### What Was Built
+- Lucide icon set replacing all Unicode symbols across Toolbar, FileRow, StagingPanel, CommitForm, BranchSidebar, TabBar, and SVG overlay pills
+- Toast notification system: Svelte 5 $state store, auto-dismiss timer, fly transition, per-kind styling (error/success)
+- Destructive operations: discard file/all (git2 checkout + fs::remove_file for untracked), delete branch/tag, rename branch, reset (soft/mixed/hard) — all with confirmation dialogs and toast feedback
+- Three-way commit/amend/stash selector replacing amend checkbox; stash mode auto-populates subject as stash name
+- Graph CSS polish: viewport padding, column overflow-hidden with fixed minimum, sidebar click scrolls to ref commit via resolve_ref backend command
+- Unified title bar: decorations:false + drag region + macOS traffic light padding (78px); right pane auto-opens on commit/ref click
+- Bug fixes from TODO.md: window rubber-band scroll (overflow:hidden on html/body), root commit downward branch tip (isBranchTip=true for root commits)
+
+### What Worked
+- **Established patterns enabled fast delivery**: All backend commands used the inner-fn pattern; all frontend IPC used safeInvoke — zero new architecture decisions needed
+- **Wave 0 test scaffolds**: Writing failing tests before implementation (Phase 27-01) verified TDD discipline and caught the toast store import issue early
+- **Phases 27-31 executed in 2 days**: Fastest multi-phase milestone yet — UI work is less risky than graph algorithm work
+- **TODO.md as pre-archive checklist**: Reviewing TODO.md before closing found 2 real bugs (scroll gap, root commit tip) that were quick to fix and worth shipping in v0.6
+- **Decimal phase (27.1) for urgent insertion**: Clean way to insert an urgent fix without renumbering subsequent phases
+
+### What Was Inefficient
+- **Phase 30 "Plans: TBD" in ROADMAP**: Phase 30 had `Plans: TBD` at roadmap creation time — should have been planned at the same time as other phases
+- **STATE.md progress bar stale**: Progress bar in STATE.md showed `3/5 phases` even after all 5 completed — hand-maintained state drifted
+- **REQUIREMENTS.md traceability stale**: GRAPH-01/02/03, LAYOUT-01/02 stayed "Pending" in the traceability table after phases 30/31 completed — not updated post-execution
+- **gsd-tools couldn't find phase plans** (archived to v0.6-phases/ before CLI ran): CLI reported 0 phases/plans in MILESTONES.md — had to manually fill stats
+
+### Patterns Established
+- **`@lucide/svelte` not `lucide-svelte` for Svelte 5**: `lucide-svelte` causes SvelteComponent type errors; `@lucide/svelte` is the correct Svelte 5 package
+- **`decorations: false` + drag region**: Native titlebar removal pattern; `data-tauri-drag-region` on non-interactive elements, `padding-left: 78px` for macOS traffic lights
+- **`overflow: hidden` on html/body**: Required with `decorations: false` to prevent macOS rubber-band scroll from creating a window gap
+- **`isBranchTip = true` for root commits**: Root commits have no parents but may have `active_lanes[col] = Some(...)` set by their child — must explicitly mark as tip
+- **discard uses git2 checkout for tracked, fs::remove_file for untracked**: No git CLI subprocess needed; `discard` commands skip cache rebuild since FS watcher handles workdir detection
+- **clearRedoStack guard for stash mode**: stash doesn't modify commit history so clearRedoStack must be skipped
+
+### Key Lessons
+1. **Archive phases before running milestone CLI**: gsd-tools `milestone complete` relies on finding phase files in `.planning/phases/` — archiving first causes 0-count MILESTONES.md entries
+2. **TODO.md review before milestone close is high-value**: Found 2 bugs in 5 minutes that were straightforward to fix and improved the shipped quality
+3. **UI polish milestones are faster than graph milestones**: 16 plans/2 days vs 12 plans/2 days for v0.5, with less uncertainty — established patterns do the heavy lifting
+4. **Stale traceability tables are misleading**: Update requirement statuses immediately after phase completion, not at milestone close
+5. **Root commit edge cases in graph algorithms**: The isBranchTip detection used `active_lanes[col].is_none()` but a child sets that slot before the root processes — always cross-check with `parent_count() == 0`
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -206,12 +250,14 @@
 | v0.3 | 3 | 4 | 14 | Largest plan count — subprocess pattern for remote/cherry-pick/revert |
 | v0.4 | 1 | 3 | 5 | Intermediate architecture — per-row viewBox SVG (superseded by v0.5) |
 | v0.5 | 2 | 7 | 12 | Pure function pipeline — decision gate, TDD, SVG overlay architecture |
+| v0.6 | 2 | 6 | 16 | UI polish milestone — established patterns enabled fastest per-plan pace yet |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. **Gap closure plans are a recurring pattern**: All 5 milestones needed additional plans for UAT findings — budget 1-2 per phase
-2. **ROADMAP checkboxes get stale**: All 5 milestones had this issue — should automate or remove
+1. **Gap closure plans are a recurring pattern**: All 6 milestones needed additional plans for UAT findings — budget 1-2 per phase
+2. **ROADMAP checkboxes get stale**: All 6 milestones had this issue — should automate or remove
 3. **Test suite protects against regressions**: Tests caught zero regressions across all milestones — TDD investment pays dividends
 4. **Visual rendering is the riskiest area**: v0.1 needed 3 graph iterations, v0.2 needed 3 gap closures for connectors, v0.3 had a full plan redo (11-02), v0.5 had constant confusion — visual features need more upfront design or spike plans
 5. **Decision gates prevent wasted work**: v0.4's architecture was superseded in 1 day; v0.5's Phase 20 decision gate validated the approach before committing — gates should be standard for architecture changes
 6. **Pure function pipelines scale**: v0.5's pipeline (data → paths → visibility → rendering) was independently testable and composable — prefer this over stateful approaches
+7. **TODO.md review before milestone close is high-value**: v0.6 found 2 real bugs in pre-archive review — make this a standard step

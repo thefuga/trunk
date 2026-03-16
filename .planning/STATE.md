@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: null
-milestone_name: null
-status: idle
-stopped_at: null
-last_updated: "2026-03-16T01:00:00.000Z"
-last_activity: 2026-03-16 - Completed quick task 260316-1j6: Remove the bottom bar and use the new notification system for state updates
+milestone: v0.6
+milestone_name: UI Polish & Core Ops
+status: completed
+stopped_at: Completed 29-01-PLAN.md
+last_updated: "2026-03-16T04:57:52.777Z"
+last_activity: "2026-03-16 - Completed quick task 260316-1j6: Remove the bottom bar and use the new notification system for state updates"
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,10 +17,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-15 after v0.6 milestone started)
+See: .planning/PROJECT.md (updated 2026-03-16 after v0.6 milestone archived)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** v0.6 UI Polish & Core Ops — COMPLETE
+**Current focus:** Planning v0.7 — run /gsd-new-milestone to start
 
 ## Current Position
 
