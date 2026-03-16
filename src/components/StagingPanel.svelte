@@ -154,19 +154,23 @@
     padding: 0 12px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 6px;
     flex-shrink: 0;
   ">
     <span style="font-size: 12px; color: var(--color-text);">
       {totalCount} file{totalCount === 1 ? '' : 's'} changed
     </span>
     {#if currentBranch}
+      <span style="font-size: 11px; color: var(--color-text-muted);">on</span>
       <span style="
-        background: var(--color-surface);
-        border-radius: 4px;
-        padding: 2px 6px;
+        background: var(--lane-0);
+        border-radius: 9999px;
+        padding: 0 6px;
         font-size: 11px;
-        color: var(--color-text-muted);
+        line-height: 20px;
+        color: white;
+        font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

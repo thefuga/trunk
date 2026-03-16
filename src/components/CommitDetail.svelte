@@ -131,6 +131,7 @@
         padding: 0 12px;
         display: flex;
         align-items: center;
+        justify-content: center;
         border-bottom: 1px solid var(--color-border);
         flex-shrink: 0;
       ">

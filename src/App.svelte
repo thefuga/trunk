@@ -10,7 +10,7 @@
   import Toast from './components/Toast.svelte';
   import { safeInvoke } from './lib/invoke.js';
   import { getZoomLevel, setZoomLevel, getLeftPaneWidth, setLeftPaneWidth, getRightPaneWidth, setRightPaneWidth, getLeftPaneCollapsed, setLeftPaneCollapsed, getRightPaneCollapsed, setRightPaneCollapsed, getOpenRepo, setOpenRepo } from './lib/store.js';
-  import type { FileDiff, CommitDetail as CommitDetailType } from './lib/types.js';
+  import type { FileDiff, CommitDetail as CommitDetailType, RefsResponse } from './lib/types.js';
 
   interface DirtyCounts {
     staged: number;
@@ -28,6 +28,7 @@
   let repoName = $state<string>('');
   let refreshSignal = $state(0);
   let dirtyCounts = $state<DirtyCounts>({ staged: 0, unstaged: 0, conflicted: 0 });
+  let headBranch = $state<string | undefined>(undefined);
   let wipSubject = $state('');
 
   // Staging file selection (from StagingPanel)
@@ -62,6 +63,16 @@
       dirtyCounts = result;
     } catch {
       // non-fatal — keep previous counts
+    }
+  }
+
+  async function loadHeadBranch() {
+    if (!repoPath) return;
+    try {
+      const refs = await safeInvoke<RefsResponse>('list_refs', { path: repoPath });
+      headBranch = refs.local.find(b => b.is_head)?.name;
+    } catch {
+      // non-fatal — keep previous value
     }
   }
 
@@ -197,6 +208,7 @@
   $effect(() => {
     if (repoPath) {
       loadDirtyCounts();
+      loadHeadBranch();
     }
   });
 
@@ -210,6 +222,7 @@
         debounceTimer = setTimeout(() => {
           handleRefresh();
           loadDirtyCounts();
+          loadHeadBranch();
           if (selectedFile) {
             refetchFileDiff(selectedFile.path, selectedFile.kind);
           }
@@ -406,7 +419,7 @@
             onclose={clearCommit}
           />
         {:else}
-          <StagingPanel repoPath={repoPath!} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} />
+          <StagingPanel repoPath={repoPath!} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} />
         {/if}
       </div>
     </main>
