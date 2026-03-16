@@ -156,10 +156,15 @@
     const name = values.name?.trim();
     if (!name) return;
     try {
-      await safeInvoke('create_branch', { path: repoPath, name, checkout: true });
-      showToast('Branch created', 'success');
-    } catch {
-      showToast('Failed to create branch', 'error');
+      await safeInvoke('create_branch', { path: repoPath, name });
+      showToast('Checked out ' + name, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      if (err.code === 'dirty_workdir') {
+        showToast('Branch created (checkout skipped — uncommitted changes)', 'success');
+      } else {
+        showToast('Failed to create branch', 'error');
+      }
     }
   }
 </script>
@@ -182,7 +187,7 @@
 
   .toolbar-btn {
     background: none;
-    border: 1px solid var(--color-border);
+    border: none;
     border-radius: 4px;
     color: var(--color-text);
     font-size: 12px;

@@ -100,8 +100,7 @@
 
   .chevron-btn {
     background: none;
-    border: 1px solid var(--color-border);
-    border-left: none;
+    border: none;
     border-radius: 0 4px 4px 0;
     color: var(--color-text-muted);
     cursor: pointer;
