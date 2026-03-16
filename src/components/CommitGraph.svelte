@@ -698,11 +698,12 @@
       {#snippet graphOverlay(contentHeight: number, visibleStart: number, visibleEnd: number)}
         {@const refOffset = columnVisibility.ref ? columnWidths.ref : 0}
         {@const visible = getVisibleOverlayElements(paths, graphData.nodes, visibleStart, visibleEnd, pillData)}
+        {@const svgGraphWidth = columnVisibility.graph ? columnWidths.graph : Math.max(maxColumns, 1) * displaySettings.laneWidth}
         <svg
           class="absolute top-0"
-          width={refOffset + Math.max(maxColumns, 1) * displaySettings.laneWidth}
+          width={refOffset + svgGraphWidth}
           height={contentHeight}
-          style="left: 0; pointer-events: none; z-index: 1;"
+          style="left: 0; pointer-events: none; z-index: 1; overflow: hidden;"
         >
           <g class="overlay-rails" transform="translate({refOffset}, 0)">
             {#each visible.rails as path}
