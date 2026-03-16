@@ -698,13 +698,22 @@
       {#snippet graphOverlay(contentHeight: number, visibleStart: number, visibleEnd: number)}
         {@const refOffset = columnVisibility.ref ? columnWidths.ref : 0}
         {@const visible = getVisibleOverlayElements(paths, graphData.nodes, visibleStart, visibleEnd, pillData)}
-        {@const svgGraphWidth = columnVisibility.graph ? columnWidths.graph : Math.max(maxColumns, 1) * displaySettings.laneWidth}
+        {@const naturalGraphWidth = Math.max(maxColumns, 1) * displaySettings.laneWidth}
+        {@const graphColWidth = columnVisibility.graph ? columnWidths.graph : naturalGraphWidth}
         <svg
           class="absolute top-0"
-          width={refOffset + svgGraphWidth}
+          width={refOffset + naturalGraphWidth}
           height={contentHeight}
-          style="left: 0; pointer-events: none; z-index: 1; overflow: hidden;"
+          style="left: 0; pointer-events: none; z-index: 1;"
         >
+          <!-- GRAPH-02: clip graph lanes to column width when narrower than natural content -->
+          <defs>
+            <clipPath id="graph-clip">
+              <rect x="0" y="0" width={refOffset + graphColWidth} height={contentHeight} />
+            </clipPath>
+          </defs>
+          <!-- Graph layers clipped to graph column boundary -->
+          <g clip-path="url(#graph-clip)">
           <g class="overlay-rails" transform="translate({refOffset}, 0)">
             {#each visible.rails as path}
               <path d={path.d} fill="none"
@@ -749,6 +758,7 @@
               {/if}
             {/each}
           </g>
+          </g><!-- end graph-clip group -->
           {#if columnVisibility.ref}
             <g class="overlay-pills">
               {#each visible.pills as pill}
