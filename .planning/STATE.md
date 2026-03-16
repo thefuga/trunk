@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6
-milestone_name: UI Polish & Core Ops
-status: complete
+milestone: null
+milestone_name: null
+status: idle
 stopped_at: null
-last_updated: "2026-03-16T00:35:00.000Z"
-last_activity: 2026-03-16 - Milestone v0.6 complete (all 6 phases done)
+last_updated: "2026-03-16T01:00:00.000Z"
+last_activity: 2026-03-16 - Cleaned up v0.6 milestone artifacts
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 16
-  completed_plans: 16
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
