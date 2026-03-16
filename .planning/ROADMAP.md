@@ -196,7 +196,7 @@ Plans:
 | 26. SVG Ref Pills | v0.5 | 2/2 | Complete | 2026-03-14 |
 | 27. Foundation — Icons, Toast & Bug Fixes | 4/4 | Complete    | 2026-03-15 | - |
 | 28. Destructive Operations | 4/4 | Complete    | 2026-03-15 | - |
-| 29. Staging & Commit UX | 2/2 | Complete   | 2026-03-15 | - |
+| 29. Staging & Commit UX | 2/2 | Complete    | 2026-03-16 | - |
 | 30. Graph Polish & Navigation | v0.6 | 0/? | Not started | - |
 | 31. Layout Polish | v0.6 | 0/? | Not started | - |
 
