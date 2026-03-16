@@ -732,7 +732,7 @@
         {@const scrollX = Math.min(graphScrollX, Math.max(0, naturalGraphWidth - graphColWidth))}
         <svg
           class="absolute top-0"
-          width={refOffset + graphColWidth}
+          width={refOffset + Math.max(graphColWidth, naturalGraphWidth)}
           height={contentHeight}
           style="left: 0; pointer-events: none; z-index: 1;"
         >
