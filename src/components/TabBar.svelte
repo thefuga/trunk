@@ -20,7 +20,7 @@
   <span class="truncate max-w-[200px]">{repoName}</span>
   <button
     onclick={onclose}
-    class="flex items-center justify-center w-4 h-4 rounded-sm transition-colors ml-1"
+    class="flex items-center justify-center w-4 h-4 rounded-sm transition-colors ml-1 cursor-pointer"
     style="color: var(--color-text-muted);"
     aria-label="Close repository"
     title="Close repository"
