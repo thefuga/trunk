@@ -86,11 +86,15 @@ v0.6 Progress: [████████████░░░░░░░░] 3/
 
 ### Pending Todos
 
-4 pending todos carried from v0.2:
+8 pending todos:
 1. **Make commit dot bigger and lanes thinner** (ui) — 2026-03-10
 2. **WIP HEAD row background covers dotted line on hover** (ui) — 2026-03-10
 3. **Second commit connector line disconnected from first commit** (ui) — 2026-03-10
 4. **Persist left and right pane open/close state** (ui) — 2026-03-10
+5. **Check out branch after creating** (ui) — 2026-03-16
+6. **Fix staged files header sinking when collapsed** (ui) — 2026-03-16
+7. **Align commit graph and staging panel header heights** (ui) — 2026-03-16
+8. **Add consistent horizontal padding to commit graph columns** (ui) — 2026-03-16
 
 ### Known Limitations
 
