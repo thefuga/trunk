@@ -768,7 +768,7 @@
                Dots slide along their horizontal line to stay visible in the viewport.
                Viewport spans graph coordinates [scrollX, scrollX + graphColWidth].
                Dots clamp to viewport edges (bead-on-a-string effect). -->
-          <g class="overlay-dots" clip-path="url(#graph-clip)" transform="translate({refOffset}, 0)">
+          <g class="overlay-dots" transform="translate({refOffset}, 0)">
             {#each visible.dots as node}
               {@const clampedCx = Math.max(displaySettings.dotRadius, Math.min(graphColWidth - displaySettings.dotRadius, cx(node.x) - scrollX))}
               {#if node.isWip}
