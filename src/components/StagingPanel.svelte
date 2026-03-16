@@ -149,7 +149,7 @@
 ">
   <!-- Panel header -->
   <div style="
-    height: 32px;
+    height: 24px;
     border-bottom: 1px solid var(--color-border);
     padding: 0 12px;
     display: flex;
@@ -168,7 +168,7 @@
         border-radius: 9999px;
         padding: 0 6px;
         font-size: 11px;
-        line-height: 20px;
+        line-height: 16px;
         color: white;
         font-weight: 700;
         overflow: hidden;
