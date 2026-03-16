@@ -296,10 +296,15 @@
     const menu = await Menu.new({
       items: [
         await MenuItem.new({
+          text: 'Checkout',
+          enabled: !isHead,
+          action: () => { handleCheckout(branchName); },
+        }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
+        await MenuItem.new({
           text: 'Rename…',
           action: () => { handleRenameBranch(branchName); },
         }),
-        await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({
           text: 'Delete',
           enabled: !isHead,
@@ -404,6 +409,7 @@
             ahead={branch.ahead}
             behind={branch.behind}
             onclick={() => onrefnavigate?.(branch.name)}
+            ondblclick={() => handleCheckout(branch.name)}
             oncontextmenu={(e) => showBranchContextMenu(e, branch.name, branch.is_head)}
           />
         {/each}

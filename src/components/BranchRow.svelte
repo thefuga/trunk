@@ -11,6 +11,7 @@
     ahead?: number;
     behind?: number;
     onclick?: () => void;
+    ondblclick?: () => void;
     oncontextmenu?: (e: MouseEvent) => void;
   }
 
@@ -24,6 +25,7 @@
     ahead = 0,
     behind = 0,
     onclick,
+    ondblclick,
     oncontextmenu,
   }: Props = $props();
 
@@ -38,6 +40,7 @@
     role="button"
     tabindex="0"
     onclick={() => onclick?.()}
+    ondblclick={() => ondblclick?.()}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onclick?.(); }}
     oncontextmenu={(e) => { if (oncontextmenu) { e.preventDefault(); oncontextmenu(e); } }}
     onmouseenter={() => (hovered = true)}
