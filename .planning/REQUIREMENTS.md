@@ -30,9 +30,9 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 
 ### Graph
 
-- [ ] **GRAPH-01**: Commit graph has visible padding above first and below last commit row
-- [ ] **GRAPH-02**: Graph column can shrink below graph content width, compressing lanes
-- [ ] **GRAPH-03**: Clicking a branch or tag in sidebar scrolls graph to that commit's row
+- [x] **GRAPH-01**: Commit graph has visible padding above first and below last commit row
+- [x] **GRAPH-02**: Graph column can shrink below graph content width, compressing lanes
+- [x] **GRAPH-03**: Clicking a branch or tag in sidebar scrolls graph to that commit's row
 
 ### Bug Fixes
 
@@ -45,8 +45,8 @@ Requirements for milestone v0.6 UI Polish & Core Ops. Each maps to roadmap phase
 
 ### Layout
 
-- [ ] **LAYOUT-01**: Right pane auto-opens when user clicks a commit, branch, or navigable item while pane is closed
-- [ ] **LAYOUT-02**: Window top bar and tab/actions bar are visually merged into a single bar
+- [x] **LAYOUT-01**: Right pane auto-opens when user clicks a commit, branch, or navigable item while pane is closed
+- [x] **LAYOUT-02**: Window top bar and tab/actions bar are visually merged into a single bar
 
 ## Future Requirements
 
