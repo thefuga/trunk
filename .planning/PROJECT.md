@@ -64,6 +64,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 
 - **v0.8**: Conflict & Rebase — conflict diffs, conflict resolution, interactive rebase
 - **v0.9**: Multi-tab & Views — multiple tabs, list/preview toggle for file lists
+- **v0.10**: CI/CD & Releases — GitHub Actions CI, cross-platform release publishing (macOS, Linux, Windows)
 - **v1.0**: Infrastructure — E2E test harness (GOOS-style), performance benchmarks
 
 ### Out of Scope
