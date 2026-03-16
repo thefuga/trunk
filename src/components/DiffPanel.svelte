@@ -54,7 +54,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    ">{#if commitDetail}<span style="font-family: monospace;">{commitDetail.short_oid}</span> — {selectedPath}{:else if selectedPath}{selectedPath}{/if}</span>
+    ">{#if selectedPath}{selectedPath}{/if}</span>
     <button
       onclick={onclose}
       aria-label="Close diff"
