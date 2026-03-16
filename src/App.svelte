@@ -2,7 +2,6 @@
   import WelcomeScreen from './components/WelcomeScreen.svelte';
   import TabBar from './components/TabBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
-  import StatusBar from './components/StatusBar.svelte';
   import CommitGraph from './components/CommitGraph.svelte';
   import BranchSidebar from './components/BranchSidebar.svelte';
   import StagingPanel from './components/StagingPanel.svelte';
@@ -411,7 +410,6 @@
         {/if}
       </div>
     </main>
-    <StatusBar repoPath={repoPath!} />
   {/if}
   <Toast />
 </div>
