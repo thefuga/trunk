@@ -10,6 +10,7 @@ import {
   ICON_WIDTH,
   ICON_GAP,
   BADGE_FONT_SIZE,
+  COLUMN_PADDING_X,
 } from './graph-constants.js';
 import { truncateWithEllipsis } from './text-measure.js';
 
@@ -96,7 +97,10 @@ export function buildRefPillData(
 
     // Compute available text width
     const badgeWidth = overflowCount > 0 ? PILL_GAP + estimateBadgeWidth(overflowCount) : 0;
-    const maxTextWidth = refColumnWidth - PILL_PADDING_X * 2 - iconWidth - ICON_GAP - badgeWidth;
+    // Right gap matches the dot's visual inset: COLUMN_PADDING_X + (laneWidth/2 - dotRadius)
+    // so the pill and first dot are equidistant from the column divider
+    const dotInset = settings.laneWidth / 2 - settings.dotRadius;
+    const maxTextWidth = refColumnWidth - PILL_MARGIN_LEFT - COLUMN_PADDING_X - dotInset - PILL_PADDING_X * 2 - iconWidth - ICON_GAP - badgeWidth;
 
     // Measure and truncate text
     const font = primary.is_head ? PILL_FONT_BOLD : PILL_FONT;

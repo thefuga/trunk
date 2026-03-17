@@ -6,7 +6,7 @@
   import { clearRedoStack } from '../lib/undo-redo.svelte.js';
   import type { GraphCommit, GraphResponse, EdgeType, StashEntry } from '../lib/types.js';
   import { getColumnWidths, setColumnWidths, type ColumnWidths, getColumnVisibility, setColumnVisibility, type ColumnVisibility } from '../lib/store.js';
-  import { DEFAULT_GRAPH_SETTINGS, PILL_HEIGHT, PILL_PADDING_X, PILL_FONT_SIZE, PILL_GAP, BADGE_HEIGHT, BADGE_FONT_SIZE, ICON_WIDTH, ICON_GAP } from '../lib/graph-constants.js';
+  import { DEFAULT_GRAPH_SETTINGS, PILL_HEIGHT, PILL_PADDING_X, PILL_FONT_SIZE, PILL_GAP, BADGE_HEIGHT, BADGE_FONT_SIZE, ICON_WIDTH, ICON_GAP, COLUMN_PADDING_X } from '../lib/graph-constants.js';
   import { buildGraphData } from '../lib/active-lanes.js';
   import { buildOverlayPaths } from '../lib/overlay-paths.js';
   import { getVisibleOverlayElements } from '../lib/overlay-visible.js';
@@ -87,7 +87,7 @@
   const naturalGraphWidth = $derived(Math.max(maxColumns, 1) * displaySettings.laneWidth);
   // Derived: maximum horizontal scroll within the graph column
   const maxGraphScrollX = $derived(
-    columnVisibility.graph ? Math.max(0, naturalGraphWidth - columnWidths.graph) : 0
+    columnVisibility.graph ? Math.max(0, naturalGraphWidth - columnWidths.graph + 2 * COLUMN_PADDING_X) : 0
   );
 
   // Clamp graphScrollX when maxGraphScrollX shrinks (e.g. column widened or fewer lanes)
@@ -123,7 +123,7 @@
     };
     const maxWidths: Record<keyof ColumnWidths, number> = {
       ref: 400,
-      graph: naturalGraphWidth, // GRAPH-02: cap at natural content width — can't be wider than needed
+      graph: naturalGraphWidth + 2 * COLUMN_PADDING_X, // GRAPH-02: cap at natural content width + padding
       author: 400,
       date: 400,
       sha: 400,
@@ -648,12 +648,12 @@
   <!-- Header row (always visible) -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="flex items-center px-2 flex-shrink-0"
-    style="height: 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-muted); user-select: none;"
+    class="flex items-center flex-shrink-0"
+    style="height: 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-muted); user-select: none; padding: 0 {COLUMN_PADDING_X}px;"
     oncontextmenu={showHeaderContextMenu}
   >
     {#if columnVisibility.ref}
-      <div class="flex-shrink-0 relative px-2" style="width: {columnWidths.ref}px;">
+      <div class="flex-shrink-0 relative" style="width: {columnWidths.ref}px; padding: 0 {COLUMN_PADDING_X}px;">
         Branch/Tag
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'ref' !== lastVisibleColumn}
@@ -662,7 +662,7 @@
       </div>
     {/if}
     {#if columnVisibility.graph}
-      <div class="flex-shrink-0 relative px-2" style="width: {columnWidths.graph}px;">
+      <div class="flex-shrink-0 relative" style="width: {columnWidths.graph}px; padding: 0 {COLUMN_PADDING_X}px;">
         Graph
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'graph' !== lastVisibleColumn}
@@ -671,7 +671,7 @@
       </div>
     {/if}
     {#if columnVisibility.message}
-      <div class="flex-1 relative px-2">
+      <div class="flex-1 relative" style="padding: 0 {COLUMN_PADDING_X}px;">
         Message
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'message' !== lastVisibleColumn}
@@ -680,7 +680,7 @@
       </div>
     {/if}
     {#if columnVisibility.author}
-      <div class="flex-shrink-0 relative px-2" style="width: {columnWidths.author}px;">
+      <div class="flex-shrink-0 relative" style="width: {columnWidths.author}px; padding: 0 {COLUMN_PADDING_X}px;">
         Author
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'author' !== lastVisibleColumn}
@@ -689,7 +689,7 @@
       </div>
     {/if}
     {#if columnVisibility.date}
-      <div class="flex-shrink-0 relative px-2" style="width: {columnWidths.date}px;">
+      <div class="flex-shrink-0 relative" style="width: {columnWidths.date}px; padding: 0 {COLUMN_PADDING_X}px;">
         Date
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'date' !== lastVisibleColumn}
@@ -698,7 +698,7 @@
       </div>
     {/if}
     {#if columnVisibility.sha}
-      <div class="flex-shrink-0 px-2" style="width: {columnWidths.sha}px;">
+      <div class="flex-shrink-0" style="width: {columnWidths.sha}px; padding: 0 {COLUMN_PADDING_X}px;">
         SHA
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         {#if 'sha' !== lastVisibleColumn}
@@ -710,7 +710,7 @@
 
   <!-- Content area (grows to fill remaining space) -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="flex-1 overflow-hidden" onwheel={(e) => {
+  <div class="flex-1 overflow-hidden" style="padding: 0 {COLUMN_PADDING_X}px;" onwheel={(e) => {
     // GRAPH-02: horizontal pan on trackpad swipe or shift+wheel
     if (maxGraphScrollX > 0 && e.deltaX !== 0) {
       graphScrollX = Math.max(0, Math.min(maxGraphScrollX, graphScrollX + e.deltaX));
@@ -745,7 +745,7 @@
         {@const refOffset = columnVisibility.ref ? columnWidths.ref : 0}
         {@const visible = getVisibleOverlayElements(paths, graphData.nodes, visibleStart, visibleEnd, pillData)}
         {@const graphColWidth = columnVisibility.graph ? columnWidths.graph : naturalGraphWidth}
-        {@const scrollX = Math.min(graphScrollX, Math.max(0, naturalGraphWidth - graphColWidth))}
+        {@const scrollX = Math.min(graphScrollX, Math.max(0, naturalGraphWidth - graphColWidth + 2 * COLUMN_PADDING_X))}
         <svg
           class="absolute top-0"
           width={refOffset + Math.max(graphColWidth, naturalGraphWidth)}
@@ -755,13 +755,13 @@
           <!-- GRAPH-02: clip graph content to column width -->
           <defs>
             <clipPath id="graph-clip">
-              <rect x={refOffset} y="0" width={graphColWidth} height={contentHeight} />
+              <rect x={refOffset + COLUMN_PADDING_X} y="0" width={graphColWidth - 2 * COLUMN_PADDING_X} height={contentHeight} />
             </clipPath>
           </defs>
           <!-- GRAPH-02: Layer A — rails + connections, scrolled and clipped.
                Translated left by scrollX to pan through lanes. -->
           <g clip-path="url(#graph-clip)">
-            <g class="overlay-rails" transform="translate({refOffset - scrollX}, 0)">
+            <g class="overlay-rails" transform="translate({refOffset + COLUMN_PADDING_X - scrollX}, 0)">
               {#each visible.rails as path}
                 <path d={path.d} fill="none"
                   stroke={laneColor(path.colorIndex)}
@@ -770,7 +770,7 @@
                   stroke-dasharray={path.dashed ? '3 3' : 'none'} />
               {/each}
             </g>
-            <g class="overlay-connections" transform="translate({refOffset - scrollX}, 0)">
+            <g class="overlay-connections" transform="translate({refOffset + COLUMN_PADDING_X - scrollX}, 0)">
               {#each visible.connections as path}
                 <path d={path.d} fill="none"
                   stroke={laneColor(path.colorIndex)}
@@ -784,9 +784,9 @@
                Dots slide along their horizontal line to stay visible in the viewport.
                Viewport spans graph coordinates [scrollX, scrollX + graphColWidth].
                Dots clamp to viewport edges (bead-on-a-string effect). -->
-          <g class="overlay-dots" transform="translate({refOffset}, 0)">
+          <g class="overlay-dots" transform="translate({refOffset + COLUMN_PADDING_X}, 0)">
             {#each visible.dots as node}
-              {@const clampedCx = Math.max(displaySettings.dotRadius, Math.min(graphColWidth - displaySettings.dotRadius, cx(node.x) - scrollX))}
+              {@const clampedCx = Math.max(displaySettings.laneWidth / 2, Math.min(graphColWidth - 2 * COLUMN_PADDING_X - displaySettings.dotRadius, cx(node.x) - scrollX))}
               {#if node.isWip}
                 <circle cx={clampedCx} cy={cy(node.y)} r={displaySettings.dotRadius}
                   fill="none" stroke={laneColor(node.colorIndex)}
@@ -816,11 +816,11 @@
               {#each visible.pills as pill}
                 <!-- Connector line from pill to commit dot (uses sticky X position, scroll-adjusted) -->
                 {#if columnVisibility.graph}
-                  {@const stickyDotCx = Math.max(displaySettings.dotRadius, Math.min(graphColWidth - displaySettings.dotRadius, pill.dotCx - scrollX))}
+                  {@const stickyDotCx = Math.max(displaySettings.laneWidth / 2, Math.min(graphColWidth - 2 * COLUMN_PADDING_X - displaySettings.dotRadius, pill.dotCx - scrollX))}
                   <line
                     x1={pill.x + pill.width}
                     y1={pill.y}
-                    x2={refOffset + stickyDotCx}
+                    x2={refOffset + COLUMN_PADDING_X + stickyDotCx}
                     y2={pill.dotCy}
                     stroke={laneColor(pill.commitColorIndex)}
                     stroke-width={displaySettings.pillStroke}
@@ -1002,7 +1002,7 @@
       <!-- Mid-scroll skeleton (more commits loading) -->
       {#if loading && commits.length > 0}
         {#each { length: 3 } as _}
-          <div class="flex items-center gap-2 px-2 animate-pulse" style="height: {displaySettings.rowHeight}px">
+        <div class="flex items-center gap-2 animate-pulse" style="height: {displaySettings.rowHeight}px">
             <div
               class="rounded-full flex-shrink-0"
               style="background: var(--color-border); width: 64px; height: 12px;"
@@ -1065,5 +1065,6 @@
     padding-top: 8px;
     padding-bottom: 8px;
     box-sizing: border-box;
+    overflow-x: hidden;
   }
 </style>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GraphCommit } from '../lib/types.js';
   import type { ColumnWidths, ColumnVisibility } from '../lib/store.js';
-  import { LANE_WIDTH, ROW_HEIGHT } from '../lib/graph-constants.js';
+  import { LANE_WIDTH, ROW_HEIGHT, COLUMN_PADDING_X } from '../lib/graph-constants.js';
 
   interface Props {
     commit: GraphCommit;
@@ -36,7 +36,7 @@
 </script>
 
 <div
-  class="relative flex items-center px-2 cursor-pointer text-[13px]"
+  class="relative flex items-center cursor-pointer text-[13px]"
   class:hover:bg-[var(--color-surface)]={!selected}
   style:height="{rowHeight}px"
   style="color: var(--color-text); {selected ? 'background: var(--color-selected-row);' : ''}"
@@ -45,43 +45,43 @@
 >
   <!-- Column 1: Branch/Tag refs spacer (SVG overlay handles rendering) -->
   {#if columnVisibility.ref}
-    <div class="flex-shrink-0" style="width: {columnWidths.ref}px;"></div>
+    <div class="flex-shrink-0" style="width: {columnWidths.ref}px; padding: 0 {COLUMN_PADDING_X}px;"></div>
   {/if}
 
   <!-- Column 2: Graph -->
   {#if columnVisibility.graph}
-    <div class="relative z-[1] flex items-center flex-shrink-0 overflow-hidden" style="width: {columnWidths.graph}px;">
+    <div class="relative z-[1] flex items-center flex-shrink-0 overflow-hidden" style="width: {columnWidths.graph}px; padding: 0 {COLUMN_PADDING_X}px;">
     </div>
   {/if}
 
   <!-- Column 3: Message (flex-1, always visible) -->
   {#if isWip || isStash}
-    <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap italic px-1" style="color: var(--color-text-muted);">
+    <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap italic" style="color: var(--color-text-muted); padding: 0 {COLUMN_PADDING_X}px;">
       {commit.summary}
     </div>
   {:else}
-    <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap px-1">
+    <div class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap" style="padding: 0 {COLUMN_PADDING_X}px;">
       {commit.summary}
     </div>
   {/if}
 
   <!-- Column 4: Author -->
   {#if columnVisibility.author}
-    <div class="flex-shrink-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] px-1" style="width: {columnWidths.author}px; color: var(--color-text-muted);">
+    <div class="flex-shrink-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px]" style="width: {columnWidths.author}px; color: var(--color-text-muted); padding: 0 {COLUMN_PADDING_X}px;">
       {#if !isWip && !isStash}{commit.author_name}{/if}
     </div>
   {/if}
 
   <!-- Column 5: Date -->
   {#if columnVisibility.date}
-    <div class="flex-shrink-0 overflow-hidden whitespace-nowrap text-[11px] px-1" style="width: {columnWidths.date}px; color: var(--color-text-muted);">
+    <div class="flex-shrink-0 overflow-hidden whitespace-nowrap text-[11px]" style="width: {columnWidths.date}px; color: var(--color-text-muted); padding: 0 {COLUMN_PADDING_X}px;">
       {#if !isWip && !isStash}{relativeDate(commit.author_timestamp)}{/if}
     </div>
   {/if}
 
   <!-- Column 6: SHA -->
   {#if columnVisibility.sha}
-    <div class="flex-shrink-0 font-mono text-[11px] px-1" style="width: {columnWidths.sha}px; color: var(--color-text-muted);">
+    <div class="flex-shrink-0 font-mono text-[11px]" style="width: {columnWidths.sha}px; color: var(--color-text-muted); padding: 0 {COLUMN_PADDING_X}px;">
       {#if !isWip && !isStash}{commit.short_oid}{/if}
     </div>
   {/if}

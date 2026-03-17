@@ -18,6 +18,9 @@ export const DEFAULT_GRAPH_SETTINGS: GraphDisplaySettings = {
   pillStroke: PILL_STROKE,
 };
 
+// Column layout constants
+export const COLUMN_PADDING_X = 4;
+
 // Ref pill constants
 export const PILL_HEIGHT = 20;
 export const PILL_PADDING_X = 6;
