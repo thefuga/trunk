@@ -8,5 +8,3 @@ pub mod staging;
 pub mod remote;
 pub mod stash;
 
-pub use history::get_commit_graph;
-pub use repo::{close_repo, open_repo};

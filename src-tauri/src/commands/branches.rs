@@ -5,7 +5,7 @@ use git2::{BranchType, Status, StatusOptions};
 use crate::error::TrunkError;
 use crate::git::{graph, types::{BranchInfo, RefLabel, RefType, RefsResponse, StashEntry}};
 use crate::state::{CommitCache, RepoState};
-use crate::git::types::{GraphCommit, GraphResult};
+use crate::git::types::GraphResult;
 
 /// Opens a repository by looking up its path in the state map.
 fn open_repo_from_state(
