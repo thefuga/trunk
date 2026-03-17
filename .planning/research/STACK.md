@@ -1,225 +1,210 @@
-# Stack Research
+# Stack Research: Trunk v0.7
 
-**Domain:** v0.6 UI Polish & Core Ops additions to Tauri 2 + Svelte 5 Git GUI
-**Researched:** 2026-03-15
+**Domain:** v0.7 Hunk Staging & Search additions to Tauri 2 + Svelte 5 Git GUI
+**Researched:** 2026-03-17
 **Confidence:** HIGH
 
-## Core Finding: One New npm Package + Zero New Rust Crates
+## Existing Stack (DO NOT change)
 
-v0.6 needs exactly **one new dependency** (`@lucide/svelte` for icons). All git operations (discard, branch delete, tag delete) use existing `git2 = "0.19"` APIs. The dialog/notification system uses existing `@tauri-apps/plugin-dialog` plus a custom ~30 LOC toast component.
+| Layer | Technology | Version | Notes |
+|-------|-----------|---------|-------|
+| Framework | Tauri 2 | 2.x | Desktop shell, IPC via `invoke`/`listen` |
+| Frontend | Svelte 5 | 5.x | Vite SPA, runes (`$state`, `$derived`, `$effect`) |
+| Styling | Tailwind CSS v4 | 4.x | Forced dark theme via CSS custom properties |
+| Git backend | `git2` (libgit2) | 0.19 | `vendored-libgit2` feature, all local ops |
+| Git CLI | subprocess | — | Remote ops (fetch/pull/push), cherry-pick/revert |
+| Icons | `@lucide/svelte` | ^0.577 | SVG icon components (added in v0.6) |
+| FS watching | `notify` + `notify-debouncer-mini` | 7 / 0.5 | 300ms debounce |
+| State persistence | `tauri-plugin-store` | 2.4.2 | LazyStore for column widths, visibility |
+| Async runtime | `tokio` | 1 | `process`, `io-util` features |
+| Graph rendering | SVG overlay + virtual list | — | Rust lane algorithm + TS Active Lanes transform |
+
+## New Dependencies
+
+| Dependency | Version | Purpose | Why needed |
+|-----------|---------|---------|------------|
+| **None** | — | — | Both features are implementable with the existing stack. No new crates or npm packages required. |
+
+## Core Finding: Zero New Dependencies
+
+Both v0.7 features (hunk staging and commit graph search) require **zero new dependencies**. All APIs needed already exist in `git2 = "0.19"` and the existing frontend stack.
 
 ---
 
-## Recommended Stack Additions
+## Stack Decisions
 
-### Icon Library: `@lucide/svelte`
+### 1. Hunk Staging: `Repository::apply()` with `ApplyOptions::hunk_callback`
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `@lucide/svelte` | `^0.577.0` | SVG icon components throughout the app | Svelte 5-native package (separate from `lucide-svelte` which targets Svelte 4). 1500+ icons, fully tree-shakable, renders inline SVG matching the app's existing SVG-heavy architecture. Each icon is a Svelte component with `size`, `color`, `strokeWidth` props. |
+**Decision:** Use `git2`'s `apply()` + `ApplyLocation::Index` with a `hunk_callback` to selectively stage/unstage individual hunks.
 
-**Why `@lucide/svelte` over alternatives:**
+**Key git2 0.19 APIs for hunk-level staging:**
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| `@lucide/svelte` | `lucide-svelte` | `lucide-svelte` is the Svelte 4 compatible version. `@lucide/svelte` is the official Svelte 5 package using `$props()` runes natively. Same icon set, different component internals. |
-| `@lucide/svelte` | `@iconify/svelte` | Iconify fetches icons from a remote API at runtime by default — unacceptable for a desktop app that must work offline. Offline mode requires importing individual icon packages which adds complexity. Also, 216 KB unpacked vs Lucide's per-icon tree-shaking. |
-| `@lucide/svelte` | `svelte-radix` | Only ~310 Radix icons. Lucide has 1500+. Radix icons have a distinct minimal style that doesn't include git-specific icons (no git-branch, git-commit, tag, etc.). |
-| `@lucide/svelte` | Unicode symbols (current) | Current toolbar uses `&#8617;`, `&#8595;`, `&#128230;` etc. These render inconsistently across platforms, can't be sized/colored independently, and look amateur. Lucide provides proper visual consistency. |
+#### Staging a hunk (workdir → index)
 
-**Relevant Lucide icons for v0.6 features:**
-- Toolbar: `Undo2`, `Redo2`, `ArrowDown` (pull), `ArrowUp` (push), `GitBranch`, `Package` (stash), `PackageOpen` (pop)
-- Staging: `Plus` / `Minus` (stage/unstage), `CirclePlus` / `CircleMinus` (stage all/unstage all), `Trash2` (discard)
-- Refs: `GitBranch`, `Tag`, `FolderGit2` (remote), `Layers` (stash)
-- Commit form: `GitCommit`, `PenLine` (amend), `Package` (stash) — for 3-way selector
-- Dialog/toast: `AlertTriangle`, `Info`, `CheckCircle`, `XCircle`
-- Navigation: `ChevronDown`, `ChevronRight` (section expand/collapse, replacing `▼`/`▶`)
-- Tag pill: `Tag` icon (addresses "find a better icon for the tag pill" requirement)
+```rust
+// 1. Get diff of workdir changes for a file (index vs workdir)
+let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
-**Usage pattern:**
-```svelte
-<script lang="ts">
-  import { GitBranch, Tag, Trash2 } from '@lucide/svelte';
-  // Or for faster builds, direct imports:
-  import GitBranch from '@lucide/svelte/icons/git-branch';
-</script>
+// 2. Apply only the selected hunk to the INDEX
+let mut apply_opts = git2::ApplyOptions::new();
+let target_hunk_idx: usize = hunk_index; // from frontend
+let mut current_hunk: usize = 0;
 
-<GitBranch size={14} color="currentColor" strokeWidth={2} />
+apply_opts.hunk_callback(move |_hunk| {
+    let dominated = current_hunk == target_hunk_idx;
+    current_hunk += 1;
+    dominated  // true = apply this hunk, false = skip
+});
+
+repo.apply(&diff, git2::ApplyLocation::Index, Some(&mut apply_opts))?;
 ```
 
-**TypeScript support:**
+**API methods used:**
+- `Repository::diff_index_to_workdir()` — already used in `diff_unstaged_inner` (diff.rs:101)
+- `Repository::apply(&diff, location, opts)` — applies a diff. `ApplyLocation::Index` modifies only the index (staging area), leaving the working directory untouched. This is exactly `git add -p` behavior.
+- `ApplyOptions::hunk_callback(cb)` — called per hunk; return `true` to include, `false` to skip. This is the core filtering mechanism.
+- `ApplyOptions::delta_callback(cb)` — called per file delta; can additionally filter by file path.
+
+#### Unstaging a hunk (index → HEAD)
+
+Unstaging is the reverse: apply the *inverse* diff (HEAD vs index) to the index.
+
+```rust
+// 1. Get diff of staged changes (HEAD tree vs index)
+let head_tree = repo.head()?.peel_to_tree()?;
+let diff = repo.diff_tree_to_index(Some(&head_tree), None, Some(&mut diff_opts))?;
+
+// 2. Apply the selected hunk in REVERSE to remove it from the index
+// Since diff is HEAD→index, applying it reversed (index→HEAD) unstages.
+// However, git2's apply() doesn't have a reverse flag.
+// Instead, use apply_to_tree on the index tree and reconstruct:
+
+// Alternative approach for unstage — rebuild the index entry:
+let index_tree_oid = repo.index()?.write_tree()?;
+let index_tree = repo.find_tree(index_tree_oid)?;
+let mut apply_opts = git2::ApplyOptions::new();
+// ... hunk filter as above ...
+let new_tree = repo.apply_to_tree(&index_tree, &reverse_diff, Some(&mut apply_opts))?;
+// Read new_tree back into index
+let mut index = repo.index()?;
+index.read_tree(&new_tree)?;
+index.write()?;
+```
+
+**Practical approach for unstage:** Generate the diff as `diff_tree_to_index(HEAD, index)`, then use `Diff::from_buffer()` to reverse the patch (swap +/- lines), or use `apply_to_tree()` on the HEAD tree with the forward diff filtered to just the target hunk, then read the resulting tree back into the index for that file path.
+
+**Simpler alternative for unstage:** Use `Index::add_frombuffer()` to write a reconstructed file blob to the index. This is how `git reset -p` works internally — it reads the HEAD version + applies selected hunks to compute the desired index content, then writes that blob back.
+
+**Recommended approach (both stage and unstage):**
+
+1. **Stage hunk:** `repo.apply(&workdir_diff, ApplyLocation::Index, &apply_opts_with_hunk_filter)` — straightforward, one call.
+2. **Unstage hunk:** Reconstruct the desired index content by reading the HEAD blob for the file, applying all hunks *except* the one being unstaged from the staged diff, then writing the result to the index via `Index::add_frombuffer()`. This avoids reverse-patch complexity.
+
+**Confidence:** HIGH — `Repository::apply()`, `ApplyLocation::Index`, and `ApplyOptions::hunk_callback()` are all confirmed in git2 0.19.0 docs. The `hunk_callback` is specifically designed for selective hunk application (git add -p equivalent).
+
+#### Unborn HEAD edge case
+
+When HEAD is unborn (no commits yet), there's no HEAD tree to diff against. For unstaging:
+- Use `diff_tree_to_index(None, None, opts)` — None tree means empty tree
+- Same hunk-filter approach works; just treat "all content" as the diff
+
+Already handled in `diff_staged_inner` (diff.rs:113-114) with the same pattern.
+
+#### New file (untracked) hunks
+
+Untracked files show as a single hunk (all lines are additions). Staging the single hunk is equivalent to staging the whole file — `Index::add_path()` suffices. The frontend should show the single hunk with a stage button, and the backend can detect this case and use the simpler path.
+
+---
+
+### 2. Commit Graph Search: Client-Side Filtering
+
+**Decision:** Pure client-side filtering on the already-loaded `GraphCommit[]` array. No backend search command needed.
+
+**Rationale:**
+- The `CommitCache` in Rust state already holds the **full** `GraphResult` with all commits (graph.rs populates all commits via `walk_commits(repo, 0, usize::MAX)` in `refresh_commit_graph`).
+- Each `GraphCommit` already contains: `oid`, `short_oid`, `summary`, `body`, `author_name`, `author_email`, and `refs: Vec<RefLabel>` (with `name`, `short_name`).
+- The frontend already loads all commits into the `commits` $state array (CommitGraph.svelte:51).
+- For a typical repo (10k commits), filtering is O(n) string matching — sub-millisecond in JavaScript.
+
+**Search implementation:**
 ```typescript
-import { type Icon as IconType } from '@lucide/svelte';
-// Use `typeof IconType` for component type references in menus/configs
+// In CommitGraph.svelte or a new search module
+const searchResults = $derived.by(() => {
+  if (!searchQuery) return null;
+  const q = searchQuery.toLowerCase();
+  return commits
+    .map((c, i) => ({ commit: c, index: i }))
+    .filter(({ commit: c }) =>
+      c.oid.startsWith(q) ||
+      c.short_oid.startsWith(q) ||
+      c.summary.toLowerCase().includes(q) ||
+      (c.body?.toLowerCase().includes(q) ?? false) ||
+      c.author_name.toLowerCase().includes(q) ||
+      c.refs.some(r => r.short_name.toLowerCase().includes(q))
+    );
+});
 ```
 
-**Confidence:** HIGH — Official Lucide docs explicitly document `@lucide/svelte` as the Svelte 5 package. Version 0.577.0 confirmed on npm (2026-03-04). 308K weekly downloads for the lucide-svelte ecosystem.
+**Why NOT a backend search command:**
+- All data is already in memory (frontend has the full array, backend has the cache).
+- A backend command would require IPC round-trips for each keystroke.
+- Client-side filtering is instant for any reasonable repo size.
+- The search needs to highlight/navigate within the virtual list, which is purely a frontend concern.
+- No need for git2's `revwalk` or `git log --grep` — those search the ODB, but we already have all data loaded.
+
+**Search UX integration:**
+- Cmd+F opens a search bar overlaying the commit graph (standard pattern).
+- Results are navigable with Enter/Shift+Enter (next/prev match).
+- Current match scrolls into view using the existing `listRef.scroll()` API.
+- Matched rows get visual highlighting (a CSS class on `CommitRow`).
+- Escape dismisses the search bar.
+
+**Performance:** For repos with 100k+ commits, consider debouncing input by ~100ms. For repos with 1M+ commits (extreme edge case), a backend command returning matching indices could be added later — but this is out of scope for v0.7.
 
 ---
 
-### Dialog / Notification System: No New Dependencies
+## Integration Notes
 
-The app already has everything needed. **Do not add a toast/notification library.**
+### Hunk Staging: Rust Backend
 
-| Approach | What to Use | Why |
-|----------|-------------|-----|
-| **Destructive confirmations** | `@tauri-apps/plugin-dialog` `ask()` | Already used for stash drop (BranchSidebar.svelte:207). Native OS dialog, correct for "are you sure?" prompts (discard, branch delete, tag delete). |
-| **Error messages** | `@tauri-apps/plugin-dialog` `message()` | Already used for 9+ error cases in CommitGraph.svelte. Native modal, blocks until dismissed, appropriate for errors. |
-| **In-app notifications/toasts** | Custom Svelte component (build it) | For non-blocking feedback ("Branch deleted", "Changes discarded"). Build a simple `<Toast>` component using the existing `$state` rune pattern. ~30 LOC. Not worth a dependency. |
-| **Input dialogs** | Existing `InputDialog.svelte` | Already handles branch/tag creation with field validation, Escape/Enter handling, backdrop click. Extend for any future input needs. |
-
-**Why not add a toast library:**
-- The app has ~4,400 LOC Svelte. A toast is ~30 LOC.
-- Libraries like `svelte-sonner` or `svelte-french-toast` add SSR handling, portal management, and animation systems designed for web apps — unnecessary overhead for a Tauri desktop app.
-- The existing `$state` rune + shared module pattern (see `remote-state.svelte.ts`) is the proven cross-component state pattern.
-
-**Recommended toast implementation pattern:**
-```typescript
-// lib/toast-state.svelte.ts
-type Toast = { id: number; message: string; kind: 'success' | 'error' | 'info'; };
-export const toastState = $state<{ toasts: Toast[] }>({ toasts: [] });
-export function showToast(message: string, kind: Toast['kind'] = 'info') {
-  const id = Date.now();
-  toastState.toasts = [...toastState.toasts, { id, message, kind }];
-  setTimeout(() => {
-    toastState.toasts = toastState.toasts.filter(t => t.id !== id);
-  }, 3000);
-}
+**New Tauri commands (in staging.rs):**
+```
+stage_hunk_inner(path, file_path, hunk_index, state_map) -> Result<(), TrunkError>
+unstage_hunk_inner(path, file_path, hunk_index, state_map) -> Result<(), TrunkError>
 ```
 
-**Confidence:** HIGH — existing patterns verified in codebase. `@tauri-apps/plugin-dialog` already in Cargo.toml and package.json with 9+ existing usage sites.
+**Parameters:**
+- `file_path: &str` — relative path of the file in the repo
+- `hunk_index: usize` — zero-based index of the hunk within the file's diff
 
----
+These follow the established `inner-fn` pattern. The frontend already has `DiffHunk` with `old_start`, `old_lines`, `new_start`, `new_lines` from the diff commands — the hunk index maps directly to the hunk order returned by `diff_index_to_workdir()`.
 
-### git2 APIs for New Operations
+**Important:** The hunk index must correspond to the same diff the frontend is displaying. Since the diff is computed fresh each time and hunks are returned in file-order, the zero-based index is stable for a given file state.
 
-No new Rust crate dependencies needed. All operations use existing `git2 = "0.19"`.
+### Hunk Staging: Frontend
 
-#### Discard Changes (revert working tree files)
+**DiffPanel changes:**
+- Add a "Stage Hunk" / "Unstage Hunk" button per hunk header (the `@@ ... @@` line).
+- Button visibility depends on context: shown for workdir/staged diffs, hidden for commit diffs.
+- After staging/unstaging a hunk, refresh both the diff display and the staging panel status.
 
-**Two cases, two approaches:**
+**StagingPanel integration:**
+- No changes needed to StagingPanel itself — it already calls `loadStatus()` after stage/unstage operations.
+- The file-level stage/unstage buttons remain alongside hunk-level buttons.
 
-| File State | git2 API | Equivalent git command |
-|------------|----------|----------------------|
-| **Tracked modified/deleted** | `repo.checkout_head()` with `CheckoutBuilder::force().path(file)` | `git checkout -- <file>` |
-| **Untracked new files** | `std::fs::remove_file()` / `std::fs::remove_dir_all()` | `rm <file>` |
+### Commit Graph Search: Frontend
 
-**Implementation sketch:**
-```rust
-pub fn discard_file_inner(
-    path: &str,
-    file_path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    let status = repo.status_file(std::path::Path::new(file_path))?;
+**New components/modules:**
+- `SearchBar.svelte` — floating input bar with match count, next/prev navigation
+- Search state: `$state` rune module or inline in CommitGraph.svelte
 
-    if status.contains(git2::Status::WT_NEW) {
-        // Untracked file — just delete it
-        let full_path = repo.workdir()
-            .ok_or_else(|| TrunkError::new("bare_repo", "Cannot discard in bare repo"))?
-            .join(file_path);
-        if full_path.is_dir() {
-            std::fs::remove_dir_all(&full_path)
-                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-        } else {
-            std::fs::remove_file(&full_path)
-                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-        }
-    } else {
-        // Tracked file — checkout from HEAD
-        repo.checkout_head(Some(
-            git2::build::CheckoutBuilder::new()
-                .force()
-                .path(file_path)
-        ))?;
-    }
-    Ok(())
-}
-```
+**CommitGraph.svelte changes:**
+- Add keyboard listener for Cmd+F (Ctrl+F on non-macOS)
+- Pass `highlightedOids: Set<string>` to CommitRow for visual highlighting
+- Use `listRef.scroll()` to navigate to matched rows
 
-**Key APIs (all confirmed in git2 0.19.0 docs):**
-- `repo.status_file(path)` — returns `Status` bitflags for one file
-- `repo.checkout_head(opts)` — already used in `create_branch_inner` (branches.rs:279)
-- `CheckoutBuilder::force()` — "take any action necessary to get the working directory to match"
-- `CheckoutBuilder::path(file)` — scopes checkout to a single file instead of entire tree
-
-**Discard all:** Same pattern but use `checkout_head(force)` without path filter (discards all tracked), then iterate `get_status_inner` result to delete remaining `WT_NEW` files.
-
-**Confidence:** HIGH — `checkout_head`, `CheckoutBuilder::force()`, and `CheckoutBuilder::path()` all verified in git2 0.19.0 docs.
-
-#### Branch Delete
-
-**API:** `Branch::delete(&mut self) -> Result<(), Error>`
-
-```rust
-pub fn delete_branch_inner(
-    path: &str,
-    branch_name: &str,
-    force: bool,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    let mut branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
-
-    if branch.is_head() {
-        return Err(TrunkError::new(
-            "cannot_delete_head",
-            "Cannot delete the currently checked out branch",
-        ));
-    }
-
-    // Optional: check if merged (for non-force delete)
-    if !force {
-        if let (Ok(head_ref), Some(branch_oid)) = (repo.head(), branch.get().target()) {
-            if let Ok(head_oid) = head_ref.target()
-                .ok_or(())
-                .and_then(|h| repo.merge_base(branch_oid, h).map_err(|_| ())) {
-                if head_oid != branch_oid {
-                    return Err(TrunkError::new(
-                        "branch_not_merged",
-                        format!("Branch '{}' is not fully merged. Use force delete.", branch_name),
-                    ));
-                }
-            }
-        }
-    }
-
-    branch.delete()?;
-    Ok(())
-}
-```
-
-**Key details:**
-- `repo.find_branch(name, BranchType::Local)` — already used in test code (branches.rs)
-- `Branch::delete()` takes `&mut self` — directly deletes the ref
-- Must check `branch.is_head()` to prevent deleting the current branch
-- Merge check is optional — let the frontend decide via `ask()` dialog whether to force
-
-**Confidence:** HIGH — `Branch::delete()` verified in git2 0.19.0 docs. `find_branch()` already used in existing tests.
-
-#### Tag Delete
-
-**API:** `Repository::tag_delete(&self, name: &str) -> Result<(), Error>`
-
-```rust
-pub fn delete_tag_inner(
-    path: &str,
-    tag_name: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    repo.tag_delete(tag_name)?;
-    Ok(())
-}
-```
-
-**Key details:**
-- `tag_delete` takes the short name (e.g., "v1.0.0"), NOT the full ref ("refs/tags/v1.0.0")
-- Already have `repo.tag()` in `create_tag_inner` (commit_actions.rs:75) — symmetric operation
-- Confirmation dialog in frontend before calling (tags may be pushed to remotes)
-
-**Confidence:** HIGH — `Repository::tag_delete()` verified in git2 0.19.0 docs.
+**CommitRow.svelte changes:**
+- Accept optional `isSearchMatch` prop for highlight styling
 
 ---
 
@@ -227,103 +212,41 @@ pub fn delete_tag_inner(
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `svelte-sonner` / `svelte-french-toast` | SSR-oriented, portal complexity, overkill for desktop app | Custom `<Toast>` with `$state` rune (~30 LOC) |
-| `@iconify/svelte` | Fetches icons from remote API by default — fails offline in desktop app | `@lucide/svelte` (bundled, tree-shakable) |
-| `lucide-svelte` (without @lucide scope) | Targets Svelte 4, not Svelte 5 runes-native | `@lucide/svelte` (Svelte 5 native) |
-| Any animation library | Existing CSS transitions + Svelte `transition:fade` sufficient for toast | `svelte/transition` (built-in) |
-| Any new Rust crates | All git operations covered by existing `git2 = "0.19"` | `Branch::delete()`, `tag_delete()`, `checkout_head()` with `force().path()` |
-| Custom icon font | Adds build complexity, can't tree-shake, can't color individual strokes | SVG icon components from `@lucide/svelte` |
-| `tauri-plugin-notification` | System-level notifications are too heavy for in-app feedback | Custom toast or `message()` dialog |
+| `diffy` / `similar` / `imara-diff` crates | git2's `apply()` + `hunk_callback` handles hunk-level staging natively; no need for external diff/patch libraries | `git2::Repository::apply()` with `ApplyOptions` |
+| `git2-patch` or custom patch parsing | git2 0.19 already has `Diff::from_buffer()` for parsing patches and `apply()` for applying them | Built-in `git2` APIs |
+| `fuse.js` or `minisearch` (fuzzy search libs) | Commit graph search is exact substring/prefix matching; fuzzy search adds complexity without clear UX benefit for git hashes/messages | Simple `String.includes()` / `String.startsWith()` |
+| Backend search command (Tauri `invoke`) | All commit data already loaded in frontend memory; IPC adds latency | Client-side `$derived` filtering |
+| `regex` crate for Rust-side search | Search is client-side; if later needed, JS `RegExp` suffices | JavaScript string methods |
+| New npm packages | No frontend library needed for either feature | Existing Svelte 5 reactivity + Tailwind |
+| `git add -p` via CLI subprocess | Would require interactive stdin/stdout parsing; git2's `apply()` API is cleaner and testable | `git2::Repository::apply()` |
 
 ---
 
-## Installation
+## git2 0.19 API Reference for v0.7
 
-```bash
-# One new npm dependency (icons)
-npm install @lucide/svelte
-
-# No new Rust dependencies — all operations use existing git2 = "0.19"
-# No Cargo.toml changes
-# No tauri.conf.json changes (dialog plugin already configured)
-```
-
----
-
-## Version Compatibility
-
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `@lucide/svelte@^0.577.0` | `svelte@^5.0.0` | Explicitly designed for Svelte 5. Uses `$props()` runes internally. |
-| `@lucide/svelte@^0.577.0` | `vite@^6.0.0` | Pure ES modules, works with Vite's tree-shaking out of the box. |
-| `git2@0.19` | Existing — no changes | `Branch::delete()`, `tag_delete()`, `checkout_head(force)` all in 0.19.0. |
-| `@tauri-apps/plugin-dialog@^2.6.0` | Existing — no changes | `ask()`, `message()` already used for confirmations and errors. |
-
----
-
-## Integration Points
-
-### Icon Integration with Existing Components
-
-| Component | Current Icons | Replace With |
-|-----------|--------------|--------------|
-| `Toolbar.svelte` | Unicode: `↩ ↪ ↓ ↑ ⏗ 📦 📥` | Lucide: `Undo2`, `Redo2`, `ArrowDown`, `ArrowUp`, `GitBranch`, `Package`, `PackageOpen` |
-| `FileRow.svelte` | Text symbols: `+`, `✎`, `−`, `→`, `⇄`, `!` | **Keep as-is** — these are single-character status badges, not icons. Text symbols are the correct convention for file status indicators (Git, VS Code, and GitKraken all use similar). |
-| `StagingPanel.svelte` | Text: "Stage All Changes", "Unstage All" with `▼`/`▶` chevrons | Add Lucide `ChevronDown`/`ChevronRight` for expand toggles. Add `Plus`/`Minus` icons to "Stage All" / "Unstage All" buttons. |
-| `BranchSection.svelte` | No icons, `▶`/`▼` for expand | Add section header icons: `GitBranch` (Local), `Globe` (Remote), `Tag` (Tags), `Layers` (Stashes). Replace `▶`/`▼` with `ChevronRight`/`ChevronDown`. |
-| `CommitForm.svelte` | No icons, checkbox for amend | Replace checkbox with 3-way selector using icons: `GitCommit` (commit), `PenLine` (amend), `Package` (stash) |
-| `TabBar.svelte` | `×` text close button | Lucide `X` icon (14px, consistent with other icons) |
-| SVG ref pills | Text-only tag pill | Lucide `Tag` icon rendered as inline SVG `<path>` data (not as component — pills are in SVG overlay, need raw path data) |
-| `WelcomeScreen.svelte` | No icons | Lucide `FolderOpen` for the "Open Repository" button |
-
-### Dialog Integration for New Operations
-
-| Operation | Dialog Type | Existing Pattern |
-|-----------|-------------|------------------|
-| Discard single file | `ask()` — "Discard changes to {file}?" | Same as stash drop in BranchSidebar.svelte |
-| Discard all files | `ask()` with `kind: 'warning'` — "Discard all changes?" | Same pattern |
-| Delete branch | `ask()` — "Delete branch {name}?"; warn if unmerged | Same pattern |
-| Delete tag | `ask()` — "Delete tag {name}?" | Same pattern |
-| Success feedback | Custom `<Toast>` — "Branch deleted" | New pattern (described above) |
-| Error feedback | `message()` with `kind: 'error'` | 9+ existing usages in CommitGraph.svelte |
-
-### Rust Command Pattern for New Operations
-
-Follow the established `inner-fn` pattern (e.g., `create_tag_inner` → `create_tag`):
-
-```
-discard_file_inner   → discard_file    (Tauri command)
-discard_all_inner    → discard_all     (Tauri command)
-delete_branch_inner  → delete_branch   (Tauri command)
-delete_tag_inner     → delete_tag      (Tauri command)
-```
-
-Each new command should:
-1. Clone `state_map` from `RepoState` (established pattern)
-2. Run in `tauri::async_runtime::spawn_blocking` (established pattern)
-3. Rebuild graph cache after mutation for branch/tag delete (changes ref labels in graph)
-4. Emit `repo-changed` event via `app.emit()` (established pattern)
-5. Return `Result<(), String>` with `TrunkError` serialization (established pattern)
-
-**Where to place new commands:**
-- `discard_file` / `discard_all` → `staging.rs` (alongside stage/unstage)
-- `delete_branch` → `branches.rs` (alongside create/checkout branch)
-- `delete_tag` → `commit_actions.rs` (alongside create_tag)
+| API | Signature | Used For |
+|-----|-----------|----------|
+| `Repository::apply()` | `fn apply(&self, diff: &Diff, location: ApplyLocation, opts: Option<&mut ApplyOptions>) -> Result<(), Error>` | Stage/unstage hunks by applying filtered diffs |
+| `ApplyLocation::Index` | enum variant | Apply diff to index only (staging area), not working directory |
+| `ApplyOptions::hunk_callback()` | `fn hunk_callback<F>(&mut self, cb: F) -> &mut Self where F: FnMut(Option<DiffHunk>) -> bool` | Filter which hunks to include (true=include, false=skip) |
+| `ApplyOptions::delta_callback()` | `fn delta_callback<F>(&mut self, cb: F) -> &mut Self where F: FnMut(Option<DiffDelta>) -> bool` | Filter which file deltas to include |
+| `ApplyOptions::check()` | `fn check(&mut self, check: bool) -> &mut Self` | Dry-run mode — validate patch applies without modifying index |
+| `Repository::apply_to_tree()` | `fn apply_to_tree(&self, tree: &Tree, diff: &Diff, opts: Option<&mut ApplyOptions>) -> Result<Index, Error>` | Apply diff to a tree object (useful for unstaging) |
+| `Index::add_frombuffer()` | `fn add_frombuffer(&mut self, entry: &IndexEntry, data: &[u8]) -> Result<(), Error>` | Write computed file content directly to index (alternative unstage approach) |
+| `Index::read_tree()` | `fn read_tree(&mut self, tree: &Tree) -> Result<(), Error>` | Replace index contents from tree (used with apply_to_tree result) |
+| `Repository::diff_index_to_workdir()` | already used in diff.rs | Get workdir diff for stage-hunk |
+| `Repository::diff_tree_to_index()` | already used in diff.rs | Get staged diff for unstage-hunk |
 
 ---
 
 ## Sources
 
-- [git2 0.19.0 Repository docs](https://docs.rs/git2/0.19.0/git2/struct.Repository.html) — `tag_delete()`, `checkout_head()`, `status_file()` (HIGH confidence)
-- [git2 0.19.0 Branch docs](https://docs.rs/git2/0.19.0/git2/struct.Branch.html) — `Branch::delete()`, `find_branch()`, `is_head()` (HIGH confidence)
-- [git2 0.19.0 CheckoutBuilder docs](https://docs.rs/git2/0.19.0/git2/build/struct.CheckoutBuilder.html) — `force()`, `path()` (HIGH confidence)
-- [Lucide Svelte docs](https://lucide.dev/guide/packages/lucide-svelte) — `@lucide/svelte` for Svelte 5, import patterns, props API (HIGH confidence)
-- [npm: @lucide/svelte](https://www.npmjs.com/package/@lucide/svelte) — version 0.577.0, confirmed on npm (HIGH confidence)
-- [npm: lucide-svelte](https://www.npmjs.com/package/lucide-svelte) — Svelte 4 version, 308K weekly downloads (HIGH confidence)
-- [npm: @iconify/svelte](https://www.npmjs.com/package/@iconify/svelte) — API-dependent, not suitable for offline desktop (HIGH confidence)
-- [npm: svelte-radix](https://www.npmjs.com/package/svelte-radix) — Only 310 icons, no git-specific icons (HIGH confidence)
-- Existing codebase: `branches.rs`, `commit_actions.rs`, `staging.rs`, `Toolbar.svelte`, `BranchSidebar.svelte`, `CommitGraph.svelte`, `InputDialog.svelte`, `FileRow.svelte`, `CommitForm.svelte`, `StagingPanel.svelte` (HIGH confidence)
+- [git2 0.19.0 Repository::apply](https://docs.rs/git2/0.19/git2/struct.Repository.html#method.apply) — `apply()`, `apply_to_tree()` (HIGH confidence)
+- [git2 0.19.0 ApplyOptions](https://docs.rs/git2/0.19/git2/struct.ApplyOptions.html) — `hunk_callback`, `delta_callback`, `check` (HIGH confidence)
+- [git2 0.19.0 ApplyLocation](https://docs.rs/git2/0.19/git2/enum.ApplyLocation.html) — `WorkDir`, `Index`, `Both` variants (HIGH confidence)
+- [git2 0.19.0 Index](https://docs.rs/git2/0.19/git2/struct.Index.html) — `add_frombuffer`, `read_tree`, `write` (HIGH confidence)
+- Existing codebase: `diff.rs` (diff_unstaged_inner, diff_staged_inner), `staging.rs` (stage_file_inner, unstage_file_inner), `CommitGraph.svelte` (commits array, virtual list scroll), `types.ts` (DiffHunk, GraphCommit) (HIGH confidence)
 
 ---
-*Stack research for: Trunk v0.6 UI Polish & Core Ops*
-*Researched: 2026-03-15*
+*Stack research for: Trunk v0.7 Hunk Staging & Search*
+*Researched: 2026-03-17*

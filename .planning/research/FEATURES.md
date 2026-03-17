@@ -1,358 +1,288 @@
-# Feature Landscape: v0.6 UI Polish & Core Ops
+# Features Research: Trunk v0.7 — Hunk Staging & Commit Graph Search
 
-**Domain:** Desktop Git GUI — UI polish, missing core operations, staging UX, graph polish, dialog system
-**Researched:** 2026-03-15
+**Domain:** Desktop Git GUI — granular staging, commit search
+**Researched:** 2026-03-17
 
 ## Context
 
-Trunk v0.6 is a polish milestone. The core architecture (graph, staging, commits, remotes) is proven. This milestone addresses the gap between "functional prototype" and "daily driver" — adding icons, missing destructive operations (discard, delete), UX refinements (commit mode selector, staging buttons), graph polish (overflow, navigation), bug fixes, and infrastructure (dialog system, layout merge).
+Trunk v0.7 adds two features: (1) stage/unstage individual hunks within file diffs, and (2) search the commit graph by SHA, message, and branch name via cmd+f. Trunk already has whole-file staging, a DiffPanel that renders hunks with headers and colored +/- lines, a commit graph with SVG overlay and virtualized scrolling, and a branch sidebar with search filtering.
 
-Research focuses on: how do GitKraken, Fork, Sublime Merge, and Tower handle these features? What are user expectations? What patterns avoid pitfalls?
-
----
-
-## Table Stakes
-
-Features users expect. Missing = product feels incomplete.
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Icon system throughout UI** | Every competitor uses icons. Unicode symbols (current: `↓ ↑ ⟗ 📦 📥 ↩ ↪`) look unpolished and render inconsistently across platforms. Icons are the single highest-impact visual polish item. | MEDIUM | Affects Toolbar, FileRow, BranchSidebar, StagingPanel, CommitForm, TabBar, context menus. ~30-40 icon placements. |
-| **Discard changes (file-level)** | GitKraken, Fork, Tower, Sublime Merge all have discard. Users expect to revert unstaged changes without terminal. This is the most common "missing feature" for staging workflows. | MEDIUM | Backend: `git2::Repository::checkout_index` or `checkout_head` with path spec for tracked files; `std::fs::remove_file` for untracked. Frontend: trash icon on hover per file + "Discard All" button. **Must confirm** — destructive, unrecoverable. |
-| **Branch delete** | Every Git GUI supports right-click → Delete on local branches. Without it, users must go to terminal for basic branch hygiene. | LOW | Backend: `git2::Branch::delete()`. Frontend: context menu item in BranchSidebar + confirmation dialog. Must prevent deleting HEAD branch. Consider "also delete remote" checkbox like GitKraken. |
-| **Tag delete** | Same as branch delete — table stakes for any Git GUI with tag display. GitKraken shows "Delete locally" and "Delete from remote" as separate options. | LOW | Backend: `git2::Reference::delete()` for local tags. Remote tag delete needs `git push --delete origin <tag>` (CLI). Frontend: context menu in sidebar Tags section. |
-| **Confirmation dialogs for destructive ops** | GitKraken, Fork, Tower all confirm before discard/delete. Users will accidentally lose work without confirmation. | LOW | Trunk already uses `@tauri-apps/plugin-dialog` `ask()` for stash drop (see BranchSidebar.svelte line 207). Extend this pattern to discard and delete operations. |
-| **Stage All / Unstage All with clear visual affordance** | Currently text-only buttons ("Stage All Changes" / "Unstage All"). Every competitor uses colored icon buttons. GitKraken: green ↑ arrow. Fork: green + button. | LOW | Replace text buttons with icon buttons. Green background for "Stage All", red/muted for "Unstage All". Matches universal color semantics (green = add/approve, red = remove/danger). |
-| **Discard All Changes button** | GitKraken shows a trash icon at the top of the unstaged section. Fork has "Discard All" button. Essential companion to per-file discard. | LOW | Trash icon button in unstaged section header, next to "Stage All". Must confirm before executing. |
-
-## Differentiators
-
-Features that set product apart. Not expected, but valued.
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Three-way commit/amend/stash selector** | GitKraken does this: the commit panel bottom has tabs/icons that switch between Commit, Amend, and Stash modes. Tower has a similar dropdown. Most GUIs keep these as separate actions (checkbox for amend, toolbar button for stash). Unifying them in one selector is cleaner. | MEDIUM | Replaces current `amend` checkbox + separate stash in toolbar. Selector changes button label and behavior. "Commit" (default), "Amend" (pre-fills HEAD message), "Stash" (creates stash, optionally with name from message field). Depends on: existing CommitForm refactor. |
-| **Stash name defaults to commit message** | GitKraken does this — the WIP node name becomes the stash name. If user has typed a commit message and switches to Stash mode, the message becomes the stash name. Seamless context switching. | LOW | Read `subject` state from CommitForm when stash mode is selected. Pass as `message` to `stash_save`. |
-| **Click refs in left pane → navigate graph** | GitKraken: double-click branch in left panel scrolls graph to that branch's HEAD commit. Fork: same. Sublime Merge: same. This is expected in apps that have both sidebar and graph. | MEDIUM | Requires: mapping branch name → commit OID → row index in virtual list → programmatic scroll to that index. Backend already returns `oid` per branch in `RefsResponse`. Frontend needs `scrollToIndex(idx)` on virtual list. |
-| **Commit graph overflow with sticky right-side** | When graph has many lanes, the graph column should be scrollable horizontally but the right-side columns (message, author, date, SHA) should remain visible. Fork and GitKraken both handle this — message column never scrolls off-screen. | MEDIUM | CSS: graph column gets `overflow-x: auto` while remaining columns stay fixed. Or: the graph SVG column shrinks to a min-width with horizontal scroll, while right columns remain anchored. Tricky with current 6-column resizable layout. |
-| **Right pane auto-opens when content changes** | If user clicks a file in staging panel or a commit in graph, and right pane is collapsed, it should auto-open. Fork does this. Prevents "I clicked but nothing happened" confusion. | LOW | Check `rightPaneCollapsed` state; if true and content arrives, set to false. Simple reactive guard in App.svelte. |
-| **Merge window top bar with tab+actions bar** | Currently two bars: TabBar (repo name + close) and Toolbar (actions). Merging them saves 36px vertical space — valuable for a desktop app where the graph is the primary content area. | LOW | Layout change only. Move toolbar buttons into same flex row as tab. Fork and Sublime Merge both use single toolbar rows. |
-| **Top/bottom padding in commit graph** | Without padding, the first and last commits touch the container edges. Fork and GitKraken both add whitespace padding. Small visual polish. | LOW | Add padding rows (empty space) to virtual list, or CSS padding on scroll container. |
-| **Dialog system for errors/warnings/notifications** | Currently errors go to `console.error` or inline text. A proper dialog system shows modal/toast notifications for errors, warnings, and confirmations. GitKraken uses modal dialogs for errors + toast for progress. | MEDIUM | Generalized dialog component beyond current InputDialog. Needs: title, message, icon (error/warning/info), actions (OK / OK+Cancel / custom). Toast variant for non-blocking notifications. |
-
-## Anti-Features
-
-Features to explicitly NOT build.
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Discard individual hunks/lines** | v0.7 scope (Hunk Staging). Mixing hunk-level operations into v0.6 adds complexity to what should be a polish milestone. | File-level discard only. Hunk-level discard ships with hunk staging in v0.7. |
-| **Remote branch delete** | Requires `git push --delete`, which is destructive and affects other collaborators. Easy to accidentally delete production branches. | Local branch delete only for v0.6. Remote delete can be added later with extra safety guards. |
-| **Branch rename** | Separate feature with its own edge cases (tracking branch updates, remote rename). Not in v0.6 scope. | Defer to v0.7+. Users can delete + recreate. |
-| **Undo discard** | `git checkout -- <file>` is irreversible for untracked files and unstaged changes. No Git GUI provides undo for discard. | Confirmation dialog is the safety mechanism. Do NOT promise or attempt undo. |
-| **Toast notification system with queue/animation** | Over-engineering for v0.6. Simple modal dialogs cover all error/warning needs. | Modal dialog only. Toast/snackbar can come later if needed. |
-| **Custom icon font / SVG sprite sheet** | Over-engineering. Tree-shaking individual imports is simpler and more maintainable. | Direct Lucide component imports. |
-| **Tag push from sidebar** | Requires knowing which remote to push to, handling auth, error states. Separate concern from delete. | Tags are pushed via `git push` (already works). Tag push UI deferred. |
+This research covers how GitKraken, Fork, Sublime Merge, lazygit, GitUI, and VS Code (Source Control) implement these features — what's table stakes, what differentiates, and what to avoid.
 
 ---
 
-## Feature Dependencies
+## Hunk Staging
 
-```
-[Icon System]
-  └── ALL other visual features depend on having icons available
-  └── Should be first phase: establishes visual vocabulary
+### How Each Tool Does It
 
-[Dialog System]
-  └── Required by: Discard (confirmation), Branch Delete (confirmation), Tag Delete (confirmation)
-  └── Extends: existing InputDialog pattern (backdrop + modal)
-  └── Does NOT depend on: icon system (can use text-only initially)
+**GitKraken:**
+- Click a file in WIP node to open diff view. Diff shows hunks separated by hunk headers.
+- Three diff view modes: **Hunk View** (collapsed context, shows only changed blocks), **Inline View** (full file with inline changes), **Split View** (side-by-side).
+- In Hunk View, each hunk has a **"Revert"** button to revert that hunk.
+- To stage specific lines: highlight lines in the diff, right-click → "Stage selected lines". Same for unstaging.
+- "Stage File" / "Unstage File" buttons remain on each file header for whole-file operations.
+- Discard hunks: right-click in diff → "Discard hunk". Available since late 2024.
+- No explicit "Stage Hunk" button per hunk — staging granularity is line-based via selection, or whole-file.
 
-[Discard Changes]
-  └── Requires: Dialog System (confirmation before destructive action)
-  └── Requires: Icon System (trash icon on hover per file)
-  └── Backend: new Tauri command `discard_file` + `discard_all`
-  └── Modifies: FileRow.svelte (add discard button), StagingPanel.svelte (add discard all)
+**Fork:**
+- Diff view shows unified diff with hunk headers.
+- Features **line-by-line staging**: click a line to select it, shift-click for range, then stage selection.
+- "Stage / unstage changes line-by-line" is listed as a headline feature on their marketing page.
+- Stage Hunk: click the hunk header area to stage the entire hunk.
+- Split (side-by-side) diff view supported.
+- No per-hunk stage/unstage buttons visible in the UI — staging is selection-based.
 
-[Branch Delete]
-  └── Requires: Dialog System (confirmation)
-  └── Modifies: BranchSidebar.svelte (context menu), BranchRow.svelte (context menu handler)
-  └── Backend: new Tauri command `delete_branch`
-  └── Safety: must check if branch == HEAD, refuse with error
+**Sublime Merge:**
+- Diff is shown per file with collapsible hunks. Three staging granularities with explicit buttons:
+  - **"Stage file"** button at file level
+  - **"Stage hunk"** button at each hunk header
+  - **"Stage lines"**: select individual lines, then click "Stage lines" button
+- Context dragging: click and drag the edge of a hunk to expand/collapse context lines around changes.
+- Full file context toggle: button on hunk header toggles between hunk view and full file view.
+- This is the gold standard for hunk staging UX — explicit buttons at every level, no ambiguity.
 
-[Tag Delete]
-  └── Requires: Dialog System (confirmation)
-  └── Modifies: BranchSidebar.svelte (Tags section context menu)
-  └── Backend: new Tauri command `delete_tag`
+**lazygit (TUI):**
+- In the files panel, press enter to view diff. Diff shows hunks.
+- Press **space** on a line to stage/unstage that single line.
+- Press **v** to enter visual (range) selection mode, then space to stage the range.
+- Press **a** to stage/unstage the entire current hunk.
+- Navigation: arrow keys move between lines, tab switches between staged/unstaged panels.
+- No mouse support for hunk staging — entirely keyboard-driven.
 
-[Three-Way Selector]
-  └── Requires: Icon System (mode icons: commit, amend, stash)
-  └── Modifies: CommitForm.svelte (replace checkbox with selector)
-  └── Inherits: existing amend logic + stash_save from toolbar
+**GitUI (TUI, Rust + git2):**
+- Stage, unstage, revert and reset at file, hunk, and line granularity.
+- In diff view: navigate to a hunk, press enter/space to stage it.
+- Line-level staging via visual selection mode.
+- Uses git2 crate (same as Trunk) for all operations.
 
-[Staging Button Improvements]
-  └── Requires: Icon System (+ and - icons, or checkmark/x)
-  └── Modifies: StagingPanel.svelte (section headers)
+**VS Code Source Control:**
+- Gutter icons: each hunk in the diff editor has inline stage/unstage/revert gutter buttons.
+- Can also select lines and use "Stage Selected Ranges" from context menu or command palette.
+- Hunk headers shown as collapsible sections with "Stage Change" / "Revert Change" buttons in the gutter.
 
-[Graph Overflow/Sticky Columns]
-  └── Independent of other features
-  └── Modifies: CommitGraph.svelte, column layout CSS
-  └── Risk: complex CSS interaction with virtual list + SVG overlay
+### Table Stakes (must have)
 
-[Click Refs → Navigate Graph]
-  └── Requires: virtual list `scrollToIndex` capability
-  └── Modifies: BranchSidebar.svelte (click handler), App.svelte (scroll communication)
+| Feature | Evidence | Notes |
+|---------|----------|-------|
+| **Per-hunk stage button** | Sublime Merge, VS Code, GitUI all have explicit hunk-level stage buttons. Fork and lazygit also support it (click header / press 'a'). | Button on each hunk header: "Stage Hunk" (unstaged view) or "Unstage Hunk" (staged view). Universally expected. |
+| **Per-hunk unstage button** | Mirrors stage. All tools that support hunk staging also support hunk unstaging at the same granularity. | Button on each hunk header in staged diff view. |
+| **Visual hunk boundaries** | Every tool shows hunk headers (`@@ -X,Y +A,B @@`) with distinct styling (muted color, background band). Hunks are visually separated sections. | Trunk already renders hunk headers — need to add interactive affordance (button) to them. |
+| **Hunk header as clickable/actionable region** | Sublime Merge, Fork, VS Code all make the hunk header row interactive. It's the natural place for the stage/unstage button. | Hunk header row becomes a flex container: `[hunk header text] [Stage Hunk / Unstage Hunk button]`. |
+| **Hover affordance on stage/unstage buttons** | All GUI tools show buttons on hover or always-visible. Not hidden behind right-click. Hunk staging must be discoverable. | Button always visible or appears on hover over hunk header. Green for stage, red for unstage — matching Trunk's existing color semantics. |
+| **Diff context awareness (unstaged vs staged)** | When viewing an unstaged file, hunks can be staged. When viewing a staged file, hunks can be unstaged. Different diff source = different action. | Trunk already has `diff_workdir` and `diff_staged` commands. The DiffPanel needs to know which context it's in to show the right button. |
+| **Discard hunk** | GitKraken ("Revert Hunk"), VS Code ("Revert Change"), Sublime Merge (context menu). Discarding individual hunks from working tree is expected alongside staging. | Third action on hunk header: "Discard Hunk" (only for unstaged hunks). Requires confirmation or undo capability. |
+| **Refresh after stage/unstage** | After staging a hunk, the diff must refresh to reflect the change. If a file has 3 hunks and you stage 1, the unstaged diff now shows 2 hunks. | IPC round-trip: stage hunk → re-fetch diff → re-render. Must feel instant (<100ms). |
 
-[Graph Padding]
-  └── Independent, simple CSS/virtual list change
-  └── Modifies: CommitGraph.svelte or VirtualList.svelte
+### Differentiators (nice to have)
 
-[Right Pane Auto-Open]
-  └── Independent
-  └── Modifies: App.svelte (reactive guard on rightPaneCollapsed)
+| Feature | Evidence | Complexity | Notes |
+|---------|----------|------------|-------|
+| **Line-level staging** | GitKraken (select lines → right-click → "Stage selected lines"), Fork (click/shift-click lines), Sublime Merge ("Stage lines" button), lazygit (space on line, v for range). | HIGH | Requires: (1) making individual diff lines selectable/highlightable, (2) computing the partial patch from selected lines, (3) applying that patch via git2. Significantly more complex than hunk staging. Fork, GitKraken, and Sublime Merge all have it, making it a differentiator but approaching table stakes for premium GUIs. |
+| **Split (side-by-side) diff view** | GitKraken, Fork, Sublime Merge all offer split view. Old file left, new file right. | MEDIUM-HIGH | Different rendering mode for DiffPanel. Requires computing line-to-line mapping between old and new. Not needed for hunk staging but pairs well with it. |
+| **Context expansion (show more lines)** | Sublime Merge: drag hunk edges to reveal more context. VS Code: "Show More Lines" button between hunks. | MEDIUM | Requires backend support to re-fetch diff with different context line count. git2's DiffOptions has `context_lines()` setting. |
+| **Hunk splitting** | `git add -p` in CLI has the `s` (split) command that breaks large hunks into smaller ones. None of the GUI tools expose explicit "split hunk" UI. Sublime Merge handles it via line-level staging. lazygit and GitUI handle it via line selection. | HIGH (if manual), N/A (via line staging) | git2 doesn't expose hunk splitting. The standard approach is: support line-level staging, which implicitly gives split-hunk capability. Explicit "split hunk" button is an anti-feature — nobody does it in GUIs. |
+| **Keyboard shortcuts for hunk navigation** | lazygit: arrow keys between hunks. VS Code: `Alt+F3` / `Alt+F5` jump between changes. | LOW | Add `[` / `]` or `↑` / `↓` keyboard shortcuts to jump between hunks in diff view. Low effort, high value for keyboard users. |
 
-[Layout Merge (top bars)]
-  └── Independent
-  └── Modifies: App.svelte, TabBar.svelte, Toolbar.svelte
+### Anti-Features (avoid)
 
-[Bug Fixes]
-  └── Independent of features, can be interleaved
-  └── Overflow pill z-index: SVG layering fix
-  └── Trailing header divider: CSS fix
-  └── Untracked files not showing WIP: backend logic fix
-```
-
----
-
-## Detailed Feature Analysis
-
-### 1. Icon System
-
-**How competitors do it:**
-- **GitKraken:** Custom icon font with proprietary glyphs. Consistent but not reusable.
-- **Fork:** Native macOS SF Symbols + custom SVG icons. Platform-native look.
-- **Sublime Merge:** Custom SVG icons, minimal set, very consistent sizing.
-- **Tower:** Custom icon font, consistent weight and style throughout.
-
-**Recommendation for Trunk:** Use **Lucide** (`@lucide/svelte` for Svelte 5). Reasons:
-- 1,500+ icons, covers all Git GUI needs (git-branch, git-commit, git-merge, tag, trash, plus, minus, check, x, undo, redo, download, upload, archive, etc.)
-- Official Svelte 5 package (`@lucide/svelte`), tree-shakable individual imports
-- Consistent 24x24 grid, 2px stroke width — scales cleanly to 12-16px used in Trunk's UI
-- ISC license (permissive, compatible with any future open source release)
-- `currentColor` default — works with CSS custom properties for theming
-
-**Key icon mappings needed (~35 icons):**
-- Toolbar: `Undo2`, `Redo2`, `ArrowDown` (Pull), `ArrowUp` (Push), `GitBranch`, `Archive` (Stash), `ArchiveRestore` (Pop)
-- FileRow status: `Plus`, `Pencil`, `Minus`/`Trash2`, `ArrowRight` (Renamed), `RefreshCw` (Typechange), `AlertTriangle` (Conflicted)
-- FileRow actions: `Plus` (stage), `Minus` (unstage), `Trash2` (discard)
-- StagingPanel: `ChevronDown`/`ChevronRight` (expand/collapse), `Plus` (stage all), `Minus` (unstage all), `Trash2` (discard all)
-- CommitForm: `GitCommit` (commit mode), `PenLine` (amend mode), `Archive` (stash mode)
-- Sidebar: `GitBranch` (local), `Globe` (remote), `Tag`, `Layers` (stashes), `Plus` (create), `Search` (filter)
-- TabBar: `X` (close)
-- Ref pills: `Tag` (better icon for tag pill — currently using generic symbol)
-
-**Confidence:** HIGH — Lucide has official Svelte 5 package, verified via lucide.dev docs.
-
-### 2. Discard Changes
-
-**How competitors do it:**
-- **GitKraken:** Trash icon on hover per file (unstaged section). "Discard all changes" button (trash icon) in section header. Confirmation dialog: "Are you sure you want to discard all changes?" Right-click context menu also has "Discard changes".
-- **Fork:** Right-click file → "Discard Changes". Also has "Discard All" in toolbar. Confirmation dialog before executing.
-- **Sublime Merge:** Right-click file → "Discard File". Keyboard shortcut available. Confirmation dialog.
-- **Tower:** Right-click → "Discard Changes". Batch discard for multi-selected files. Confirmation.
-
-**Universal pattern:** Every GUI confirms before discard. All support per-file and all-files. Most show discard on hover (icon) and in context menu (text).
-
-**Implementation for Trunk:**
-- Per-file: hover shows trash icon (third action after stage +/unstage −). Click → confirm dialog → `git checkout HEAD -- <path>` for tracked files, `rm` for untracked new files.
-- Discard All: button in unstaged section header (trash icon). Click → confirm dialog → restore all.
-- Backend: `git2::Repository::checkout_head()` with `CheckoutBuilder::path()` for tracked files. `std::fs::remove_file()` for untracked (New) files.
-- Staged files: Do NOT show discard on staged files. Discard operates on unstaged changes only. This matches GitKraken/Fork behavior.
-
-**Confidence:** HIGH — well-established pattern across all competitors.
-
-### 3. Branch Delete
-
-**How competitors do it:**
-- **GitKraken:** Right-click branch → "Delete [branch-name]". Confirmation dialog. Cannot delete HEAD branch (menu item greyed out). Also offers "Delete [branch] from [remote]" as separate action.
-- **Fork:** Right-click → Delete. Asks "Delete branch 'X'?" with option "Also delete remote tracking branch". Cannot delete current branch.
-- **Sublime Merge:** Right-click → Delete Branch. Requires switching away from branch first.
-- **Tower:** Right-click → Delete. Multi-select delete supported.
-
-**Universal pattern:** Context menu → confirmation → delete. HEAD branch cannot be deleted (disabled/greyed, not hidden). Some offer remote delete as checkbox or separate option.
-
-**Implementation for Trunk:**
-- Add "Delete" to existing BranchRow context menu (right-click handling needed — currently only has checkout via click)
-- Confirmation dialog using `@tauri-apps/plugin-dialog` `ask()` (same pattern as stash drop)
-- Backend: `git2::Branch::delete()` after checking it's not HEAD
-- Grey out/hide for HEAD branch
-- v0.6 scope: local delete only (remote delete deferred — too destructive for v0.6)
-
-**Confidence:** HIGH — straightforward pattern.
-
-### 4. Tag Delete
-
-**How competitors do it:**
-- **GitKraken:** Right-click tag → "Delete [tag] locally" and "Delete [tag] from [remote]" as separate options. Confirmation: "Deleting a tag is permanent and cannot be undone."
-- **Fork:** Right-click → Delete Tag. Confirmation.
-- **Tower:** Right-click → Delete. Option to also delete from remote.
-
-**Implementation for Trunk:**
-- Tags section in sidebar currently has `BranchRow` with no context menu. Need to add right-click → "Delete tag" context menu.
-- Backend: `git2::Reference::delete()` — find ref by `refs/tags/<name>` and delete.
-- Confirmation dialog. "Delete tag '[name]'? This cannot be undone."
-- v0.6 scope: local delete only.
-
-**Confidence:** HIGH — straightforward.
-
-### 5. Three-Way Commit/Amend/Stash Selector
-
-**How competitors do it:**
-- **GitKraken:** The commit panel has three mode icons at the bottom. Clicking the Stash icon switches the panel to "Stash mode" — the button says "Stash Changes", subject field becomes stash name, description becomes stash message. Amend pre-fills HEAD message. Very smooth mode switching.
-- **Tower:** Dropdown selector above commit message: "Commit" / "Amend" / "Stash". Changes button text and behavior.
-- **Fork:** Amend is a checkbox. Stash is a separate toolbar action. No unified selector.
-- **Sublime Merge:** Amend via commit menu. Stash via menu/toolbar. No unified selector.
-
-**Analysis:** GitKraken's unified approach is the best UX. It acknowledges that commit, amend, and stash are three variations of "save my work" and belong in the same UI location. Fork/Sublime Merge's approach of scattering them is functional but less discoverable.
-
-**Implementation for Trunk:**
-- Replace `amend` checkbox with segmented control or tab bar: `[Commit] [Amend] [Stash]`
-- Default: "Commit" mode (current behavior)
-- "Amend" mode: pre-fills subject/body from HEAD commit (current checkbox logic)
-- "Stash" mode: button says "Stash Changes", subject field is stash name (optional), body is stash message
-- When switching to "Stash" mode: if subject has text, it becomes the stash name (the "stash name defaults to commit message" feature)
-- Stash mode should work with or without staged files (stashes everything)
-- Visually: three small buttons/tabs above the commit message area, or a segmented control
-
-**Confidence:** MEDIUM — the UX design is clear from competitors, but the exact Svelte component design needs iteration. The concept is well-proven.
-
-### 6. Staging Button Improvements
-
-**Current state:** Text buttons "Stage All Changes" and "Unstage All" in section headers. Individual files show `+` or `−` text on hover.
-
-**How competitors do it:**
-- **GitKraken:** Green "Stage all changes" button with icon. Individual files show "Stage File" label on hover. Unstage has corresponding button.
-- **Fork:** Green `+` icon button for stage all, red `−` for unstage all. Per-file has same colored icons.
-- **Sublime Merge:** Buttons in toolbar area, not inline.
-
-**Implementation for Trunk:**
-- "Stage All" button: green background, `Plus` or `PlusCircle` icon, prominent
-- "Unstage All" button: red/danger background, `Minus` or `MinusCircle` icon
-- Per-file: keep hover action icons but use proper Lucide icons instead of `+`/`−` text
-- "Discard All" button: trash icon, danger color, in unstaged header (next to Stage All)
-- Equal height for unstaged/staged sections when both expanded: CSS `flex: 1` on both sections, giving 50/50 split of available space
-
-**Confidence:** HIGH — well-understood visual patterns.
-
-### 7. Graph Overflow/Sticky Columns
-
-**How competitors do it:**
-- **GitKraken:** Graph column scrolls horizontally when many lanes push it wider than its allocated space. Message/author/date columns remain fixed in place. Horizontal scrollbar appears only on graph column.
-- **Fork:** Similar — graph area is independently scrollable horizontally. Right columns (message, author, date, SHA) never scroll off-screen.
-- **Sublime Merge:** Different approach — graph never gets too wide because it limits lane depth. But it does scroll the graph column independently.
-
-**Implementation for Trunk:**
-- Current: 6-column resizable layout with graph as one column. If graph needs more space than allocated, content is clipped.
-- Fix: make graph column `overflow-x: auto` with its own horizontal scrollbar. OR: implement sticky right columns using CSS `position: sticky` on the right cells.
-- The tricky part: SVG overlay spans the graph column. Horizontal scrolling of the graph column must also scroll the SVG overlay's x-position.
-- Alternative simpler approach: instead of horizontal scroll, shrink graph lines when space is tight (reduce `LANE_WIDTH` dynamically based on `max_columns` vs available width). This is what some GUIs do for very dense graphs.
-
-**Confidence:** MEDIUM — the UX goal is clear, but implementation with virtual list + SVG overlay is non-trivial. May need experimentation.
-
-### 8. Click Refs → Navigate Graph
-
-**How competitors do it:**
-- **GitKraken:** Double-click branch in left panel → graph scrolls to that branch's HEAD commit and highlights it.
-- **Fork:** Single-click branch → graph scrolls to commit, selects it.
-- **Tower:** Same pattern.
-- **Sublime Merge:** Same pattern.
-
-**Implementation for Trunk:**
-- Branch/tag entries in sidebar already have `oid` (from `RefsResponse`).
-- On click: find the row index for that OID in the commit list. Call `virtualList.scrollToIndex(rowIndex)`.
-- The virtual list (VirtualList.svelte) needs a `scrollToIndex(idx)` method exposed. This is a standard virtual list feature.
-- After scrolling, select the commit (reuse `handleCommitSelect` from App.svelte).
-- For branches: the click currently triggers checkout. Need to differentiate: single-click → navigate, double-click → checkout. Or: left-click → navigate, right-click → context menu with checkout/delete.
-
-**Confidence:** HIGH — standard pattern, implementation path is clear.
-
-### 9. Dialog System
-
-**How competitors do it:**
-- **GitKraken:** Modal dialogs for errors (red border, error icon), warnings (yellow), confirmations (neutral). Toast notifications for progress (push/pull). Activity log for history.
-- **Fork:** OS-native dialogs for most confirmations. Custom modals for complex operations.
-- **Tower:** Custom modal dialogs with icon, title, message, actions. Snackbar for transient notifications.
-
-**Current Trunk state:** Uses `@tauri-apps/plugin-dialog` `ask()` for stash drop confirmation. Has `InputDialog.svelte` for form input (branch creation). Errors go to `console.error` or inline text (`checkoutError`, `stashCreateError`).
-
-**Implementation for Trunk:**
-- Generalize `InputDialog.svelte` into a `Dialog.svelte` component that supports:
-  - **Confirm dialog:** title, message, "Cancel" / "Delete" buttons (destructive variant)
-  - **Error dialog:** title, error message, "OK" button, error styling
-  - **Warning dialog:** title, warning message, "OK" / "Cancel"
-  - **Input dialog:** current InputDialog functionality (backwards-compatible)
-- Use a shared `$state` rune module (`dialog-state.svelte.ts`) following the established `remote-state.svelte.ts` pattern
-- Functions: `showConfirm(title, message): Promise<boolean>`, `showError(title, message): void`, `showInput(config): Promise<Record<string, string> | null>`
-- This replaces direct `@tauri-apps/plugin-dialog` calls with in-app styled dialogs (consistent visual language)
-- OR keep using `@tauri-apps/plugin-dialog` for confirmations (OS-native) and only build custom dialogs for errors/warnings
-
-**Recommendation:** Use **native OS dialogs** (`@tauri-apps/plugin-dialog`) for confirmations (discard, delete) — they're already proven and feel native. Build a custom **error/notification dialog** for error display (replacing console.error). This hybrid approach gives native feel for confirmations + custom styling for errors.
-
-**Confidence:** HIGH — patterns are well-established, Trunk already has 80% of the infrastructure.
-
-### 10. Bug Fixes
-
-| Bug | Root Cause (likely) | Fix Approach | Complexity |
-|-----|---------------------|--------------|------------|
-| **Branch overflow pill z-index behind graph** | SVG overlay has higher z-index than HTML ref pills, or SVG `<g>` rendering order. | Ensure overflow badge SVG elements render in the topmost `<g>` group. Or increase z-index of the overflow badge container. | LOW |
-| **Trailing header divider on last visible column** | CSS `:last-child` doesn't account for hidden columns (display:none doesn't remove from DOM). | Use `:last-of-type` or calculate visible columns and apply class to actual last visible column. | LOW |
-| **New untracked files not showing WIP row or diff** | `get_status` may not detect untracked files, or WIP row rendering logic doesn't trigger when only untracked files exist (no staged or modified). | Check `status.unstaged` includes untracked files. Ensure WIP row appears when `unstaged.length > 0` regardless of file status type. | LOW-MEDIUM |
+| Feature | Why Avoid |
+|---------|-----------|
+| **Explicit "Split Hunk" button** | No GUI tool has this. The CLI's `git add -p` split is a workaround for not having line-level staging. GUIs solve this with line selection instead. Adding a split button adds confusion. |
+| **Inline editing in diff view** | Some tools (GitKraken, VS Code) allow editing files directly in the diff. This is a separate, complex feature. Mixing editing with staging creates ambiguous state. Defer entirely. |
+| **Three diff view modes (hunk/inline/split)** | GitKraken has all three. Adding view mode switching adds UI complexity. For v0.7, ship one good unified diff view with hunk staging. Split view is a separate future feature. |
+| **Drag-to-expand context lines** | Sublime Merge's context dragging is elegant but complex — requires re-diffing with different context sizes per hunk. Defer to future polish. |
+| **Staging from commit diff view** | Staging should only work from WIP (working directory) diffs. Allowing staging from historical commit diffs creates confusion. Keep commit diffs read-only. |
 
 ---
 
-## MVP Recommendation
+## Commit Graph Search
 
-### Phase 1: Foundation (enables everything else)
-1. **Icon system** — install `@lucide/svelte`, replace all Unicode symbols throughout app
-2. **Dialog system** — generalize confirmation dialogs for destructive operations
+### How Each Tool Does It
 
-### Phase 2: Core Operations
-3. **Discard changes** — per-file + discard all, with confirmation
-4. **Branch delete** — context menu + confirmation
-5. **Tag delete** — context menu + confirmation
+**GitKraken:**
+- **Search bar** in upper-right corner of the app, always visible. Defaults to commit search.
+- Searches by: **commit message**, **SHA**, and **author name/email**.
+- Results update **live** as you type (incremental search).
+- Matching commit is **highlighted in the graph** — the graph scrolls to show the match.
+- Does NOT filter/hide non-matching commits — the full graph remains visible with the match highlighted.
+- No prev/next navigation for multiple results mentioned in docs — appears to highlight the first match.
+- Also has a **Command Palette** (Cmd+P) for actions, but commit search is the dedicated search bar.
 
-### Phase 3: Staging & Commit UX
-6. **Three-way selector** — commit/amend/stash unified control
-7. **Staging button improvements** — colored icon buttons for stage all/unstage all
-8. **Stash name from commit message** — wire up subject field to stash name
+**Fork:**
+- **Filter bar** at the top of the commit list. Typing filters the visible commits.
+- Searches by: commit message, SHA, author, branch name.
+- Approach: **filters the commit list** to show only matching commits. Non-matches are hidden.
+- Can toggle between "Filter" mode (hide non-matches) and "Search" mode (highlight matches).
+- Supports regex in search queries.
 
-### Phase 4: Graph & Navigation
-9. **Graph padding** — top/bottom whitespace
-10. **Click refs → navigate** — sidebar click scrolls to commit
-11. **Graph overflow/sticky columns** — horizontal scroll for wide graphs
+**Sublime Merge:**
+- **Cmd+F** (or Ctrl+F) opens a **search overlay bar** at the top of the commit graph.
+- `toggle_search` command bound to `super+f`.
+- Searches by: commit message, SHA, author, file path, branch name.
+- Rich query syntax: can prefix with `author:`, `path:`, `sha:`, `branch:` for scoped search.
+- Results: **filters the graph** to show only matching commits. The graph topology is preserved (connecting lines drawn between visible matching commits).
+- Has prev/next navigation buttons (or Enter/Shift+Enter) to jump between results.
+- Also supports `--` for regex and various git-log-style options.
 
-### Phase 5: Layout & Polish
-12. **Right pane auto-open** — reactive guard
-13. **Merge top bars** — layout consolidation
-14. **Bug fixes** — overflow z-index, trailing divider, untracked files
+**lazygit (TUI):**
+- Press **`/`** in any panel to enter **filter mode**. Types filter the visible list.
+- In commits panel: filters commits by message text.
+- In branches panel: filters branches by name.
+- Separate **search commits** feature: press `Ctrl+S` to search commits by message/SHA with prev/next navigation.
+- Does NOT search across panels simultaneously — each panel has its own filter.
 
-**Defer:**
-- Remote branch/tag delete: too destructive for v0.6, needs extra safety
-- Hunk-level discard: ships with v0.7 hunk staging
-- Branch rename: separate feature, not in scope
-- Toast notifications: over-engineering for v0.6
+**GitUI (TUI):**
+- Search/filter in commit log panel.
+- Searches by commit message text.
+- Filter mode narrows visible commits.
+
+**VS Code Source Control (Timeline/Git Graph extension):**
+- Git Graph extension: Cmd+F opens search bar. Searches by message, SHA, author. Highlights matches in graph, with prev/next jump.
+- Does NOT filter the graph — highlights within it.
+
+### Table Stakes (must have)
+
+| Feature | Evidence | Notes |
+|---------|----------|-------|
+| **Cmd+F keyboard shortcut** | Sublime Merge, VS Code, and web browsers all use Cmd+F. Universal muscle memory. GitKraken has a dedicated search bar always visible but Cmd+F is the expected shortcut. | Must intercept Cmd+F when commit graph has focus. |
+| **Search overlay bar** | Sublime Merge and VS Code show a floating search bar at the top of the content area (not a sidebar, not a modal). This is the standard UX for in-place search. | Overlay bar at top of CommitGraph: text input + match count + prev/next buttons + close. |
+| **Search by commit message** | Every tool searches messages. This is the primary use case: "find the commit where I changed X". | Substring match (case-insensitive) against `summary` and optionally `body`. |
+| **Search by SHA (full or prefix)** | Every tool supports SHA search. Developers copy SHAs from GitHub, CI logs, error messages. Must find commits by hash. | Match against `oid` or `short_oid`. Prefix matching (typing `abc` matches `abc1234...`). |
+| **Search by branch/ref name** | GitKraken, Fork, Sublime Merge all support branch name search. Essential for finding where a branch points in a large graph. | Match against ref labels on commits. If a commit's refs contain a match, highlight that commit. |
+| **Highlight matches in graph** | GitKraken highlights matching commit. VS Code/Git Graph extension highlights. This preserves graph context — user sees where the match sits in the topology. | Highlight the matching row (background color change, or ring around the dot). Do NOT hide other commits. |
+| **Scroll to first match** | When search finds a result, the graph must scroll to show it. Otherwise the user has no feedback. | Auto-scroll virtual list to the row index of the first match. |
+| **Match count display** | "3 of 17 matches" — standard for search UIs (browsers, VS Code, Sublime Text). Gives user confidence about search completeness. | Display next to search input: `N of M` or `N results`. |
+| **Prev/Next navigation** | Enter (or Down arrow) → next match. Shift+Enter (or Up arrow) → previous match. Sublime Merge and VS Code both support this. Standard search pattern. | Prev/Next buttons in search bar + keyboard shortcuts. Wraps around at ends. |
+| **Escape to close** | Universal: Escape closes the search overlay and returns focus to the graph. | Clear search state, remove highlighting, close overlay. |
+| **Dismiss without clearing** | Pressing Escape should close the overlay but ideally keep the current scroll position (don't jump back to where user was before search). | Close overlay, preserve scroll position, remove highlights. |
+
+### Differentiators (nice to have)
+
+| Feature | Evidence | Complexity | Notes |
+|---------|----------|------------|-------|
+| **Search by author** | GitKraken, Sublime Merge, Fork all support author search. | LOW | Match against `author_name` or `author_email`. Easy to add since data already exists in GraphCommit. |
+| **Live/incremental search** | GitKraken updates results as you type. Sublime Merge also live-filters. | MEDIUM | Debounce input (150-200ms), re-search on each keystroke. Must be fast enough for large repos (searching 10k+ commit messages). Consider running search in Rust backend for speed. |
+| **Scoped search prefixes** | Sublime Merge: `author:jane`, `sha:abc`, `branch:feature/`. Explicit scope narrows results. | LOW-MEDIUM | Parse input for `key:value` prefix. Route to appropriate field match. Good power-user feature. |
+| **Filter mode (hide non-matches)** | Fork and Sublime Merge can filter the graph to show only matching commits. Topology is preserved with connecting lines. | HIGH | Requires re-computing visible rows, adjusting SVG overlay to draw connections between non-adjacent visible rows. Complex interaction with virtual list and lane algorithm. |
+| **Regex support** | Fork supports regex. Sublime Merge has regex toggle. | LOW | Use Rust `regex` crate in backend search. Toggle button in search bar. |
+| **Search by file path** | Sublime Merge supports `path:` scoped search. "Find the commit that last changed this file." | HIGH | Requires walking commit trees to find path changes — expensive. Not a v0.7 priority. |
+| **Persist search across panel switches** | If user switches to diff panel and back, search state should be preserved. | LOW | Store search state in a shared `$state` module. |
+
+### Anti-Features (avoid)
+
+| Feature | Why Avoid |
+|---------|-----------|
+| **Full graph filtering (hide non-matches)** | Extremely complex to implement with SVG overlay + virtual list + lane algorithm. Hiding rows breaks the virtual list's index assumptions and requires re-rendering all SVG paths. Fork and Sublime Merge took years to get this right. Not worth it for v0.7. Highlight-in-place is sufficient. |
+| **Search replacing sidebar filter** | The branch sidebar already has a text filter for branch names. Commit graph search is a separate feature. Don't merge them — they serve different purposes (find branch vs find commit). |
+| **Search modal/dialog** | A search modal (centered popup) blocks the graph view. The user needs to see the graph while searching. An overlay bar at the top (like Ctrl+F in browsers) is correct. |
+| **Fuzzy matching** | Fuzzy search (like fzf) sounds cool but commit messages and SHAs are not fuzzy targets. Substring match is what every tool uses and what users expect. Fuzzy matching would produce confusing results. |
+| **Saved searches / search history** | Over-engineering for v0.7. Users can type the same search again. |
+| **Cross-panel search** | Searching commits, branches, and files simultaneously creates ambiguous results. Each panel should have its own search. For v0.7, search is commit-graph-only. |
+
+---
+
+## Complexity Notes
+
+### Hunk Staging
+
+| Task | Complexity | Why |
+|------|-----------|-----|
+| **Backend: stage hunk (Rust/git2)** | MEDIUM | git2 has `Repository::apply()` for applying patches. Need to: (1) construct a `git2::Diff` for a single hunk, (2) apply it to the index. Alternative: use `git2::Index::add_frombuffer()` to write the partially-staged file content to the index. Another approach: shell out to `git apply --cached` with a patch constructed from the hunk. git2's apply API is the cleanest but requires careful patch construction. |
+| **Backend: unstage hunk** | MEDIUM | Reverse of stage: construct a reverse patch for the hunk, apply to index. Or: recompute the file content without the hunk and write to index. |
+| **Backend: discard hunk** | MEDIUM | Apply reverse patch to working directory (not index). Or write the original content (from HEAD) for just those lines back to the file. |
+| **Frontend: hunk header buttons** | LOW | Add a button element to the existing hunk header div in DiffPanel.svelte. Wire to new Tauri command. |
+| **Frontend: diff refresh after hunk op** | LOW-MEDIUM | After staging a hunk, re-invoke `diff_workdir` / `diff_staged` and re-render. Must handle the case where staging the last hunk removes the file from the unstaged list. |
+| **Frontend: context awareness** | LOW | DiffPanel needs a prop or context to know if it's showing unstaged or staged diff. This determines whether buttons say "Stage" or "Unstage". |
+
+**Total hunk staging estimate: MEDIUM complexity.** The main challenge is the git2 patch construction for partial staging. Once the backend command works, the frontend is straightforward.
+
+### Commit Graph Search
+
+| Task | Complexity | Why |
+|------|-----------|-----|
+| **Backend: search command** | LOW | Search is a filter over `GraphCommit[]` data that's already cached in `CommitCache`. New Tauri command `search_commits(repo, query)` iterates cached commits and returns matching indices/OIDs. Fast: 10k commits × string contains check = <1ms. |
+| **Frontend: search overlay component** | MEDIUM | New Svelte component: SearchBar.svelte. Text input, match count, prev/next buttons, close button. Positioned absolutely at top of CommitGraph container. Cmd+F keybinding to toggle. |
+| **Frontend: highlight matching rows** | LOW | Pass `Set<string>` of matching OIDs to CommitRow. Matching rows get a subtle background highlight (yellow/amber tint). |
+| **Frontend: scroll to match** | LOW | Virtual list `scrollToIndex()` already needed (and may already exist from v0.6 ref navigation). Jump to first match on search, advance on prev/next. |
+| **Frontend: keyboard handling** | LOW | Cmd+F to open, Escape to close, Enter for next, Shift+Enter for previous. Standard event handlers. |
+
+**Total search estimate: LOW-MEDIUM complexity.** Mostly frontend work. The search itself is trivial (string matching on cached data). The UX component is the main effort.
+
+---
+
+## Dependencies on Existing Features
+
+### Hunk Staging depends on:
+
+| Existing Feature | How Used | Status |
+|-----------------|----------|--------|
+| **DiffPanel.svelte** | Already renders hunks with headers and colored lines. Hunk staging adds buttons to each hunk header div. | Ready — extend, not replace |
+| **DiffHunk type (Rust + TS)** | Already has `header`, `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]`. Contains all data needed to construct a patch for staging. | Ready — no changes needed |
+| **`diff_workdir` / `diff_staged` commands** | Already return `FileDiff[]` with hunks. Used to refresh diff after staging a hunk. | Ready — reuse as-is |
+| **`stage_file` / `unstage_file` commands** | Existing whole-file staging. Hunk staging is a new parallel command (`stage_hunk`, `unstage_hunk`) — does not replace whole-file staging. | Ready — parallel path |
+| **StagingPanel.svelte** | Shows unstaged/staged file lists. After hunk staging, file may split between lists (partially staged). StagingPanel already handles this case if the file appears in both lists. | Ready — but verify partial staging display |
+| **Filesystem watcher + auto-refresh** | After staging a hunk, the watcher should trigger a status refresh. Existing `repo-changed` event flow handles this. | Ready |
+| **Toast notifications (v0.6)** | Can show success/error toasts for stage/unstage/discard operations. | Ready |
+
+### Commit Graph Search depends on:
+
+| Existing Feature | How Used | Status |
+|-----------------|----------|--------|
+| **CommitGraph.svelte** | Container for the search overlay. Search results highlight rows within it. | Ready — add overlay child |
+| **CommitRow.svelte** | Needs to accept a `highlighted` or `isSearchMatch` prop for visual styling. | Ready — add prop |
+| **VirtualList.svelte** | Needs `scrollToIndex(idx)` method for jumping to search results. | May need enhancement — check if already exposed from v0.6 ref navigation feature |
+| **CommitCache (Rust)** | Search queries run against cached commits. No additional data loading needed. | Ready — `GraphResult` has all commit data |
+| **GraphCommit type** | Has `oid`, `short_oid`, `summary`, `author_name`, `refs[]` — all searchable fields. | Ready |
+| **BranchSidebar search** | Sidebar already has a text filter for branches (implemented in v0.6). Separate from commit graph search but establishes the search UX pattern. | Ready — separate feature, consistent pattern |
+
+---
+
+## Implementation Recommendations
+
+### Hunk Staging — Recommended Approach
+
+**Backend (Rust):** The cleanest approach with git2 is:
+1. `stage_hunk(repo_path, file_path, hunk_index)`: Read the working directory file. Read the index (staged) version. Construct the "desired index content" by taking the current index content and applying only the target hunk's changes. Write this content to the index via `Index::add_frombuffer()`.
+2. Alternative: Build a minimal unified diff patch string for the single hunk and apply via `git2::Repository::apply()` with `ApplyLocation::Index`.
+3. `unstage_hunk`: Same approach in reverse — construct index content with the hunk removed.
+4. `discard_hunk`: Build reverse patch, apply to working directory file.
+
+**Frontend (Svelte):** 
+1. Add `diffContext: 'unstaged' | 'staged' | 'commit'` prop to DiffPanel.
+2. When `diffContext` is `'unstaged'`: show "Stage Hunk" + "Discard Hunk" buttons on each hunk header.
+3. When `diffContext` is `'staged'`: show "Unstage Hunk" button on each hunk header.
+4. When `diffContext` is `'commit'`: no buttons (read-only).
+5. On button click: invoke `stage_hunk` / `unstage_hunk` / `discard_hunk` → re-fetch diff → re-render.
+
+### Commit Graph Search — Recommended Approach
+
+**Backend (Rust):**
+1. `search_commits(repo_path, query)` — iterate `CommitCache` entries, match `query` (case-insensitive substring) against `summary`, `oid`, `short_oid`, and ref names. Return `Vec<usize>` (matching row indices) + total count.
+2. Consider: doing search on frontend since `GraphCommit[]` is already available in JS. Avoids IPC round-trip. 10k commits × 3 string comparisons is fast in JS.
+
+**Frontend (Svelte):**
+1. New `SearchOverlay.svelte` component: positioned absolute at top of CommitGraph.
+2. Cmd+F toggles visibility. Escape closes.
+3. Input field with debounced search (100-150ms).
+4. Display: "N of M matches" + [Prev] [Next] buttons.
+5. Pass `matchingOids: Set<string>` to CommitGraph for row highlighting.
+6. On result navigation: call `virtualList.scrollToIndex(matchIndex)`.
 
 ---
 
 ## Sources
 
-- GitKraken Desktop documentation (Feb 2026): staging, stashing, tags, branching — help.gitkraken.com (accessed 2026-03-15) [HIGH confidence]
-- Lucide Svelte package documentation: lucide.dev/guide/packages/lucide-svelte (accessed 2026-03-15) [HIGH confidence]
-- Fork Git client: feature observation from known UX patterns [MEDIUM confidence — no docs fetched, based on domain knowledge]
-- Sublime Merge, Tower: feature observation from known UX patterns [MEDIUM confidence — based on domain knowledge]
-- Trunk codebase: App.svelte, CommitForm.svelte, StagingPanel.svelte, Toolbar.svelte, BranchSidebar.svelte, FileRow.svelte, InputDialog.svelte [HIGH confidence — direct code review]
-- git2 crate: Repository::checkout_head, Branch::delete, Reference::delete APIs [MEDIUM confidence — based on training data, verify against current docs]
+- GitKraken Desktop docs — staging (Feb 2026): explicit line staging via right-click, hunk revert in Hunk View [HIGH confidence — fetched directly]
+- GitKraken Desktop docs — diff (Mar 2026): Hunk/Inline/Split views, revert hunk button per hunk [HIGH confidence — fetched directly]
+- GitKraken Desktop docs — search (Jan 2026): search bar searches by message/SHA/author, highlights in graph, live results [HIGH confidence — fetched directly]
+- Fork homepage: "Stage / unstage changes line-by-line" as headline feature [HIGH confidence — fetched directly]
+- Sublime Merge docs — getting started: "Stage file" / "Stage hunk" / "Stage lines" explicit buttons, screenshot reference [HIGH confidence — fetched directly]
+- Sublime Merge docs — key bindings: `toggle_search` bound to `super+f`, search_mode context key [HIGH confidence — fetched directly]
+- Sublime Merge docs — diff context: context dragging and full-file toggle [HIGH confidence — fetched directly]
+- lazygit README: space to stage line, `v` for range selection, `a` for whole hunk, `/` for filter mode [HIGH confidence — fetched directly]
+- GitUI README: "Stage, unstage, revert and reset files, hunks and lines", search commit log [HIGH confidence — fetched directly]
+- Trunk codebase: DiffPanel.svelte, types.ts (DiffHunk/DiffLine/FileDiff), src-tauri/src/commands/diff.rs, src-tauri/src/git/types.rs [HIGH confidence — direct code review]
 
 ---
-*Feature landscape for: Trunk v0.6 — UI Polish & Core Ops*
-*Researched: 2026-03-15*
+*Feature landscape for: Trunk v0.7 — Hunk Staging & Commit Graph Search*
+*Researched: 2026-03-17*

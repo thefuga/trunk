@@ -1,8 +1,8 @@
-# Architecture Research: v0.6 UI Polish & Core Ops Integration
+# Architecture Research: Trunk v0.7 — Hunk Staging & Commit Graph Search
 
-**Domain:** Desktop Git GUI — feature integration into existing Tauri 2 + Svelte 5 + Rust architecture
-**Researched:** 2026-03-15
-**Confidence:** HIGH (based on full codebase audit, all claims verified against existing source)
+**Domain:** Desktop Git GUI — hunk-level staging and commit graph search integration
+**Researched:** 2026-03-17
+**Confidence:** HIGH (based on full codebase audit of all Rust commands, Svelte components, types, and IPC patterns)
 
 ## Current Architecture Summary
 
@@ -34,865 +34,661 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## v0.6 Feature Integration Map
-
-Each v0.6 feature classified by integration approach: **New Component**, **Modified Component**, **New Rust Command**, **CSS/Layout Only**, or **Bug Fix**.
-
-### Feature-by-Feature Architecture Decisions
-
 ---
 
-### 1. Icon System
+## Feature 1: Hunk-Level Staging
 
-**Type:** New shared module + new component + modified components (many)
-**Confidence:** HIGH
+### Problem Analysis
 
-**Current state:** Unicode symbols for toolbar buttons (`&#8617;`, `&#8595;`, `&#9095;`, `&#128230;`), single-char symbols for file status (`+`, `✎`, `−`, `→`, `⇄`, `!`), inline SVG paths for ref pill icons (tag diamond, stash box).
+Current staging operates at whole-file granularity:
+- `stage_file_inner` → `index.add_path(file_path)` — stages entire file
+- `unstage_file_inner` → `index.remove_path` or `repo.reset_default` — unstages entire file
+- DiffPanel renders hunks with headers + lines but has no interactive elements per hunk
 
-**Architecture:**
+git2 does NOT provide a `stage_hunk` API. Hunk staging requires manually applying a patch to the index. Two approaches exist:
 
-Create `src/lib/icons.ts` — a centralized icon module exporting SVG path data strings keyed by icon name. NOT an icon component per icon — raw SVG `<path d="...">` data for maximum flexibility across HTML, SVG overlay, and toolbar contexts.
+### Approach A: git2 Index Manipulation (Recommended)
 
-```typescript
-// src/lib/icons.ts
-export const ICONS = {
-  // Toolbar
-  undo: 'M9 15L3 9l6-6 M3 9h12a6 6 0 010 12H9',
-  redo: 'M15 15l6-6-6-6 M21 9H9a6 6 0 000 12h6',
-  pull: 'M12 5v14 M19 12l-7 7-7-7',
-  push: 'M12 19V5 M5 12l7-7 7 7',
-  branch: 'M6 3v12 M18 9a3 3 0 01-3 3H6',
-  stash: 'M5 8h14 M7 4h10 M3 12h18v8H3z',
-  pop: 'M5 12h14 M12 8V2 M8 6l4-4 4 4',
-  // File status
-  fileAdd: 'M12 5v14 M5 12h14',
-  fileModify: 'M11 4H4v16h16v-7',
-  fileDelete: 'M5 12h14',
-  fileRename: 'M5 12h14 M13 6l6 6-6 6',
-  // Ref pills (tiny, for 10px icon width)
-  tag: 'M0 0l4-4 4 4-4 4z',
-  stashPill: 'M0 4V-4h5v4H0',
-  // Section headers
-  chevronDown: 'M6 9l6 6 6-6',
-  chevronRight: 'M9 6l6 6-6 6',
-  plus: 'M12 5v14 M5 12h14',
-  close: 'M18 6L6 18 M6 6l12 12',
-  // Actions
-  discard: 'M3 6h18 M8 6V4h8v2 M5 6v14h14V6',
-  stage: 'M5 12l5 5L20 7',
-  unstage: 'M5 12h14',
-} as const;
-
-export type IconName = keyof typeof ICONS;
-```
-
-**New component:** `src/components/Icon.svelte` — thin wrapper for consistent sizing:
-
-```svelte
-<script lang="ts">
-  import { ICONS, type IconName } from '../lib/icons.js';
-  interface Props {
-    name: IconName;
-    size?: number;
-    class?: string;
-    stroke?: string;
-  }
-  let { name, size = 16, class: className = '', stroke = 'currentColor' }: Props = $props();
-</script>
-
-<svg width={size} height={size} viewBox="0 0 24 24"
-  fill="none" {stroke} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-  class={className}>
-  <path d={ICONS[name]} />
-</svg>
-```
-
-**Components to modify:**
-- `Toolbar.svelte` — Replace unicode entities with `<Icon name="pull" />` etc.
-- `FileRow.svelte` — Replace `STATUS_ICONS` symbol chars with SVG icon paths
-- `BranchSection.svelte` — Replace `▼`/`▶` with chevron icons, `+` with plus icon
-- `StagingPanel.svelte` — Replace section header text symbols
-- `CommitGraph.svelte` — Replace ref pill inline SVG paths with `ICONS.tag`/`ICONS.stashPill`
-- `TabBar.svelte` — Replace `×` with close icon
-
-**Why this approach:**
-- SVG path data (not icon font, not component-per-icon) — zero bundle overhead, works in both HTML and SVG overlay contexts
-- Centralized module — single source of truth, easy to swap icon set later
-- Matches Lucide/Feather icon convention (24x24 viewBox, stroke-based) — large library of compatible icons available if needed
-- `Icon.svelte` wrapper is optional — components can use raw paths directly in SVG contexts (ref pills)
-
-**No Rust changes required.**
-
----
-
-### 2. Better Tag Pill Icon
-
-**Type:** Modified constant in `icons.ts` + modified `CommitGraph.svelte`
-**Confidence:** HIGH
-
-**Current state:** Tag pill uses inline diamond SVG path: `d="M {x} {y} l 4 -4 l 4 4 l -4 4 z"`
-
-**Change:** Replace diamond with a proper tag icon (price tag / label shape) in the ICONS module. Update the path in CommitGraph.svelte's ref pill rendering section (around line 617).
-
-**No Rust changes required.**
-
----
-
-### 3. Discard Changes (Revert Working Tree Files)
-
-**Type:** New Rust commands + Modified frontend components
-**Confidence:** HIGH
-
-**New Rust commands in `src-tauri/src/commands/staging.rs`:**
+Build a partial patch from the hunk data and apply it to the index using `git2::Repository::apply()` (available since git2 0.17).
 
 ```rust
-// discard_file_inner: revert a single working tree file
-pub fn discard_file_inner(
+// Signature for stage_hunk_inner
+pub fn stage_hunk_inner(
     path: &str,
     file_path: &str,
+    hunk_index: usize,        // which hunk (0-based) within the file's diff
     state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-
-    // Check if file is untracked (WT_NEW) — delete it
-    let statuses = repo.statuses(None)?;
-    let is_untracked = statuses.iter().any(|entry| {
-        entry.path() == Some(file_path) && entry.status().contains(git2::Status::WT_NEW)
-    });
-
-    if is_untracked {
-        let full_path = repo.workdir()
-            .ok_or_else(|| TrunkError::new("bare_repo", "Cannot discard in bare repo"))?
-            .join(file_path);
-        std::fs::remove_file(&full_path)
-            .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-    } else {
-        // Tracked file — checkout from HEAD (or index)
-        repo.checkout_head(Some(
-            git2::build::CheckoutBuilder::new()
-                .force()
-                .path(file_path)
-        ))?;
-    }
-    Ok(())
-}
-
-// discard_all_unstaged_inner: revert all unstaged working tree changes
-pub fn discard_all_unstaged_inner(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    // ... checkout all tracked modifications + delete untracked files
-}
+) -> Result<(), TrunkError>
 ```
 
-**Registration:** Add to `lib.rs` invoke_handler: `commands::staging::discard_file`, `commands::staging::discard_all_unstaged`
+**Implementation strategy:**
 
-**Frontend integration (FileRow.svelte / StagingPanel.svelte):**
-- Add discard button (trash icon) to `FileRow.svelte` for unstaged files — shows on hover alongside the stage `+` button
-- Add confirmation dialog before discard (destructive action) — use `ask()` from `@tauri-apps/plugin-dialog` (same pattern as stash drop in BranchSidebar)
-- StagingPanel: Add "Discard All" button in unstaged section header (alongside existing "Stage All Changes")
+1. Compute the workdir-to-index diff for the file (same as `diff_unstaged_inner`)
+2. Walk the diff to isolate the target hunk by index
+3. Build a patch buffer containing only that hunk (with the correct unified diff header)
+4. Apply the patch to the index using `repo.apply(&diff_for_hunk, ApplyLocation::Index, None)`
 
-**Data flow:**
-```
-User clicks discard icon on FileRow
-  → ask() confirmation dialog
-  → safeInvoke('discard_file', { path, filePath })
-  → Rust: git2 checkout_head(force, path) or fs::remove_file
-  → Filesystem watcher detects change → 'repo-changed' event
-  → StagingPanel re-fetches status automatically
-```
-
-**Note:** No cache rebuild needed — discard doesn't affect commit graph. The filesystem watcher (300ms debounce) handles refresh automatically.
-
----
-
-### 4. Branch Delete Action
-
-**Type:** New Rust command + Modified frontend components
-**Confidence:** HIGH
-
-**New Rust command in `src-tauri/src/commands/branches.rs`:**
+The key insight: `git2::Repository::apply()` can apply a `Diff` object to the index (`ApplyLocation::Index`). We need to construct a `Diff` from the single-hunk patch text. git2 provides `Diff::from_buffer()` for this.
 
 ```rust
-pub fn delete_branch_inner(
+use git2::{ApplyLocation, Diff};
+
+pub fn stage_hunk_inner(
     path: &str,
-    branch_name: &str,
-    force: bool,
+    file_path: &str,
+    hunk_index: usize,
     state_map: &HashMap<String, PathBuf>,
-    cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
-    let mut branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
-
-    if branch.is_head() {
-        return Err(TrunkError::new(
-            "cannot_delete_head",
-            "Cannot delete the currently checked-out branch",
-        ));
-    }
-
-    if force {
-        // Force delete (like git branch -D)
-        branch.delete()?;
-    } else {
-        // Safe delete — git2 branch.delete() already checks merge status
-        branch.delete()?;
-    }
-    drop(repo);
-
-    // Rebuild graph cache (branch refs change the graph display)
-    let path_buf = state_map.get(path)
-        .ok_or_else(|| TrunkError::new("not_open", "Repository not open"))?;
-    let mut repo2 = git2::Repository::open(path_buf)?;
-    let graph_result = graph::walk_commits(&mut repo2, 0, usize::MAX)?;
-    cache_map.insert(path.to_owned(), graph_result);
-
+    
+    // Get the full workdir→index diff for this file
+    let mut opts = git2::DiffOptions::new();
+    opts.pathspec(file_path);
+    let full_diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
+    
+    // Build a patch containing only the target hunk
+    let patch_buf = extract_hunk_patch(&full_diff, file_path, hunk_index)?;
+    
+    // Parse the patch back into a Diff object
+    let hunk_diff = Diff::from_buffer(&patch_buf)?;
+    
+    // Apply to the index (not workdir)
+    repo.apply(&hunk_diff, ApplyLocation::Index, None)?;
+    
     Ok(())
 }
 ```
 
-**Note on force delete:** `git2::Branch::delete()` does NOT check merge status — it always succeeds. For safe delete (checking if branch is fully merged), we need to verify merge status manually using `repo.merge_base()` before calling delete, or use git CLI `git branch -d` which does check. Recommend starting with `git2::Branch::delete()` (always works) behind an `ask()` confirmation, and adding the unmerged-branch warning in a future iteration.
-
-**Registration:** Add `commands::branches::delete_branch` to invoke_handler.
-
-**Frontend integration:**
-- **BranchSidebar.svelte:** Add right-click context menu on local branch rows. Use Tauri `Menu` API (same pattern as stash context menu at line 170):
-  ```
-  Right-click on local branch → Context Menu:
-    - Checkout
-    - Delete...  → ask() confirmation → safeInvoke('delete_branch')
-  ```
-- **BranchRow.svelte:** Add `oncontextmenu` prop (currently only has `onclick`)
-
-**Data flow:**
-```
-User right-clicks branch in sidebar
-  → Native context menu with Delete option
-  → ask() confirmation ("Delete branch 'feature-x'? This cannot be undone.")
-  → safeInvoke('delete_branch', { path, branchName, force: false })
-  → Rust: git2 branch.delete() + cache rebuild
-  → app.emit('repo-changed')
-  → BranchSidebar loadRefs() + CommitGraph refresh()
-```
-
----
-
-### 5. Tag Delete Action
-
-**Type:** New Rust command + Modified frontend component
-**Confidence:** HIGH
-
-**New Rust command in `src-tauri/src/commands/commit_actions.rs`:**
+**Unstage hunk** follows the inverse pattern:
 
 ```rust
-pub fn delete_tag_inner(
+pub fn unstage_hunk_inner(
     path: &str,
-    tag_name: &str,
+    file_path: &str,
+    hunk_index: usize,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<GraphResult, TrunkError> {
-    let repo = open_repo(path, state_map)?;
-    let ref_name = format!("refs/tags/{}", tag_name);
-    let mut reference = repo.find_reference(&ref_name)?;
-    reference.delete()?;
-    drop(reference);
-    drop(repo);
-
-    let path_buf = state_map.get(path)
-        .ok_or_else(|| TrunkError::new("not_open", "Repository not open"))?;
-    let mut repo2 = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo2, 0, usize::MAX).map_err(TrunkError::from)
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+    
+    // Get the HEAD→index diff (what's staged)
+    let head_tree = repo.head()?.peel_to_tree()?;
+    let mut opts = git2::DiffOptions::new();
+    opts.pathspec(file_path);
+    let full_diff = repo.diff_tree_to_index(Some(&head_tree), None, Some(&mut opts))?;
+    
+    // Build a REVERSED patch for the target hunk
+    let patch_buf = extract_hunk_patch_reversed(&full_diff, file_path, hunk_index)?;
+    
+    let hunk_diff = Diff::from_buffer(&patch_buf)?;
+    repo.apply(&hunk_diff, ApplyLocation::Index, None)?;
+    
+    Ok(())
 }
 ```
 
-**Registration:** Add `commands::commit_actions::delete_tag` to invoke_handler.
-
-**Frontend integration:**
-- **BranchSidebar.svelte:** Add right-click context menu on tag rows:
-  ```
-  Right-click on tag → Context Menu:
-    - Copy Tag Name
-    - Delete Tag... → ask() confirmation → safeInvoke('delete_tag')
-  ```
-- Current tag rows use `<BranchRow name={tag.short_name} />` with no context menu or click handler. Add `oncontextmenu` prop.
-
-**Data flow:** Same pattern as branch delete — cache rebuild + repo-changed emit.
-
----
-
-### 6. Three-Way Selector (Commit / Amend / Stash)
-
-**Type:** Modified component (CommitForm.svelte) — significant rework
-**Confidence:** HIGH
-
-**Current state:** CommitForm has a subject input, body textarea, amend checkbox, and commit button. Stash is triggered from Toolbar or sidebar, not from the commit form.
-
-**Architecture — Replace amend checkbox with segmented control:**
+**Helper: `extract_hunk_patch`** — walks the diff callbacks, counts hunks for the target file, and when the target hunk is reached, builds a valid unified diff patch string:
 
 ```
-┌──────────┬──────────┬──────────┐
-│  Commit  │  Amend   │  Stash   │   ← segmented radio-style control
-└──────────┴──────────┴──────────┘
+--- a/{file_path}
++++ b/{file_path}
+@@ -{old_start},{old_lines} +{new_start},{new_lines} @@{header_suffix}
+ context line
+-removed line
++added line
 ```
 
-**CommitForm.svelte changes:**
-- Replace `let amend = $state(false)` with `let mode = $state<'commit' | 'amend' | 'stash'>('commit')`
-- Remove amend checkbox UI, add 3-segment selector row
-- When mode='amend': load HEAD message (existing `handleAmendToggle` logic)
-- When mode='stash': change button text to "Stash", call `stash_save` with subject as stash message
-- Subject field placeholder changes per mode: "Summary (required)" / "Amend message" / "Stash name (optional)"
-- Body field hidden in stash mode (stashes have single-line names)
+### Approach B: git CLI Subprocess (Fallback)
 
-**Button behavior per mode:**
+Use `git apply --cached` with a patch file. This matches the pattern used for remote operations (git CLI subprocess with `GIT_TERMINAL_PROMPT=0`). The patch must be written to a temp file or piped via stdin.
 
-| Mode | Button Text | Validation | Command |
-|------|-------------|------------|---------|
-| commit | "Commit" | subject required, stagedCount > 0 | `create_commit` |
-| amend | "Amend Commit" | subject required | `amend_commit` |
-| stash | "Stash" | none (empty = auto-name) | `stash_save` |
+**Trade-off:** Approach A is pure Rust (testable via inner-fn pattern, no subprocess), consistent with all local operations using git2. Approach B is simpler to implement but introduces a new pattern (git CLI for local ops). **Recommend Approach A.**
 
-**No new Rust commands required** — uses existing `create_commit`, `amend_commit`, `stash_save`.
+### Approach A Risks & Mitigations
 
----
+| Risk | Mitigation |
+|------|-----------|
+| `Diff::from_buffer()` may reject malformed patches | Extensive unit tests with various diff shapes (add-only, delete-only, mixed, binary, no-newline-at-eof) |
+| `repo.apply()` may fail on edge cases (binary files, rename diffs) | Disable hunk buttons for binary files (already detected: `fd.is_binary`). Rename diffs: fall back to whole-file staging |
+| Hunk index may become stale if file changes between diff fetch and stage action | Re-fetch diff immediately before staging, validate hunk exists. Show toast if stale |
+| Unborn HEAD (no commits yet) for unstage_hunk | Use `diff_tree_to_index(None, ...)` when HEAD is unborn, same as existing `diff_staged_inner` pattern |
 
-### 7. Green "Stage All" / Red "Unstage All" Buttons
+### New Rust Commands
 
-**Type:** Modified component (StagingPanel.svelte) — CSS styling change
-**Confidence:** HIGH
+| Command | Inner Function | Module | Purpose |
+|---------|---------------|--------|---------|
+| `stage_hunk` | `stage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | Stage a single hunk from workdir→index diff |
+| `unstage_hunk` | `unstage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | Unstage a single hunk from HEAD→index diff |
 
-**Current state:** "Stage All Changes" and "Unstage All" are text-only buttons with `color: var(--color-text-muted)`, no background, no border.
+### DiffPanel Changes
 
-**Change:**
-- Stage All: green background (`#2ea043`), white text, icon prefix (checkmark from icon system)
-- Unstage All: red-ish background (`#da3633`), white text, icon prefix (minus from icon system)
-- Both become small pill-shaped buttons within the section header
+Current DiffPanel (`src/components/DiffPanel.svelte`) renders hunks as read-only with no interactivity. Changes needed:
 
-**No Rust changes. No new components.**
+1. **New props on DiffPanel:**
+   ```typescript
+   interface Props {
+     fileDiffs: FileDiff[];
+     commitDetail: CommitDetail | null;
+     selectedPath?: string | null;
+     onclose: () => void;
+     // NEW for hunk staging:
+     diffKind?: 'unstaged' | 'staged' | 'commit';
+     onHunkAction?: (filePath: string, hunkIndex: number) => void;
+   }
+   ```
 
----
+2. **Hunk action button** — rendered in the hunk header row (the `@@ ... @@` line), positioned to the right:
+   - For `diffKind='unstaged'`: green "Stage Hunk" button (or `+` icon)
+   - For `diffKind='staged'`: red "Unstage Hunk" button (or `-` icon)
+   - For `diffKind='commit'`: no button (read-only)
+   - Button hidden for binary files (`fd.is_binary`)
 
-### 8. Equal Height Unstaged/Staged Lists
+3. **Hunk header markup change:**
+   ```svelte
+   <!-- Current -->
+   <div style="...">{hunk.header}</div>
 
-**Type:** Modified component (StagingPanel.svelte) — layout change
-**Confidence:** HIGH
+   <!-- New -->
+   <div style="...; display: flex; align-items: center;">
+     <span style="flex: 1;">{hunk.header}</span>
+     {#if diffKind && diffKind !== 'commit' && !fd.is_binary}
+       <button onclick={() => onHunkAction?.(fd.path, hunkIdx)}
+         style="... background: {diffKind === 'unstaged' ? '#22c55e' : '#f87171'}; ..."
+       >
+         {diffKind === 'unstaged' ? 'Stage Hunk' : 'Unstage Hunk'}
+       </button>
+     {/if}
+   </div>
+   ```
 
-**Current state:** Both sections share a single `overflow-y: auto` scrollable wrapper. Sections grow/shrink naturally based on content.
+4. **Hunk index tracking:** The `{#each fd.hunks as hunk, hunkIdx}` loop already provides the index via the second parameter of `#each`. Pass `hunkIdx` to the action callback.
 
-**Architecture change:** When both sections are expanded, split the scrollable area 50/50 with each section independently scrollable:
+### App.svelte Wiring
+
+Current file selection flow in App.svelte:
 
 ```
-┌──────────────────────────┐
-│  Panel Header            │  flex-shrink: 0
-├──────────────────────────┤
-│  Unstaged Header (+btns) │  flex-shrink: 0, 28px
-│  ┌────────────────────┐  │
-│  │  unstaged files     │  │  flex: 1, overflow-y: auto
-│  │  (scrollable)       │  │
-│  └────────────────────┘  │
-├──────────────────────────┤
-│  Staged Header (+btns)   │  flex-shrink: 0, 28px
-│  ┌────────────────────┐  │
-│  │  staged files       │  │  flex: 1, overflow-y: auto
-│  │  (scrollable)       │  │
-│  └────────────────────┘  │
-├──────────────────────────┤
-│  CommitForm              │  flex-shrink: 0
-└──────────────────────────┘
+handleFileSelect(path, kind='unstaged'|'staged')
+  → sets selectedFile = { path, kind }
+  → fetches diff via 'diff_unstaged' or 'diff_staged'
+  → sets stagingDiffFiles
+  → DiffPanel renders with fileDiffs={stagingDiffFiles}
 ```
 
-**Implementation:** Replace the single scrollable wrapper with a flex column. Each file list section gets `flex: 1; overflow-y: auto; min-height: 0;`. When one section is collapsed (header only, 28px), the other section gets all remaining space. When both expanded, each gets 50%.
+**New wiring for hunk actions:**
 
-**No Rust changes.**
-
----
-
-### 9. Stash Name Defaults to Commit Form Message
-
-**Type:** Modified component interaction (CommitForm ↔ Toolbar)
-**Confidence:** HIGH
-
-**Current state:** `Toolbar.handleStash()` calls `stash_save` with `message: ''`. CommitForm's subject is accessible via `wipSubject` state in App.svelte.
-
-**Architecture:**
-- When three-way selector is in "stash" mode, CommitForm already has access to the subject field — pass it directly to `stash_save`
-- When stash is triggered from Toolbar, pass `wipSubject` from App.svelte
-
-**Changes:**
-- `Toolbar.svelte`: Accept `stashMessage?: string` prop, use in `handleStash()`
-- `App.svelte`: Pass `stashMessage={wipSubject}` to Toolbar
-
-**No Rust changes.**
-
----
-
-### 10. Top/Bottom Padding in Commit Graph
-
-**Type:** Modified component (CommitGraph.svelte / VirtualList)
-**Confidence:** HIGH
-
-**Current state:** The virtual list renders items edge-to-edge with no padding. First commit row starts at y=0.
-
-**Architecture (recommended approach):** CSS padding on the VirtualList's content container. Add `padding-top` and `padding-bottom` via a wrapper or by targeting `.virtual-list-content`. The SVG overlay height already matches `contentHeight` from VirtualList — ensure padding is accounted for in the overlay Y offset.
-
-**Alternative approach (sentinel items):** Add invisible padding rows at top/bottom of `displayItems`. This is fragile — affects row indices, selection, and context menus. **Avoid.**
-
-**No Rust changes.**
-
----
-
-### 11. Commit Graph Overflow/Shrink with Sticky Right-Side Columns
-
-**Type:** Modified components (CommitGraph.svelte, CommitRow.svelte) — layout adjustment
-**Confidence:** MEDIUM (may need iteration)
-
-**Current state:** Graph column has fixed width (`columnWidths.graph`). With many active lanes (e.g., 20+), the graph SVG can exceed the column width and push right-side columns off-screen.
-
-**Architecture:**
-
-The graph column should clip when content exceeds allocated width. Right-side columns (message, author, date, SHA) remain at fixed positions.
-
-**Implementation:**
-1. CommitRow: Graph column div already has `flex-shrink: 0` and fixed width. Add `overflow: hidden` to clip the graph SVG content.
-2. SVG overlay: Already positioned `left: 0` with width based on `maxColumns * laneWidth`. When this exceeds `columnWidths.graph`, the parent's `overflow: hidden` handles clipping.
-3. The flex layout already keeps message as `flex-1` — it fills remaining space after fixed columns.
-
-**Key insight:** The current layout already partially handles this since the graph column width is user-resizable. The main fix is adding `overflow: hidden` to the graph column containers in both the header and rows.
-
-**No Rust changes.**
-
----
-
-### 12. Click References in Left Pane to Navigate Graph
-
-**Type:** Modified components (BranchSidebar, BranchRow, App.svelte, CommitGraph)
-**Confidence:** HIGH
-
-**Current state:** Clicking a local branch triggers checkout. Tags have no click handler. No way to scroll the graph to a specific ref's commit.
-
-**Architecture:**
-
-**Recommended approach:** Extend `BranchInfo` with `oid: String` field in Rust (already available — we peel to commit for `last_commit_timestamp`). Then clicking a ref fires a navigation callback that scrolls the graph.
-
-**Rust change (list_refs_inner in branches.rs):**
-Add `oid` field to `BranchInfo` struct:
-```rust
-pub struct BranchInfo {
-    pub name: String,
-    pub is_head: bool,
-    pub upstream: Option<String>,
-    pub ahead: usize,
-    pub behind: usize,
-    pub last_commit_timestamp: i64,
-    pub oid: String,        // NEW — commit OID for navigation
+```typescript
+async function handleHunkAction(filePath: string, hunkIndex: number) {
+  if (!repoPath || !selectedFile) return;
+  const command = selectedFile.kind === 'unstaged' ? 'stage_hunk' : 'unstage_hunk';
+  try {
+    await safeInvoke(command, { path: repoPath, filePath, hunkIndex });
+    // Re-fetch the diff to show updated hunk state
+    await refetchFileDiff(selectedFile.path, selectedFile.kind);
+    // Trigger status refresh (file may have moved between staged/unstaged)
+  } catch (e) {
+    const err = e as TrunkError;
+    showToast(err.message ?? 'Hunk staging failed', 'error');
+  }
 }
 ```
 
-Populate from existing commit peel:
-```rust
-let oid = branch.get().peel_to_commit()
-    .map(|c| c.id().to_string())
-    .unwrap_or_default();
-```
-
-**TypeScript type change:** Add `oid: string` to `BranchInfo` interface in `types.ts`.
-
-**Frontend flow:**
-```
-User clicks tag/branch in sidebar
-  → onrefnavigate(oid) callback to App.svelte
-  → App.svelte sets selectedCommitOid + calls graph navigation
-  → CommitGraph: find row index in displayItems where oid matches
-  → listRef.scroll({ index, align: 'center', smoothScroll: true })
-```
-
-**CommitGraph.svelte:** Expose a `scrollToOid(oid: string)` method (or accept a `scrollToOid` prop that triggers an effect).
-
-**BranchSidebar.svelte:** Add `onrefnavigate?: (oid: string) => void` callback. For local branches: fire alongside checkout. For tags: fire on click. Tags also get their target OID from `RefLabel` — but currently `RefLabel` doesn't have an oid field. Need to add `oid` to `RefLabel` or add to tags in `RefsResponse`.
-
-**Alternative simpler approach for tags:** Resolve tag → OID on click using a new Rust command `resolve_ref_oid`. This avoids changing the `RefLabel` type but adds an IPC round-trip. Given the latency is < 1ms, this is acceptable.
-
----
-
-### 13. Fix: Branch Overflow Pill Z-Index Behind Graph
-
-**Type:** Bug fix — SVG/CSS
-**Confidence:** HIGH
-
-**Current state:** SVG ref pills render in the `overlay-pills` group within the SVG. The SVG has `pointer-events: none` and `z-index: 1`.
-
-**Root cause analysis:** The overflow badge renders at `pill.x + pill.width + PILL_GAP`. If this exceeds the ref column width (`refOffset`), the badge extends into the graph area. Since all elements are in the same SVG, there's no z-index issue between SVG groups — SVG paint order determines visibility. The likely issue is that the SVG `width` is `refOffset + graphWidth`, and badges within the ref area are being clipped by the graph column's rendering.
-
-**Fix:** Set `overflow: visible` on the SVG element, or ensure the SVG width accounts for the maximum badge extent. The simpler fix: add `style="overflow: visible"` to the SVG element in CommitGraph.svelte (line ~533).
-
----
-
-### 14. Fix: Trailing Header Divider on Last Visible Column
-
-**Type:** Bug fix — conditional rendering
-**Confidence:** HIGH
-
-**Current state:** Each column header div in CommitGraph has a `.col-resize-handle` child that renders a vertical divider. The last visible column's divider is unnecessary (nothing to resize to its right).
-
-**Fix:** Determine which column key is last visible, skip its resize handle:
-
+Pass to DiffPanel:
 ```svelte
-{@const lastVisibleKey = columnLabels
-  .filter(c => columnVisibility[c.key])
-  .at(-1)?.key}
-
-<!-- In SHA column (currently last and has no handle): -->
-<!-- No change needed — SHA already lacks a handle -->
-
-<!-- The actual bug is likely that columns before SHA have handles even when SHA is hidden -->
+<DiffPanel
+  fileDiffs={currentDiffFiles}
+  commitDetail={null}
+  selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
+  onclose={handleDiffClose}
+  diffKind={selectedFile?.kind ?? (selectedCommitFile ? 'commit' : undefined)}
+  onHunkAction={handleHunkAction}
+/>
 ```
 
-After reviewing the code: The SHA column (line 494-498) intentionally has no resize handle. The Date column (line 488-492) has a handle labeled `sha` that resizes the SHA column. When SHA is hidden, the Date column's handle should also be hidden. Fix by checking if the column that the handle controls is visible.
+### Data Flow: Stage Hunk
+
+```
+User clicks "Stage Hunk" button on hunk header in DiffPanel
+  → onHunkAction(filePath, hunkIndex) callback to App.svelte
+  → safeInvoke('stage_hunk', { path: repoPath, filePath, hunkIndex })
+  → Rust: extract_hunk_patch() → Diff::from_buffer() → repo.apply(Index)
+  → Return Ok(())
+  → Frontend: re-fetch diff for the file (diff may now have fewer hunks)
+  → Filesystem watcher detects index change → 'repo-changed' event
+  → StagingPanel re-fetches status (file may appear in both staged + unstaged)
+  → CommitGraph: no refresh needed (no commit graph change)
+```
+
+### Data Flow: Unstage Hunk
+
+```
+User clicks "Unstage Hunk" on staged file's hunk in DiffPanel
+  → onHunkAction(filePath, hunkIndex) callback to App.svelte
+  → safeInvoke('unstage_hunk', { path: repoPath, filePath, hunkIndex })
+  → Rust: extract reversed hunk patch → repo.apply(Index)
+  → Return Ok(())
+  → Frontend: re-fetch diff, StagingPanel auto-refreshes
+```
 
 ---
 
-### 15. Fix: New Untracked Files Not Showing WIP Row or Diff
+## Feature 2: Commit Graph Search (Cmd+F)
 
-**Type:** Bug fix — Rust (2-line fix)
-**Confidence:** HIGH
+### Problem Analysis
 
-**Root cause in `staging.rs` (line 204):** `get_dirty_counts` checks `WT_MODIFIED | WT_DELETED | WT_RENAMED | WT_TYPECHANGE` for the unstaged count — it does NOT include `WT_NEW` (untracked files). So when only untracked files exist, `wipCount === 0` and no WIP row appears.
+Current CommitGraph supports:
+- Virtual scrolling with `VirtualList` (renders ~40 DOM nodes for any history size)
+- `displayItems` array in memory (all loaded commits, paginated via `loadMore()`)
+- `CommitCache` in Rust stores full `GraphResult` per repo (all commits, computed by `walk_commits`)
+- `scrollToOid(oid)` already exists — scrolls graph to a specific commit
 
-**Fix #1 — staging.rs `get_dirty_counts`:** Add `Status::WT_NEW` to the unstaged flags:
+Search needs to find commits matching a query (SHA prefix, message substring, branch name) and navigate to results.
+
+### Backend vs Client-Side Search
+
+**Option A: Backend search command (Recommended)**
+
+CommitCache already holds the full `GraphResult` with all `GraphCommit` structs. A backend search command can scan this in O(n) with zero serialization overhead for the scan itself, returning only matching OIDs.
 
 ```rust
-if s.intersects(
-    Status::WT_NEW          // <-- ADD THIS
-    | Status::WT_MODIFIED
-    | Status::WT_DELETED
-    | Status::WT_RENAMED
-    | Status::WT_TYPECHANGE,
-) {
-    unstaged += 1;
+#[derive(Debug, Serialize, Clone)]
+pub struct SearchResult {
+    pub oid: String,
+    pub match_type: String,  // "sha", "message", "ref"
+}
+
+pub fn search_commits_inner(
+    path: &str,
+    query: &str,
+    cache_map: &HashMap<String, GraphResult>,
+) -> Result<Vec<SearchResult>, TrunkError> {
+    let graph = cache_map.get(path)
+        .ok_or_else(|| TrunkError::new("repo_not_open", "Repository not open"))?;
+    
+    let query_lower = query.to_lowercase();
+    let mut results = Vec::new();
+    
+    for commit in &graph.commits {
+        // Match by SHA prefix
+        if commit.oid.starts_with(&query_lower) || commit.short_oid.starts_with(&query_lower) {
+            results.push(SearchResult {
+                oid: commit.oid.clone(),
+                match_type: "sha".to_string(),
+            });
+            continue;
+        }
+        
+        // Match by message (summary + body)
+        if commit.summary.to_lowercase().contains(&query_lower) {
+            results.push(SearchResult {
+                oid: commit.oid.clone(),
+                match_type: "message".to_string(),
+            });
+            continue;
+        }
+        if let Some(body) = &commit.body {
+            if body.to_lowercase().contains(&query_lower) {
+                results.push(SearchResult {
+                    oid: commit.oid.clone(),
+                    match_type: "message".to_string(),
+                });
+                continue;
+            }
+        }
+        
+        // Match by ref name
+        for ref_label in &commit.refs {
+            if ref_label.short_name.to_lowercase().contains(&query_lower) {
+                results.push(SearchResult {
+                    oid: commit.oid.clone(),
+                    match_type: "ref".to_string(),
+                });
+                break;
+            }
+        }
+    }
+    
+    Ok(results)
 }
 ```
 
-**Fix #2 — diff.rs `diff_unstaged_inner`:** Add `include_untracked(true)` to diff options so new files show diffs:
+**Why backend over client-side:**
+- CommitCache holds ALL commits (even those not yet loaded into the frontend `commits` array due to pagination). Frontend `displayItems` only has loaded batches.
+- Backend scan is O(n) on owned Rust strings — no serialization/deserialization overhead for the scan.
+- Client-side search would require loading ALL commits first (defeating pagination), or would miss unloaded commits.
+- The existing `CommitCache` lock is brief (search is read-only, no mutation needed).
 
+**Option B: Client-side search (NOT recommended)**
+
+Would require: (a) loading all commit batches first via repeated `loadMore()`, or (b) searching only loaded commits (incomplete results). Also, author name search would need all commits deserialized to JS. Backend search is strictly better.
+
+### New Rust Command
+
+| Command | Inner Function | Module | Purpose |
+|---------|---------------|--------|---------|
+| `search_commits` | `search_commits_inner(path, query, cache_map)` | `history.rs` | Search CommitCache for matching commits |
+
+Registration in `lib.rs`: `commands::history::search_commits`
+
+**Note:** The command reads from `CommitCache` (not `RepoState`), so it only needs the `cache: State<'_, CommitCache>` parameter — same pattern as `get_commit_graph`.
+
+### Search UI Component
+
+New component: `src/components/SearchBar.svelte`
+
+```
+┌──────────────────────────────────────────┐
+│  🔍 Search commits...    [2/15] [↑] [↓]  │
+└──────────────────────────────────────────┘
+```
+
+**State:**
+```typescript
+let query = $state('');
+let results = $state<SearchResult[]>([]);
+let currentIndex = $state(0);
+let visible = $state(false);
+```
+
+**Behavior:**
+- `Cmd+F` toggles visibility (keyboard listener in CommitGraph or App.svelte)
+- Debounced search: 200ms after typing stops, invoke `search_commits`
+- Results are OIDs with match type
+- Up/Down arrows or Enter cycle through results
+- Each navigation calls `commitGraphRef.scrollToOid(results[currentIndex].oid)` + selects the commit
+- `Escape` closes search bar
+- Result count badge shows "N/M" (current index / total matches)
+
+**Positioning:** Overlaid at top of CommitGraph area (below the column headers), absolute positioned with z-index above the graph content. Does NOT replace the graph — it floats on top.
+
+### Search Integration with Virtual Scrolling
+
+The key question: how does search navigate to results that aren't loaded yet?
+
+**Answer:** `scrollToOid(oid)` already handles this. Looking at CommitGraph.svelte:569-593:
+
+```typescript
+export async function scrollToOid(oid: string): Promise<void> {
+  let idx = displayItems.findIndex(c => c.oid === oid);
+  // Load more batches until found or all commits exhausted
+  while (idx < 0 && hasMore && !loading) {
+    await loadMore();
+    await tick();
+    idx = displayItems.findIndex(c => c.oid === oid);
+  }
+  if (idx < 0 || !listRef) return;
+  // Smooth scroll to center the row
+  ...
+}
+```
+
+This already lazy-loads batches until the target OID is found, then scrolls to it. Search navigation simply calls this existing method. No changes needed to `VirtualList.svelte` or the scroll machinery.
+
+### Search Data Flow
+
+```
+User presses Cmd+F
+  → SearchBar becomes visible, input focused
+  → User types query (debounced 200ms)
+  → safeInvoke('search_commits', { path: repoPath, query })
+  → Rust: scan CommitCache, return Vec<SearchResult>
+  → Frontend: set results, currentIndex = 0
+  → Auto-navigate to first result: scrollToOid(results[0].oid)
+  → CommitGraph loads batches if needed, scrolls to commit row
+  → Commit row highlighted (selectedCommitOid set via handleCommitSelect)
+
+User presses ↓ (next result) or ↑ (prev result)
+  → currentIndex = (currentIndex + 1) % results.length
+  → scrollToOid(results[currentIndex].oid)
+  → handleCommitSelect(results[currentIndex].oid)
+
+User presses Escape
+  → SearchBar hidden, results cleared
+  → Optional: clear commit selection or keep current
+```
+
+### Search UI Placement Decision
+
+Two options:
+
+**Option A: Inside CommitGraph (recommended)**
+- SearchBar is a child of CommitGraph.svelte, positioned absolutely below the header row
+- Cmd+F handler lives in CommitGraph
+- Direct access to `scrollToOid` and `handleCommitSelect` via internal state
+- No additional App.svelte wiring needed for scroll
+
+**Option B: In App.svelte above CommitGraph**
+- SearchBar is a sibling of CommitGraph
+- Requires forwarding results to CommitGraph via props
+- More separation of concerns but more prop plumbing
+
+**Recommend Option A** — search is tightly coupled to the graph (navigation, highlighting, scrolling). Keeping it inside CommitGraph reduces prop drilling and makes the feature self-contained.
+
+### Selected Commit Highlighting During Search
+
+Current highlighting: `selectedCommitOid` in App.svelte is passed to CommitGraph, which passes `selected={commit.oid === selectedCommitOid}` to each CommitRow. This already works for search — navigating to a result calls `handleCommitSelect(oid)` which sets `selectedCommitOid`.
+
+**Additional UX for multi-result awareness:** Optionally dim all non-matching rows or add a subtle marker on all matching rows. This is a stretch goal — basic search with navigation is the MVP.
+
+---
+
+## New Rust Commands (Combined)
+
+| Command | Inner Function | Module | State Needed | Purpose |
+|---------|---------------|--------|-------------|---------|
+| `stage_hunk` | `stage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | `RepoState` | Stage a single diff hunk |
+| `unstage_hunk` | `unstage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | `RepoState` | Unstage a single diff hunk |
+| `search_commits` | `search_commits_inner(path, query, cache_map)` | `history.rs` | `CommitCache` | Search commit graph |
+
+**Registration additions to `lib.rs`:**
 ```rust
-let mut opts = git2::DiffOptions::new();
-opts.pathspec(file_path);
-opts.include_untracked(true);  // <-- ADD THIS
+commands::staging::stage_hunk,
+commands::staging::unstage_hunk,
+commands::history::search_commits,
 ```
 
-**This is a 2-line Rust fix. No frontend changes needed.**
-
----
-
-### 16. Dialog System for Errors/Warnings/Notifications
-
-**Type:** New component + new shared state module
-**Confidence:** HIGH
-
-**Current state:** Errors handled three ways:
-1. `message()` from `@tauri-apps/plugin-dialog` — native OS dialog (CommitGraph context menu)
-2. `ask()` from `@tauri-apps/plugin-dialog` — native OS confirmation (destructive actions)
-3. Inline error text (CommitForm validation, BranchSidebar checkout errors)
-
-**Architecture — In-app toast notification system:**
-
-Don't replace native OS dialogs for confirmations (they're appropriate for destructive actions). Add toasts for non-blocking feedback.
-
-**New shared state:** `src/lib/toast-state.svelte.ts` (same `$state` rune module pattern as `remote-state.svelte.ts`):
-
-```typescript
-interface ToastMessage {
-  id: number;
-  type: 'error' | 'warning' | 'info' | 'success';
-  title: string;
-  message?: string;
-  duration?: number;
-}
-
-export const toastState = $state<{ messages: ToastMessage[] }>({
-  messages: [],
-});
-
-export function showToast(type: ToastMessage['type'], title: string, message?: string, duration = 5000) {
-  const id = ++nextId;
-  toastState.messages = [...toastState.messages, { id, type, title, message, duration }];
-  if (duration > 0) setTimeout(() => dismissToast(id), duration);
-}
-```
-
-**New component:** `src/components/Toast.svelte` — renders toast stack in bottom-right:
-- Fixed position, z-index above everything
-- Colored left border per type (red/yellow/blue/green)
-- Icon per type (from icon system)
-- Title + optional message
-- Dismiss button (X icon)
-- Auto-dismiss with slide-out animation
-
-**Mount in App.svelte:** `<Toast />` after the main layout.
-
-**Integration strategy — keep existing patterns:**
-- `ask()` — destructive confirmations (discard, delete, hard reset). Native, modal.
-- `message()` — critical errors needing acknowledgment. Native, modal.
-- `showToast()` — status updates, non-critical errors, success feedback. In-app, auto-dismiss.
-
-**Where to add toasts:**
-- Failed stage/unstage/discard (replace `console.error`)
-- Successful destructive operations ("Branch 'feature-x' deleted")
-- Commit/amend/stash success feedback
-- Remote operation completion (complement existing StatusBar display)
-
----
-
-### 17. Right Pane Auto-Opens When Content Changes
-
-**Type:** Modified App.svelte — reactive behavior
-**Confidence:** HIGH
-
-**Current state:** Right pane shows CommitDetail when a commit is selected, or StagingPanel otherwise. Can be collapsed via Cmd+K or drag-to-close.
-
-**Architecture:** Add `$effect` in App.svelte that auto-expands on commit selection:
-
-```typescript
-// Only auto-open on commit selection, not on every status change
-$effect(() => {
-  if (selectedCommitOid && rightPaneCollapsed) {
-    rightPaneCollapsed = false;
-    setRightPaneCollapsed(false);
-  }
-});
-```
-
-**Refinement:** Track whether user explicitly collapsed the pane to avoid fighting the user:
-
-```typescript
-let userExplicitlyCollapsedRight = $state(false);
-
-// In keyboard shortcut handler and drag-to-close:
-// Set userExplicitlyCollapsedRight = true
-
-// Auto-open effect:
-$effect(() => {
-  if (selectedCommitOid && rightPaneCollapsed && !userExplicitlyCollapsedRight) {
-    rightPaneCollapsed = false;
-    setRightPaneCollapsed(false);
-  }
-});
-
-// Reset flag when commit deselected:
-$effect(() => {
-  if (!selectedCommitOid) userExplicitlyCollapsedRight = false;
-});
-```
-
-**No Rust changes.**
-
----
-
-### 18. Merge Window Top Bar with Tab+Actions Bar
-
-**Type:** Modified App.svelte + TabBar.svelte — layout/visual change
-**Confidence:** MEDIUM (depends on interpretation)
-
-**Current state:** App.svelte renders a single 36px bar with TabBar (left, `flex-shrink: 0`) and Toolbar (right, `flex: 1`). The OS native title bar sits above this.
-
-**Interpretation A (simpler — recommended for v0.6):** Remove visual separation between tab and actions, make the bar feel unified. This is CSS-only: ensure consistent background, remove TabBar's right border.
-
-**Interpretation B (custom titlebar — higher risk):** Use Tauri's `decorations: false` + custom titlebar with drag region and window control buttons. This is more complex:
-
-1. `tauri.conf.json`: Set `"decorations": false` on the main window
-2. Add `data-tauri-drag-region` attribute to top bar
-3. New component `WindowControls.svelte` for minimize/maximize/close buttons
-4. Platform-specific left padding for macOS traffic lights
-
-**Recommendation:** Start with Interpretation A (CSS merge) for v0.6. Custom titlebar is higher risk due to platform-specific behavior and can be a separate task.
-
----
-
-## Component Modification Summary
+## Modified Components
 
 | Component | Changes | Risk |
 |-----------|---------|------|
-| **App.svelte** | Toast mount, right-pane auto-open, stash message prop to Toolbar | Low |
-| **CommitForm.svelte** | Three-way selector (commit/amend/stash), mode-dependent UI | Medium |
-| **StagingPanel.svelte** | Green/red buttons, equal-height lists, discard integration | Low |
-| **FileRow.svelte** | Icons, discard button for unstaged files | Low |
-| **Toolbar.svelte** | Icons, accept stashMessage prop | Low |
-| **BranchSidebar.svelte** | Context menus on branches/tags, ref navigation callbacks | Medium |
-| **BranchRow.svelte** | Add oncontextmenu prop, icons | Low |
-| **BranchSection.svelte** | Icons for chevrons and create button | Low |
-| **CommitGraph.svelte** | Graph padding, overflow handling, header divider fix, pill z-index fix | Medium |
-| **TabBar.svelte** | Close icon, potential bar merge | Low |
+| **DiffPanel.svelte** | Add `diffKind` and `onHunkAction` props; render hunk action buttons in header rows | Low-Medium |
+| **App.svelte** | Add `handleHunkAction` function, pass `diffKind`/`onHunkAction` to DiffPanel, add Cmd+F handler (if search is in App) | Low |
+| **CommitGraph.svelte** | Add SearchBar child component, Cmd+F keyboard handler, search state management | Medium |
 
 ## New Components
 
 | Component | Purpose |
 |-----------|---------|
-| `src/components/Icon.svelte` | Reusable SVG icon wrapper |
-| `src/components/Toast.svelte` | Toast notification rendering |
+| `src/components/SearchBar.svelte` | Floating search input with result count and navigation buttons |
 
-## New Modules
+## New Rust Types
 
-| Module | Purpose |
-|--------|---------|
-| `src/lib/icons.ts` | Centralized SVG icon path data |
-| `src/lib/toast-state.svelte.ts` | Shared toast notification state (reactive) |
-
-## New/Modified Rust Commands
-
-| Command | Module | Type | Purpose |
-|---------|--------|------|---------|
-| `discard_file` | staging.rs | **NEW** | Revert single working tree file |
-| `discard_all_unstaged` | staging.rs | **NEW** | Revert all unstaged changes |
-| `delete_branch` | branches.rs | **NEW** | Delete local branch |
-| `delete_tag` | commit_actions.rs | **NEW** | Delete tag by name |
-| `get_dirty_counts` | staging.rs | **FIX** | Add `WT_NEW` to unstaged count |
-| `diff_unstaged` | diff.rs | **FIX** | Add `include_untracked` for new files |
-| `list_refs` | branches.rs | **MODIFY** | Add `oid` field to `BranchInfo` for ref navigation |
-
-**Type changes (Rust + TypeScript):**
-- `BranchInfo`: Add `oid: String` / `oid: string`
-- Both in `src-tauri/src/git/types.rs` and `src/lib/types.ts`
-
-## Data Flow Changes
-
-### New Flow: Discard File
-```
-FileRow (hover → discard icon click)
-  → ask() confirmation dialog (native)
-  → safeInvoke('discard_file', { path, filePath })
-  → Rust: git2 checkout_head(force, path) OR fs::remove_file (untracked)
-  → Filesystem watcher detects change → 'repo-changed' event
-  → StagingPanel auto-refreshes via listener
+```rust
+// In git/types.rs or inline in history.rs
+#[derive(Debug, Serialize, Clone)]
+pub struct SearchResult {
+    pub oid: String,
+    pub match_type: String,  // "sha", "message", "ref"
+}
 ```
 
-### New Flow: Branch/Tag Delete
-```
-BranchSidebar (right-click → native context menu → Delete)
-  → ask() confirmation dialog (native)
-  → safeInvoke('delete_branch' / 'delete_tag', { path, branchName/tagName })
-  → Rust: git2 branch.delete() / reference.delete() + cache rebuild
-  → app.emit('repo-changed')
-  → BranchSidebar loadRefs() + CommitGraph refresh()
+```typescript
+// In lib/types.ts
+export interface SearchResult {
+  oid: string;
+  match_type: 'sha' | 'message' | 'ref';
+}
 ```
 
-### New Flow: Ref Navigation
-```
-BranchSidebar (click ref)
-  → onrefnavigate(oid) callback to App.svelte
-  → App.svelte: handleCommitSelect(oid) or dedicated scrollToCommit(oid)
-  → CommitGraph: find row index in displayItems, listRef.scroll({ index, align: 'center' })
-```
+## Integration Points
 
-### Modified Flow: Three-Way Commit Selector
-```
-CommitForm (mode = 'commit' | 'amend' | 'stash')
-  → commit: safeInvoke('create_commit')       [existing]
-  → amend:  safeInvoke('amend_commit')         [existing]
-  → stash:  safeInvoke('stash_save', { message: subject })  [existing command, new call site]
-```
+### Hunk Staging Integration Points
 
-### New Flow: Toast Notifications
-```
-Any component operation error/success
-  → showToast('error'|'success', title, message) [from toast-state.svelte.ts]
-  → toastState.messages updated ($state reactive)
-  → Toast.svelte renders in fixed bottom-right position
-  → Auto-dismiss after 5s (or manual dismiss)
-```
+1. **staging.rs ↔ diff.rs**: `stage_hunk_inner` reuses the same diff computation as `diff_unstaged_inner` (calls `repo.diff_index_to_workdir`). Could extract shared helper.
+
+2. **DiffPanel ↔ App.svelte**: New callback prop (`onHunkAction`) follows same pattern as `onclose`. App.svelte orchestrates the IPC call and diff re-fetch.
+
+3. **Filesystem watcher**: After `stage_hunk`, the index changes on disk. The filesystem watcher (watching `.git/index` changes via `notify`) fires `repo-changed`, which triggers StagingPanel to re-fetch status. This is the existing cache-repopulate-before-emit pattern — but for hunk staging, we may NOT need cache rebuild (no commit graph change). The `repo-changed` event is sufficient for StagingPanel refresh.
+
+4. **DiffPanel re-render**: After staging a hunk, the diff is re-fetched. If only 1 hunk existed, the file moves fully to staged → `selectedFile` may need to be cleared or auto-switch to show the staged diff. Edge case to handle in `handleHunkAction`.
+
+### Search Integration Points
+
+1. **CommitCache**: Search reads from `CommitCache` (same Mutex lock as `get_commit_graph`). The lock is held briefly for a read-only scan. No contention concerns — search is read-only.
+
+2. **scrollToOid**: Already exists in CommitGraph (line 569). Search navigation calls this directly. Handles lazy-loading batches automatically.
+
+3. **selectedCommitOid**: Search navigation sets this via `handleCommitSelect(oid)`, which triggers right-pane CommitDetail display. This is the existing behavior — search reuses it.
+
+4. **Cmd+F global keyboard handler**: Currently App.svelte has keyboard handlers for Cmd+J (toggle left pane), Cmd+K (toggle right pane), Cmd+0/+/- (zoom). Adding Cmd+F follows the same pattern. If search lives inside CommitGraph, the handler should be in CommitGraph (listening on `window` or the component's DOM element).
 
 ## Suggested Build Order
 
-Based on dependency analysis and risk:
+### Phase 1: Hunk Staging Backend
+**Dependencies:** None
+**Deliverables:**
+1. `extract_hunk_patch` helper function in `staging.rs`
+2. `stage_hunk_inner` function with unit tests
+3. `unstage_hunk_inner` function with unit tests
+4. `stage_hunk` / `unstage_hunk` Tauri commands registered in `lib.rs`
 
-### Phase 1: Foundation (no dependencies, enables everything else)
-1. **Icon system** (`icons.ts` + `Icon.svelte`) — used by all subsequent UI work
-2. **Toast system** (`toast-state.svelte.ts` + `Toast.svelte`) — used by all error-handling improvements
-3. **Bug fix: untracked files WIP** — 2-line Rust fix, independent, high value
+**Why first:** The backend is the riskiest part (git2 `Diff::from_buffer` + `repo.apply` may have edge cases). Get it working and tested before touching UI.
 
-### Phase 2: New Rust Commands (all independent of each other)
-4. **Discard file** (Rust `discard_file` + `discard_all_unstaged` commands + FileRow/StagingPanel)
-5. **Branch delete** (Rust `delete_branch` command + BranchSidebar context menu)
-6. **Tag delete** (Rust `delete_tag` command + BranchSidebar context menu)
+**Test strategy:**
+```rust
+#[test]
+fn stage_hunk_stages_only_target_hunk() {
+    // Create repo with file having 2+ distinct hunks
+    // Stage hunk 0 only
+    // Verify staged diff has 1 hunk, unstaged diff has remaining hunks
+}
 
-### Phase 3: Staging UX (depends on icons from Phase 1)
-7. **Three-way selector** (CommitForm rework — highest-complexity frontend change)
-8. **Green/red stage/unstage buttons** (StagingPanel styling)
-9. **Equal-height file lists** (StagingPanel layout)
-10. **Stash name defaults** (CommitForm + Toolbar prop wiring)
+#[test]
+fn unstage_hunk_unstages_only_target_hunk() {
+    // Stage entire file, then unstage hunk 0
+    // Verify staged diff has N-1 hunks, unstaged diff has 1 hunk
+}
 
-### Phase 4: Graph Polish (independent of Phases 2-3)
-11. **Graph top/bottom padding** (VirtualList/CommitGraph CSS)
-12. **Graph overflow/shrink** (CommitGraph/CommitRow overflow: hidden)
-13. **Ref navigation** (BranchInfo oid + BranchSidebar → CommitGraph scroll)
-14. **Better tag icon** (icon data update, trivial)
+#[test]
+fn stage_hunk_binary_file_error() {
+    // Binary file → should return appropriate error
+}
 
-### Phase 5: Bug Fixes & Behavior (independent, can do anytime)
-15. **Branch pill z-index fix** (SVG overflow: visible)
-16. **Trailing header divider fix** (conditional rendering)
-17. **Right pane auto-open** (App.svelte $effect)
+#[test]
+fn stage_hunk_stale_index_error() {
+    // Hunk index out of range → should return error, not panic
+}
+```
 
-### Phase 6: Layout (highest risk, do last)
-18. **Merged top bar** (CSS merge or custom titlebar)
+### Phase 2: Hunk Staging UI
+**Dependencies:** Phase 1
+**Deliverables:**
+1. DiffPanel: add `diffKind` and `onHunkAction` props
+2. DiffPanel: render "Stage Hunk" / "Unstage Hunk" buttons in hunk headers
+3. App.svelte: add `handleHunkAction` function, pass props to DiffPanel
+4. App.svelte: handle edge case where staging last hunk clears the diff view
+
+**Test strategy:** Manual testing with files containing multiple hunks. Verify:
+- Button appears only for unstaged/staged diffs (not commit diffs)
+- Button hidden for binary files
+- Staging a hunk re-renders with fewer hunks
+- Staging last hunk clears the diff or switches view
+
+### Phase 3: Search Backend
+**Dependencies:** None (parallel with Phase 1-2)
+**Deliverables:**
+1. `SearchResult` type in `types.rs` and `types.ts`
+2. `search_commits_inner` function in `history.rs` with unit tests
+3. `search_commits` Tauri command registered in `lib.rs`
+
+**Test strategy:**
+```rust
+#[test]
+fn search_by_sha_prefix() { ... }
+
+#[test]
+fn search_by_message_substring() { ... }
+
+#[test]
+fn search_by_ref_name() { ... }
+
+#[test]
+fn search_case_insensitive() { ... }
+
+#[test]
+fn search_empty_query_returns_empty() { ... }
+```
+
+### Phase 4: Search UI
+**Dependencies:** Phase 3, and CommitGraph's `scrollToOid` (already exists)
+**Deliverables:**
+1. `SearchBar.svelte` component (input, result count, prev/next buttons)
+2. CommitGraph: integrate SearchBar, add Cmd+F keyboard handler
+3. Search navigation: invoke `search_commits`, navigate results with `scrollToOid`
+4. Escape to close, result cycling with arrow keys
+
+**Test strategy:** Manual testing:
+- Cmd+F opens search bar, focuses input
+- Typing triggers search after debounce
+- Results navigable with Enter/arrows
+- Scroll position updates to show matching commit
+- Escape closes search
+- Works with large repos (10k+ commits, search result in unpaginated range)
 
 ### Dependency Graph
+
 ```
-Phase 1 (icons, toast, WIP fix)  ← no deps, do first
-    │
-    ├──► Phase 2 (Rust commands: discard, branch delete, tag delete)
-    │
-    ├──► Phase 3 (staging UX: 3-way selector, buttons, layout, stash name)
-    │
-    ├──► Phase 4 (graph: padding, overflow, ref nav, tag icon)
-    │
-    ├──► Phase 5 (bug fixes: z-index, divider, auto-open)
-    │
-    └──► Phase 6 (layout: merged bar)
+Phase 1 (Hunk Backend)  ──► Phase 2 (Hunk UI)
+                                 │
+Phase 3 (Search Backend) ──► Phase 4 (Search UI)
+                                 │
+                          (Phases 1-2 and 3-4 are independent tracks)
 ```
 
+Phases 1 and 3 can be developed in parallel. Phase 2 depends on Phase 1. Phase 4 depends on Phase 3.
+
 ### Build Order Rationale
-- **Icons first** because every subsequent UI change references the icon system
-- **Toast early** because it improves error handling across all new features
-- **WIP bug fix early** because it's trivial and high-value (users notice missing WIP rows)
-- **Rust commands before frontend integration** because they unblock testing
-- **Three-way selector** is highest frontend complexity — give it dedicated focus after simpler items validate the patterns
-- **Custom titlebar last** because it's highest risk (platform-specific, could break window management)
+
+- **Hunk backend first** — highest technical risk (git2 `apply` API, patch construction). Early validation prevents wasted UI work.
+- **Search backend is low risk** — simple string matching on cached data. Can run in parallel with hunk work.
+- **Hunk UI before search UI** — hunk staging is the higher-value feature (users encounter this more often than graph search). Ship it first.
+- **Search UI last** — builds on existing `scrollToOid` infrastructure. Lowest risk, cleanest integration.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Global Error Dialog for Everything
-**What people do:** Replace all inline errors with a global dialog/toast system
-**Why it's wrong:** Modal dialogs interrupt flow. Inline errors (CommitForm validation, checkout error banners) should stay inline — they're contextual.
-**Do this instead:** Keep inline validation errors where they are. Use toasts only for transient operation feedback. Use native `ask()`/`message()` for destructive confirmations and critical errors.
+### Anti-Pattern 1: git CLI for Hunk Staging
+**What people do:** Shell out to `git add -p` or `git apply --cached`
+**Why it's wrong for Trunk:** Every local git operation uses git2. Introducing CLI for hunk staging creates an inconsistent pattern and requires temp file management.
+**Do this instead:** Use `git2::Diff::from_buffer()` + `repo.apply(ApplyLocation::Index)`. Keep all local ops in git2.
 
-### Anti-Pattern 2: One Giant Icon Component with Dynamic Import
-**What people do:** `<Icon name="pull" />` that dynamically loads icon data or has a massive switch
-**Why it's wrong:** Adds indirection, potential async loading, harder to tree-shake
-**Do this instead:** Export static path data from `icons.ts`. The `Icon.svelte` wrapper just reads from the const object — zero dynamic behavior.
+### Anti-Pattern 2: Client-Side Search with Full Commit Load
+**What people do:** Load all commits into JS arrays, search with `.filter()`
+**Why it's wrong:** Defeats pagination purpose. 50k commits serialized to JS = ~100MB memory spike + multi-second parse time. CommitCache already has the data in Rust.
+**Do this instead:** Backend `search_commits` command reads from `CommitCache`. Only matching OIDs are serialized to frontend.
 
-### Anti-Pattern 3: Discard Without Confirmation
-**What people do:** Wire discard directly to a button click
-**Why it's wrong:** Discard is destructive and IRREVERSIBLE. No git undo. File changes are permanently lost.
-**Do this instead:** Always `ask()` before discard. "Discard All" should have an even stronger warning. Never add keyboard shortcuts for discard without modifier keys.
+### Anti-Pattern 3: Search That Replaces the Graph
+**What people do:** Show search results in a filtered list view, hiding the graph
+**Why it's wrong:** Users need graph context (which branch? which parent?) when searching. Search should highlight and navigate within the existing graph view.
+**Do this instead:** Float SearchBar over the graph. Navigate results by scrolling the graph to matching commits.
 
-### Anti-Pattern 4: Breaking Inner-Fn Pattern for New Commands
-**What people do:** Write new Rust commands as monolithic `#[tauri::command]` functions
-**Why it's wrong:** Can't unit test without Tauri runtime. Every existing command uses `*_inner()` with `state_map` param.
-**Do this instead:** Every new command (`discard_file`, `delete_branch`, `delete_tag`) must have a `*_inner()` function. Write unit tests using `make_test_repo()` helper.
+### Anti-Pattern 4: Hunk Actions Without Diff Re-fetch
+**What people do:** Optimistically remove the staged hunk from the UI without re-fetching the diff
+**Why it's wrong:** After staging a hunk, git may coalesce adjacent hunks or change line numbers. The remaining diff is NOT simply "original minus staged hunk."
+**Do this instead:** Always re-fetch the diff after a hunk action. The IPC round-trip is <5ms.
 
-### Anti-Pattern 5: Modifying BranchInfo Without Both-Side Types
-**What people do:** Add `oid` to Rust `BranchInfo` but forget the TypeScript `BranchInfo` interface
-**Why it's wrong:** Tauri IPC serializes to JSON — the frontend silently ignores unknown fields, but code accessing `branch.oid` will get `undefined`.
-**Do this instead:** Always update both `src-tauri/src/git/types.rs` and `src/lib/types.ts` simultaneously.
+### Anti-Pattern 5: Breaking the Inner-Fn Test Pattern
+**What people do:** Put git2 logic directly in `#[tauri::command]` functions
+**Why it's wrong:** Can't unit test without Tauri runtime. Every existing command follows `*_inner()` pattern.
+**Do this instead:** `stage_hunk_inner`, `unstage_hunk_inner`, `search_commits_inner` with `HashMap<String, PathBuf>` params. Test with `make_test_repo()`.
 
 ## Sources
 
-- Full codebase audit of Trunk v0.5: all components, commands, types, and tests read and analyzed
-- Tauri 2 Menu API: confirmed via existing usage in CommitGraph.svelte (line 216-237) and BranchSidebar.svelte (line 170-181)
-- Tauri 2 Dialog API: `ask()` and `message()` confirmed via existing usage in CommitGraph.svelte and BranchSidebar.svelte
-- git2 crate 0.19: `Branch::delete()`, `Reference::delete()`, `CheckoutBuilder::force().path()` — available in current dependency
-- Svelte 5 `$state` rune modules: confirmed pattern from `remote-state.svelte.ts` and `undo-redo.svelte.ts`
-- SVG stroke-based icon convention (24x24 viewBox): consistent with Lucide/Feather icon libraries
+- Full codebase audit of Trunk v0.6: all 10 Rust command modules, 20 Svelte components, 19 lib modules
+- `git2` crate 0.19 API: `Repository::apply()`, `Diff::from_buffer()`, `ApplyLocation::Index` — confirmed available
+- Existing `scrollToOid` implementation: CommitGraph.svelte:569-593 — handles lazy-load and smooth scroll
+- CommitCache structure: `state.rs:16-17` — `HashMap<String, GraphResult>`, populated on open_repo
+- DiffPanel hunk rendering: DiffPanel.svelte:123-148 — `{#each fd.hunks as hunk}` with header and lines
+- Unified diff format spec: patch header must include `--- a/` / `+++ b/` / `@@ @@` for `Diff::from_buffer`
 
 ---
-*Architecture research for: Trunk v0.6 UI Polish & Core Ops*
-*Researched: 2026-03-15*
+*Architecture research for: Trunk v0.7 Hunk Staging & Commit Graph Search*
+*Researched: 2026-03-17*
