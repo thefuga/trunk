@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.6
-milestone_name: UI Polish & Core Ops
-status: completed
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-03-16T04:57:52.777Z"
-last_activity: "2026-03-16 - Completed quick task 260316-1j6: Remove the bottom bar and use the new notification system for state updates"
+milestone: v0.7
+milestone_name: Hunk Staging & Search
+status: active
+stopped_at: null
+last_updated: "2026-03-17"
+last_activity: "2026-03-17 — Milestone v0.7 started"
 progress:
-  total_phases: 6
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,20 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-16 after v0.6 milestone archived)
+See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Planning v0.7 — run /gsd-new-milestone to start
+**Current focus:** v0.7 Hunk Staging & Search
 
 ## Current Position
 
-Phase: All complete
-Status: Milestone v0.6 complete
-Last activity: 2026-03-16 - Completed quick task 260316-1j6: Remove the bottom bar and use the new notification system for state updates
-
-```
-v0.6 Progress: [████████████░░░░░░░░] 3/5 phases
-```
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-17 — Milestone v0.7 started
 
 ## Performance Metrics
 
