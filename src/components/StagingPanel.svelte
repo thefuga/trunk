@@ -185,7 +185,7 @@
   <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
     <!-- Unstaged Files section -->
     <div style="
-      {unstaged_expanded && staged_expanded ? 'flex: 1;' : unstaged_expanded ? 'flex: 1;' : ''}
+      {unstaged_expanded && staged_expanded ? 'flex: 1;' : unstaged_expanded ? 'max-height: calc(100% - 28px);' : ''}
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -278,7 +278,7 @@
 
     <!-- Staged Files section -->
     <div style="
-      {staged_expanded && unstaged_expanded ? 'flex: 1;' : staged_expanded ? 'flex: 1;' : ''}
+      {staged_expanded && unstaged_expanded ? 'flex: 1;' : staged_expanded ? 'max-height: calc(100% - 28px);' : ''}
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -340,6 +340,11 @@
         </div>
       {/if}
     </div>
+
+    <!-- Spacer: absorbs remaining space when a section is collapsed -->
+    {#if !(unstaged_expanded && staged_expanded)}
+      <div style="flex: 1;"></div>
+    {/if}
   </div>
 
   <!-- Permanent divider above commit form -->
