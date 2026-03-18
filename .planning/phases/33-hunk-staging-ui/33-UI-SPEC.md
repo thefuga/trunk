@@ -35,7 +35,6 @@ Declared values (must be multiples of 4):
 | sm | 8px | Default component padding, gap between toolbar elements, gap between hunk action buttons |
 | md | 16px | Not used in this phase |
 | lg | 24px | Panel toolbar height (existing pattern) |
-| xl | 28px | Section header height (existing pattern from StagingPanel) |
 
 Exceptions:
 - 1px: border widths (standard throughout project, border property not spacing)
