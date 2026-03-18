@@ -16,6 +16,41 @@
   let { fileDiffs, commitDetail, selectedPath = null, onclose, diffKind = 'commit', repoPath = '', onhunkaction }: Props = $props();
 
   let hunkOperationInFlight = $state(false);
+  let focusedHunkIndex = $state(0);
+  let hunkElements: Record<string, HTMLDivElement> = {};
+
+  function scrollToHunk(index: number) {
+    const keys = Object.keys(hunkElements);
+    if (index < 0 || index >= keys.length) return;
+    focusedHunkIndex = index;
+    const el = hunkElements[keys[index]];
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el?.classList.add('hunk-highlight');
+    setTimeout(() => el?.classList.remove('hunk-highlight'), 600);
+  }
+
+  $effect(() => {
+    function handleKeydown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === ']') {
+        e.preventDefault();
+        scrollToHunk(focusedHunkIndex + 1);
+      } else if (e.key === '[') {
+        e.preventDefault();
+        scrollToHunk(focusedHunkIndex - 1);
+      }
+    }
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
+
+  $effect(() => {
+    fileDiffs;
+    focusedHunkIndex = 0;
+    hunkElements = {};
+  });
 
   async function handleStageHunk(filePath: string, hunkIndex: number) {
     hunkOperationInFlight = true;
@@ -178,13 +213,16 @@
         <!-- Hunks -->
         {#each fd.hunks as hunk, hunkIdx}
           <!-- Hunk toolbar row -->
-          <div style="
-            background: var(--color-bg);
-            display: flex;
-            align-items: center;
-            padding: 4px 8px;
-            gap: 8px;
-          ">
+          <div
+            bind:this={hunkElements[`${fd.path}-${hunkIdx}`]}
+            style="
+              background: var(--color-bg);
+              display: flex;
+              align-items: center;
+              padding: 4px 8px;
+              gap: 8px;
+            "
+          >
             <span style="flex: 1; color: var(--color-text-muted); font-size: 11px; font-family: var(--font-mono, monospace);">
               {hunk.header}
             </span>
@@ -267,3 +305,13 @@
 
   </div><!-- end scrollable content -->
 </div>
+
+<style>
+  :global(.hunk-highlight) {
+    animation: hunk-flash 0.6s ease-out;
+  }
+  @keyframes hunk-flash {
+    0% { background-color: rgba(96, 165, 250, 0.3); }
+    100% { background-color: transparent; }
+  }
+</style>
