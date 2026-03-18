@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: Hunk Staging & Search
 status: completed
-stopped_at: Phase 33 context gathered
-last_updated: "2026-03-18T02:16:23.747Z"
-last_activity: 2026-03-18 — Completed 32-01 hunk staging backend (stage/unstage/discard hunk commands)
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-03-18T02:47:16.243Z"
+last_activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar buttons + keyboard navigation)
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 
 ## Current Position
 
-Phase: 32 (Hunk Staging Backend) — Plan 01 complete
+Phase: 33 (Hunk Staging UI) — Plan 01 complete
 Plan: 01 of 01 complete
-Status: Phase 32 Plan 01 executed - hunk staging backend complete
-Last activity: 2026-03-18 — Completed 32-01 hunk staging backend (stage/unstage/discard hunk commands)
+Status: Phase 33 Plan 01 executed - hunk staging UI complete
+Last activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar buttons + keyboard navigation)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Last activity: 2026-03-18 — Completed 32-01 hunk staging backend (stage/unstag
 | Phase 29-staging-commit-ux P02 | 2min | 2 tasks | 2 files |
 | Phase 29-staging-commit-ux P01 | 2min | 1 tasks | 1 files |
 | Phase 32 P01 | 4min | 3 tasks | 2 files |
+| Phase 33 P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Last activity: 2026-03-18 — Completed 32-01 hunk staging backend (stage/unstag
 - [Phase 29-staging-commit-ux]: clearRedoStack skipped for stash — stash doesnt modify commit history
 - [Phase 32]: Used ApplyOptions::hunk_callback instead of Patch::from_diff + to_buf roundtrip -- simpler, fewer allocations
 - [Phase 32]: Kept hunk commands in staging.rs rather than new file -- shares helpers, natural grouping
+- [Phase 33]: No new dependencies -- all patterns reused from existing codebase (safeInvoke, showToast, ask())
+- [Phase 33]: Single hunkOperationInFlight boolean disables ALL hunk buttons to prevent stale-index races
 
 ### Roadmap Evolution
 
@@ -106,7 +109,7 @@ Last activity: 2026-03-18 — Completed 32-01 hunk staging backend (stage/unstag
 
 ## Session Continuity
 
-Last session: 2026-03-18T02:16:23.743Z
-Stopped at: Phase 33 context gathered
-Resume file: .planning/phases/33-hunk-staging-ui/33-CONTEXT.md
+Last session: 2026-03-18T02:47:16.240Z
+Stopped at: Completed 33-01-PLAN.md
+Resume file: None
 Next action: Discuss Phase 29

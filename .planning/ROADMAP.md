@@ -107,7 +107,7 @@ Full details: [milestones/v0.6-ROADMAP.md](milestones/v0.6-ROADMAP.md)
   4. After any hunk operation, re-fetching the diff shows updated hunk boundaries (no stale indices)
   5. All commands follow the inner-fn pattern and have unit tests covering multi-hunk files, single-hunk new files, and no-newline-at-EOF
 
-- [ ] Phase 33: Hunk Staging UI (3 requirements)
+- [x] Phase 33: Hunk Staging UI (3 requirements) (completed 2026-03-18)
   **Goal:** Add context-aware hunk action buttons to DiffPanel with binary file guards and keyboard navigation between hunks.
   **Requirements:** HUNK-04, HUNK-06, HUNK-09
   **Plans:** 1 plan
