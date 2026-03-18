@@ -402,7 +402,19 @@
       <div class="pane-divider" style="display: {leftPaneCollapsed ? 'none' : 'block'};" onmousedown={startLeftResize}></div>
       <div class="flex-1 overflow-hidden">
         {#if showDiff}
-          <DiffPanel fileDiffs={currentDiffFiles} commitDetail={null} selectedPath={selectedCommitFile ?? selectedFile?.path ?? null} onclose={handleDiffClose} />
+          <DiffPanel
+            fileDiffs={currentDiffFiles}
+            commitDetail={null}
+            selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
+            diffKind={selectedCommitFile ? 'commit' : selectedFile?.kind ?? 'commit'}
+            repoPath={repoPath!}
+            onhunkaction={async (filePath) => {
+              if (selectedFile) {
+                await refetchFileDiff(filePath, selectedFile.kind);
+              }
+            }}
+            onclose={handleDiffClose}
+          />
         {:else}
           <CommitGraph bind:this={commitGraphRef} {repoPath} oncommitselect={handleCommitSelect} {wipCount} wipMessage={wipSubject.trim() || 'WIP'} onWipClick={handleWipClick} {refreshSignal} {selectedCommitOid} />
         {/if}

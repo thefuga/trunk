@@ -1,14 +1,70 @@
 <script lang="ts">
   import type { FileDiff, CommitDetail } from '../lib/types.js';
+  import { safeInvoke, type TrunkError } from '../lib/invoke.js';
+  import { showToast } from '../lib/toast.svelte.js';
 
   interface Props {
     fileDiffs: FileDiff[];
     commitDetail: CommitDetail | null;
     selectedPath?: string | null;
     onclose: () => void;
+    diffKind?: 'unstaged' | 'staged' | 'commit';
+    repoPath?: string;
+    onhunkaction?: (filePath: string) => Promise<void>;
   }
 
-  let { fileDiffs, commitDetail, selectedPath = null, onclose }: Props = $props();
+  let { fileDiffs, commitDetail, selectedPath = null, onclose, diffKind = 'commit', repoPath = '', onhunkaction }: Props = $props();
+
+  let hunkOperationInFlight = $state(false);
+
+  async function handleStageHunk(filePath: string, hunkIndex: number) {
+    hunkOperationInFlight = true;
+    try {
+      await safeInvoke('stage_hunk', { path: repoPath, filePath, hunkIndex });
+      showToast('Staged hunk', 'success');
+      await onhunkaction?.(filePath);
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Stage hunk failed', 'error');
+    } finally {
+      hunkOperationInFlight = false;
+    }
+  }
+
+  async function handleUnstageHunk(filePath: string, hunkIndex: number) {
+    hunkOperationInFlight = true;
+    try {
+      await safeInvoke('unstage_hunk', { path: repoPath, filePath, hunkIndex });
+      showToast('Unstaged hunk', 'success');
+      await onhunkaction?.(filePath);
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Unstage hunk failed', 'error');
+    } finally {
+      hunkOperationInFlight = false;
+    }
+  }
+
+  async function handleDiscardHunk(filePath: string, hunkIndex: number) {
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await ask('Discard this hunk? This cannot be undone.', {
+      title: 'Discard Hunk',
+      kind: 'warning',
+    });
+    if (!confirmed) return;
+
+    hunkOperationInFlight = true;
+    try {
+      await safeInvoke('discard_hunk', { path: repoPath, filePath, hunkIndex });
+      showToast('Discarded hunk', 'success');
+      await onhunkaction?.(filePath);
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Discard hunk failed', 'error');
+    } finally {
+      hunkOperationInFlight = false;
+    }
+  }
 
   function lineBackground(origin: string): string {
     if (origin === 'Add') return 'rgba(74, 222, 128, 0.1)';
@@ -120,16 +176,75 @@
         </div>
       {:else}
         <!-- Hunks -->
-        {#each fd.hunks as hunk}
-          <!-- Hunk header -->
+        {#each fd.hunks as hunk, hunkIdx}
+          <!-- Hunk toolbar row -->
           <div style="
             background: var(--color-bg);
-            color: var(--color-text-muted);
-            font-size: 11px;
-            font-family: monospace;
-            padding: 2px 8px;
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            gap: 8px;
           ">
-            {hunk.header}
+            <span style="flex: 1; color: var(--color-text-muted); font-size: 11px; font-family: var(--font-mono, monospace);">
+              {hunk.header}
+            </span>
+            {#if diffKind === 'unstaged'}
+              <button
+                disabled={hunkOperationInFlight}
+                style="
+                  background: none;
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-text);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 4px 8px;
+                  cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+                  opacity: {hunkOperationInFlight ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => handleStageHunk(fd.path, hunkIdx)}
+              >
+                Stage Hunk
+              </button>
+              <button
+                disabled={hunkOperationInFlight}
+                style="
+                  background: none;
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: #f87171;
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 4px 8px;
+                  cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+                  opacity: {hunkOperationInFlight ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => handleDiscardHunk(fd.path, hunkIdx)}
+              >
+                Discard Hunk
+              </button>
+            {:else if diffKind === 'staged'}
+              <button
+                disabled={hunkOperationInFlight}
+                style="
+                  background: none;
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-text);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 4px 8px;
+                  cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+                  opacity: {hunkOperationInFlight ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => handleUnstageHunk(fd.path, hunkIdx)}
+              >
+                Unstage Hunk
+              </button>
+            {/if}
           </div>
 
           <!-- Diff lines -->
