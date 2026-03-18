@@ -552,6 +552,48 @@ pub async fn unstage_all(
         .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
+#[tauri::command]
+pub async fn stage_hunk(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || stage_hunk_inner(&path, &file_path, hunk_index, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn unstage_hunk(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || unstage_hunk_inner(&path, &file_path, hunk_index, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn discard_hunk(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || discard_hunk_inner(&path, &file_path, hunk_index, &state_map))
+        .await
+        .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
