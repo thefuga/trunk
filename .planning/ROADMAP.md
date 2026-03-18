@@ -119,7 +119,7 @@ Full details: [milestones/v0.6-ROADMAP.md](milestones/v0.6-ROADMAP.md)
   3. User can press `]` to jump to next hunk and `[` to jump to previous hunk within the diff view
   4. Hunk buttons are disabled during in-flight operations to prevent stale-index races
 
-- [ ] Phase 34: Line-Level Staging (2 requirements)
+- [x] Phase 34: Line-Level Staging (2 requirements) (completed 2026-03-18)
   **Goal:** Enable selecting and staging/unstaging individual lines within a diff hunk, constructing partial patches from line selections.
   **Requirements:** HUNK-07, HUNK-08
   **Plans:** 2 plans

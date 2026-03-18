@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: Hunk Staging & Search
-status: in_progress
-stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-03-18T06:51:07Z"
+status: completed
+stopped_at: Completed 34-02-PLAN.md
+last_updated: "2026-03-18T06:57:16.033Z"
 last_activity: 2026-03-18 — Completed 34-01 line-level staging backend (partial patch construction + Tauri commands)
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 
 ## Current Position
 
-Phase: 34 (Line-Level Staging) — Plan 01 complete
-Plan: 01 of 02 complete
-Status: Phase 34 Plan 01 executed - line-level staging backend complete
-Last activity: 2026-03-18 — Completed 34-01 line-level staging backend (partial patch construction + Tauri commands)
+Phase: 34 (Line-Level Staging) — Complete
+Plan: 02 of 02 complete
+Status: Phase 34 complete - line-level staging backend + frontend done
+Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line selection UI, toolbar mode switching, IPC handlers)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Last activity: 2026-03-18 — Completed 34-01 line-level staging backend (partia
 | Phase 32 P01 | 4min | 3 tasks | 2 files |
 | Phase 33 P01 | 2min | 2 tasks | 2 files |
 | Phase 34 P01 | 11min | 3 tasks | 2 files |
+| Phase 34 P02 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Last activity: 2026-03-18 — Completed 34-01 line-level staging backend (partia
 - [Phase 33]: Single hunkOperationInFlight boolean disables ALL hunk buttons to prevent stale-index races
 - [Phase 34]: Used forward diff + reverse patch construction instead of git2 .reverse(true) -- ensures line indices from frontend match the diff the user sees
 - [Phase 34]: Single build_partial_patch_text with reverse flag instead of separate forward/reverse builders -- less code duplication
+- [Phase 34]: No new dependencies -- all patterns reused from existing codebase (safeInvoke, showToast, ask(), CSS custom properties)
+- [Phase 34]: Selection state uses Set<number> reassigned on mutation for Svelte 5 reactivity
 
 ### Roadmap Evolution
 
@@ -112,7 +115,7 @@ Last activity: 2026-03-18 — Completed 34-01 line-level staging backend (partia
 
 ## Session Continuity
 
-Last session: 2026-03-18T06:51:07Z
-Stopped at: Completed 34-01-PLAN.md
-Resume file: .planning/phases/34-line-level-staging/34-02-PLAN.md
+Last session: 2026-03-18T06:57:16.030Z
+Stopped at: Completed 34-02-PLAN.md
+Resume file: None
 Next action: Execute Phase 34 Plan 02 (line-level staging frontend)
