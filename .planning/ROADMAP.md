@@ -110,6 +110,9 @@ Full details: [milestones/v0.6-ROADMAP.md](milestones/v0.6-ROADMAP.md)
 - [ ] Phase 33: Hunk Staging UI (3 requirements)
   **Goal:** Add context-aware hunk action buttons to DiffPanel with binary file guards and keyboard navigation between hunks.
   **Requirements:** HUNK-04, HUNK-06, HUNK-09
+  **Plans:** 1 plan
+  Plans:
+  - [ ] 33-01-PLAN.md — Add hunk toolbar rows with action buttons and [/] keyboard navigation to DiffPanel
   **Success criteria:**
   1. DiffPanel shows "Stage Hunk" button on each `@@` header for unstaged diffs, "Unstage Hunk" button for staged diffs, and no buttons for commit diffs
   2. Binary file diffs display no hunk action buttons
@@ -147,4 +150,4 @@ Full details: [milestones/v0.6-ROADMAP.md](milestones/v0.6-ROADMAP.md)
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-17 — Phase 32 planned (1 plan)*
+*Last updated: 2026-03-18 — Phase 33 planned (1 plan)*
