@@ -15,8 +15,8 @@ Requirements for v0.7 Hunk Staging & Search. Each maps to roadmap phases.
 - [x] **HUNK-04**: DiffPanel displays context-appropriate actions (Stage Hunk for unstaged, Unstage Hunk for staged, no buttons for commit diffs)
 - [x] **HUNK-05**: Diff view refreshes immediately after each hunk stage/unstage/discard operation, reflecting updated hunk boundaries
 - [x] **HUNK-06**: Hunk action buttons are hidden for binary file diffs
-- [ ] **HUNK-07**: User can select and stage individual lines within a diff hunk
-- [ ] **HUNK-08**: User can select and unstage individual lines within a diff hunk
+- [x] **HUNK-07**: User can select and stage individual lines within a diff hunk
+- [x] **HUNK-08**: User can select and unstage individual lines within a diff hunk
 - [x] **HUNK-09**: User can navigate between hunks in the diff view using keyboard shortcuts
 
 ### Commit Graph Search

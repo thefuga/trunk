@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: Hunk Staging & Search
-status: completed
-stopped_at: Phase 34 context gathered
-last_updated: "2026-03-18T03:22:27.703Z"
-last_activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar buttons + keyboard navigation)
+status: in_progress
+stopped_at: Completed 34-01-PLAN.md
+last_updated: "2026-03-18T06:51:07Z"
+last_activity: 2026-03-18 — Completed 34-01 line-level staging backend (partial patch construction + Tauri commands)
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 
 ## Current Position
 
-Phase: 33 (Hunk Staging UI) — Plan 01 complete
-Plan: 01 of 01 complete
-Status: Phase 33 Plan 01 executed - hunk staging UI complete
-Last activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar buttons + keyboard navigation)
+Phase: 34 (Line-Level Staging) — Plan 01 complete
+Plan: 01 of 02 complete
+Status: Phase 34 Plan 01 executed - line-level staging backend complete
+Last activity: 2026-03-18 — Completed 34-01 line-level staging backend (partial patch construction + Tauri commands)
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Last activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar butt
 | Phase 29-staging-commit-ux P01 | 2min | 1 tasks | 1 files |
 | Phase 32 P01 | 4min | 3 tasks | 2 files |
 | Phase 33 P01 | 2min | 2 tasks | 2 files |
+| Phase 34 P01 | 11min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Last activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar butt
 - [Phase 32]: Kept hunk commands in staging.rs rather than new file -- shares helpers, natural grouping
 - [Phase 33]: No new dependencies -- all patterns reused from existing codebase (safeInvoke, showToast, ask())
 - [Phase 33]: Single hunkOperationInFlight boolean disables ALL hunk buttons to prevent stale-index races
+- [Phase 34]: Used forward diff + reverse patch construction instead of git2 .reverse(true) -- ensures line indices from frontend match the diff the user sees
+- [Phase 34]: Single build_partial_patch_text with reverse flag instead of separate forward/reverse builders -- less code duplication
 
 ### Roadmap Evolution
 
@@ -109,7 +112,7 @@ Last activity: 2026-03-18 — Completed 33-01 hunk staging UI (hunk toolbar butt
 
 ## Session Continuity
 
-Last session: 2026-03-18T03:22:27.700Z
-Stopped at: Phase 34 context gathered
-Resume file: .planning/phases/34-line-level-staging/34-CONTEXT.md
-Next action: Discuss Phase 29
+Last session: 2026-03-18T06:51:07Z
+Stopped at: Completed 34-01-PLAN.md
+Resume file: .planning/phases/34-line-level-staging/34-02-PLAN.md
+Next action: Execute Phase 34 Plan 02 (line-level staging frontend)
