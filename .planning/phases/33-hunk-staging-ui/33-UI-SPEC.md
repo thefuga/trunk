@@ -31,29 +31,29 @@ Declared values (must be multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | Icon gaps, inline padding between adjacent elements |
-| sm | 8px | Default component padding, gap between toolbar elements |
+| xs | 4px | Button vertical padding, icon gaps, inline padding between adjacent elements |
+| sm | 8px | Default component padding, gap between toolbar elements, gap between hunk action buttons |
 | md | 16px | Not used in this phase |
 | lg | 24px | Panel toolbar height (existing pattern) |
 | xl | 28px | Section header height (existing pattern from StagingPanel) |
 
 Exceptions:
-- 2px: button vertical padding (matching existing hunk header `padding: 2px 8px`)
-- 6px: gap between hunk action buttons (matching existing toolbar gap patterns)
-- 1px: border widths (standard throughout project)
+- 1px: border widths (standard throughout project, border property not spacing)
 
 ---
 
 ## Typography
 
+Two-size monospace scale for diff UI chrome:
+
 | Role | Size | Weight | Line Height | Font |
 |------|------|--------|-------------|------|
-| Diff line | 12px | 400 | 1.5 | var(--font-mono) |
+| Diff line | 13px | 400 | 1.5 | var(--font-mono) |
 | Hunk header text | 11px | 400 | 1 | var(--font-mono) |
 | Hunk button label | 11px | 400 | 1 | var(--font-sans) |
 | Empty state | 13px | 400 | 1 | var(--font-sans) |
 
-Weights used: 400 (regular) only for this phase. No headings or bold text introduced.
+Sizes used: 11px (toolbar chrome: hunk header text, button labels) and 13px (content: diff lines, empty state). Weights used: 400 (regular) only for this phase. No headings or bold text introduced.
 
 ---
 
@@ -73,6 +73,14 @@ Accent reserved for: nothing in this phase. Hunk action buttons use ghost style 
 
 ---
 
+## Visual Hierarchy
+
+**Focal point:** The primary visual anchor on each hunk is the **hunk toolbar row** — specifically the action buttons aligned to the right side. The hunk header text (line range info) on the left serves as secondary context. Diff lines below each toolbar are tertiary content that the user scans but does not interact with directly (in this phase).
+
+**Reading flow:** Top-to-bottom within each file's diff. The user scans from one hunk toolbar row to the next, with diff lines flowing between them. Action buttons on the right side of each toolbar row are the primary interaction targets.
+
+---
+
 ## Component Inventory
 
 ### Hunk Toolbar Row
@@ -83,8 +91,8 @@ Replaces the existing plain `@@` header `<div>` in DiffPanel.
 |----------|-------|
 | Layout | `display: flex; align-items: center` |
 | Background | `var(--color-bg)` (same as current `@@` header) |
-| Padding | `2px 8px` (matching current `@@` header padding) |
-| Gap | `6px` between child elements |
+| Padding | `4px 8px` |
+| Gap | `8px` between child elements |
 | Left side | `<span>` with `flex: 1` containing hunk header text (`font-size: 11px; font-family: monospace; color: var(--color-text-muted)`) |
 | Right side | Conditional action buttons based on `diffKind` |
 
@@ -98,7 +106,7 @@ Replaces the existing plain `@@` header `<div>` in DiffPanel.
 | Font size | `11px` | `11px` | `11px` |
 | Font family | `var(--font-sans)` | `var(--font-sans)` | `var(--font-sans)` |
 | Color | `var(--color-text)` | `var(--color-text)` | `var(--color-text)` |
-| Padding | `1px 6px` | `1px 6px` | `1px 6px` |
+| Padding | `4px 8px` | `4px 8px` | `4px 8px` |
 | Cursor | `pointer` | `not-allowed` | `pointer` |
 | Opacity | `1` | `0.4` | `1` |
 | White space | `nowrap` | `nowrap` | `nowrap` |
