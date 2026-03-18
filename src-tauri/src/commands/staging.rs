@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use git2::{Status, StatusOptions};
 use tauri::State;
@@ -594,6 +594,45 @@ pub async fn discard_hunk(
         .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
+fn build_partial_patch_text(
+    file_path: &str,
+    patch: &git2::Patch<'_>,
+    hunk_idx: usize,
+    selected_indices: &[u32],
+) -> Result<String, TrunkError> {
+    todo!()
+}
+
+pub fn stage_lines_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    todo!()
+}
+
+pub fn unstage_lines_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    todo!()
+}
+
+pub fn discard_lines_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    todo!()
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -997,5 +1036,260 @@ mod tests {
         assert!(result.is_err(), "expected Err for file with no unstaged changes");
         let err = result.unwrap_err();
         assert_eq!(err.code, "file_not_found", "expected file_not_found error code");
+    }
+
+    // --- Line-level staging test fixture helper ---
+
+    /// Creates a file where hunk 0 has both add and delete lines.
+    /// Original: 30 lines ("line 1" through "line 30").
+    /// Modified: line 2 is replaced ("line 2" -> "MODIFIED line 2", "INSERTED line 2.5"),
+    ///           line 29 is replaced ("line 29" -> "MODIFIED line 29").
+    /// This produces hunk 0 with: one '-' (delete old line 2), one '+' (add MODIFIED line 2),
+    /// one '+' (add INSERTED line 2.5), and hunk 1 with changes at line 29.
+    fn create_add_delete_hunk_file(dir: &std::path::Path) {
+        // Original content: 30 lines to ensure context separation between hunks
+        let original = (1..=30)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        std::fs::write(dir.join("multi.txt"), &original).unwrap();
+
+        // Stage and commit the original
+        let repo = git2::Repository::open(dir).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("multi.txt")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Add multi.txt", &tree, &[&head]).unwrap();
+        drop(index);
+        drop(tree);
+        drop(head);
+        drop(repo);
+
+        // Modify: replace line 2 and insert a new line, plus modify line 29
+        let mut lines: Vec<String> = original.lines().map(|s| s.to_string()).collect();
+        // Replace line 2 (index 1) with modified version
+        lines[1] = "MODIFIED line 2".to_string();
+        // Insert a new line after position 1
+        lines.insert(2, "INSERTED line 2.5".to_string());
+        // Modify line 29 (now at index 29 due to insertion)
+        lines[29] = "MODIFIED line 29".to_string();
+        let modified = lines.join("\n") + "\n";
+        std::fs::write(dir.join("multi.txt"), &modified).unwrap();
+    }
+
+    // Test 19 — stage_lines_stages_selected_adds
+    #[test]
+    fn stage_lines_stages_selected_adds() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        // Get the unstaged diff to find exact line indices in hunk 0
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        assert!(!unstaged.is_empty(), "expected unstaged diff");
+        let hunk0 = &unstaged[0].hunks[0];
+
+        // Find indices of add lines ('+') in hunk 0
+        let add_indices: Vec<u32> = hunk0.lines.iter().enumerate()
+            .filter(|(_, l)| matches!(l.origin, crate::git::types::DiffOrigin::Add))
+            .map(|(i, _)| i as u32)
+            .collect();
+        assert!(!add_indices.is_empty(), "expected at least one add line in hunk 0");
+
+        // Stage only the add lines from hunk 0
+        super::stage_lines_inner(&path, "multi.txt", 0, add_indices.clone(), &state_map)
+            .expect("stage_lines_inner failed");
+
+        // Verify: staged diff should have the add lines
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert!(!staged.is_empty(), "expected staged diff after staging add lines");
+        let staged_hunk0 = &staged[0].hunks[0];
+        let staged_adds: Vec<&crate::git::types::DiffLine> = staged_hunk0.lines.iter()
+            .filter(|l| matches!(l.origin, crate::git::types::DiffOrigin::Add))
+            .collect();
+        assert!(!staged_adds.is_empty(), "expected add lines in staged diff");
+
+        // The delete line should NOT be in the staged diff (it was not selected)
+        let staged_deletes: Vec<&crate::git::types::DiffLine> = staged_hunk0.lines.iter()
+            .filter(|l| matches!(l.origin, crate::git::types::DiffOrigin::Delete))
+            .collect();
+        assert!(staged_deletes.is_empty(), "expected no delete lines in staged diff when only adds were staged");
+    }
+
+    // Test 20 — stage_lines_stages_selected_deletes
+    #[test]
+    fn stage_lines_stages_selected_deletes() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        // Get the unstaged diff to find line indices in hunk 0
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        let hunk0 = &unstaged[0].hunks[0];
+
+        // Find indices of delete lines ('-') in hunk 0
+        let del_indices: Vec<u32> = hunk0.lines.iter().enumerate()
+            .filter(|(_, l)| matches!(l.origin, crate::git::types::DiffOrigin::Delete))
+            .map(|(i, _)| i as u32)
+            .collect();
+        assert!(!del_indices.is_empty(), "expected at least one delete line in hunk 0");
+
+        // Stage only the delete lines from hunk 0
+        super::stage_lines_inner(&path, "multi.txt", 0, del_indices, &state_map)
+            .expect("stage_lines_inner failed");
+
+        // Verify: staged diff should have the delete lines
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert!(!staged.is_empty(), "expected staged diff after staging delete lines");
+        let staged_hunk0 = &staged[0].hunks[0];
+        let staged_deletes: Vec<&crate::git::types::DiffLine> = staged_hunk0.lines.iter()
+            .filter(|l| matches!(l.origin, crate::git::types::DiffOrigin::Delete))
+            .collect();
+        assert!(!staged_deletes.is_empty(), "expected delete lines in staged diff");
+
+        // Unselected add lines should NOT be in the staged diff
+        let staged_adds: Vec<&crate::git::types::DiffLine> = staged_hunk0.lines.iter()
+            .filter(|l| matches!(l.origin, crate::git::types::DiffOrigin::Add))
+            .collect();
+        assert!(staged_adds.is_empty(), "expected no add lines in staged diff when only deletes were staged");
+    }
+
+    // Test 21 — stage_lines_mixed_selection
+    #[test]
+    fn stage_lines_mixed_selection() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        let hunk0 = &unstaged[0].hunks[0];
+
+        // Select ALL add and delete lines from hunk 0 (mixed)
+        let mixed_indices: Vec<u32> = hunk0.lines.iter().enumerate()
+            .filter(|(_, l)| matches!(l.origin, crate::git::types::DiffOrigin::Add | crate::git::types::DiffOrigin::Delete))
+            .map(|(i, _)| i as u32)
+            .collect();
+        assert!(mixed_indices.len() >= 2, "expected at least 2 add/delete lines for mixed selection");
+
+        super::stage_lines_inner(&path, "multi.txt", 0, mixed_indices, &state_map)
+            .expect("stage_lines_inner failed");
+
+        // Verify: staged diff should have both add and delete lines
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert!(!staged.is_empty(), "expected staged diff");
+        let staged_hunk0 = &staged[0].hunks[0];
+        let has_adds = staged_hunk0.lines.iter().any(|l| matches!(l.origin, crate::git::types::DiffOrigin::Add));
+        let has_dels = staged_hunk0.lines.iter().any(|l| matches!(l.origin, crate::git::types::DiffOrigin::Delete));
+        assert!(has_adds, "expected add lines in staged diff for mixed selection");
+        assert!(has_dels, "expected delete lines in staged diff for mixed selection");
+    }
+
+    // Test 22 — stage_lines_stale_index
+    #[test]
+    fn stage_lines_stale_index() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        // Try to stage lines from a non-existent hunk index
+        let result = super::stage_lines_inner(&path, "multi.txt", 99, vec![0], &state_map);
+        assert!(result.is_err(), "expected Err for out-of-range hunk index");
+        let err = result.unwrap_err();
+        assert_eq!(err.code, "stale_hunk_index", "expected stale_hunk_index error code");
+    }
+
+    // Test 23 — unstage_lines_unstages_selected
+    #[test]
+    fn unstage_lines_unstages_selected() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        // Stage entire file first
+        super::stage_file_inner(&path, "multi.txt", &state_map)
+            .expect("stage_file_inner failed");
+
+        // Get the staged diff to find line indices
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert!(!staged.is_empty(), "expected staged diff");
+        let hunk0 = &staged[0].hunks[0];
+
+        // Find indices of add lines in hunk 0 of staged diff
+        let add_indices: Vec<u32> = hunk0.lines.iter().enumerate()
+            .filter(|(_, l)| matches!(l.origin, crate::git::types::DiffOrigin::Add))
+            .map(|(i, _)| i as u32)
+            .collect();
+        assert!(!add_indices.is_empty(), "expected add lines in staged hunk 0");
+
+        // Unstage only the add lines from hunk 0
+        super::unstage_lines_inner(&path, "multi.txt", 0, add_indices, &state_map)
+            .expect("unstage_lines_inner failed");
+
+        // Verify: unstaged diff should now contain add lines that were unstaged
+        let unstaged_after = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        assert!(!unstaged_after.is_empty(), "expected unstaged diff after unstaging lines");
+        let has_adds_unstaged = unstaged_after[0].hunks.iter()
+            .flat_map(|h| &h.lines)
+            .any(|l| matches!(l.origin, crate::git::types::DiffOrigin::Add));
+        assert!(has_adds_unstaged, "expected add lines in unstaged diff after unstaging");
+    }
+
+    // Test 24 — discard_lines_discards_selected
+    #[test]
+    fn discard_lines_discards_selected() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_add_delete_hunk_file(dir.path());
+
+        // Get content of add lines in hunk 0 before discard
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        let hunk0 = &unstaged[0].hunks[0];
+
+        // Find indices and content of add lines
+        let add_info: Vec<(u32, String)> = hunk0.lines.iter().enumerate()
+            .filter(|(_, l)| matches!(l.origin, crate::git::types::DiffOrigin::Add))
+            .map(|(i, l)| (i as u32, l.content.clone()))
+            .collect();
+        assert!(!add_info.is_empty(), "expected add lines in hunk 0");
+        let add_indices: Vec<u32> = add_info.iter().map(|(i, _)| *i).collect();
+        let add_contents: Vec<String> = add_info.iter().map(|(_, c)| c.clone()).collect();
+
+        // Discard only the add lines from hunk 0
+        super::discard_lines_inner(&path, "multi.txt", 0, add_indices, &state_map)
+            .expect("discard_lines_inner failed");
+
+        // Verify: file content no longer has the discarded add lines
+        let file_content = std::fs::read_to_string(dir.path().join("multi.txt")).unwrap();
+        for content in &add_contents {
+            let trimmed = content.trim();
+            assert!(!file_content.contains(trimmed),
+                "expected discarded add line '{}' to be gone from file", trimmed);
+        }
     }
 }
