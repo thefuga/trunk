@@ -594,6 +594,57 @@ pub async fn discard_hunk(
         .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
+#[tauri::command]
+pub async fn stage_lines(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        stage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn unstage_lines(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        unstage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn discard_lines(
+    path: String,
+    file_path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        discard_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
 /// Build a partial unified diff patch from selected line indices.
 ///
 /// When `reverse` is false (staging): builds a forward patch from the source diff.
