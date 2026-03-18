@@ -231,7 +231,47 @@ pub fn stage_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    Err(TrunkError::new("not_implemented", "stage_hunk not yet implemented"))
+    let repo = open_repo_from_state(path, state_map)?;
+
+    // Generate diff for this file (index -> workdir)
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.pathspec(file_path);
+    let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
+
+    // Validate: at least one delta expected
+    if diff.deltas().len() == 0 {
+        return Err(TrunkError::new(
+            "file_not_found",
+            format!("No unstaged changes for: {}", file_path),
+        ));
+    }
+
+    // Count hunks via Patch to validate hunk_index
+    let patch = git2::Patch::from_diff(&diff, 0)?
+        .ok_or_else(|| TrunkError::new("file_not_found", "Binary or unchanged file"))?;
+    let num_hunks = patch.num_hunks();
+    if (hunk_index as usize) >= num_hunks {
+        return Err(TrunkError::new(
+            "stale_hunk_index",
+            format!("Hunk index {} out of range (file has {} hunks)", hunk_index, num_hunks),
+        ));
+    }
+    drop(patch); // Release borrow on diff
+
+    // Apply only the target hunk to the index
+    let target = hunk_index as usize;
+    let mut current: usize = 0;
+    let mut apply_opts = git2::ApplyOptions::new();
+    apply_opts.hunk_callback(move |_hunk| {
+        let apply = current == target;
+        current += 1;
+        apply
+    });
+
+    repo.apply(&diff, git2::ApplyLocation::Index, Some(&mut apply_opts))
+        .map_err(|e| TrunkError::new("hunk_apply_failed", e.message().to_owned()))?;
+
+    Ok(())
 }
 
 pub fn unstage_hunk_inner(
@@ -240,7 +280,53 @@ pub fn unstage_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    Err(TrunkError::new("not_implemented", "unstage_hunk not yet implemented"))
+    let repo = open_repo_from_state(path, state_map)?;
+
+    // Generate reversed diff (index -> HEAD) so applying it to index undoes the staged change
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.pathspec(file_path).reverse(true);
+
+    let diff = if is_head_unborn(&repo) {
+        repo.diff_tree_to_index(None, None, Some(&mut diff_opts))?
+    } else {
+        let head_tree = repo.head()?.peel_to_tree()?;
+        repo.diff_tree_to_index(Some(&head_tree), None, Some(&mut diff_opts))?
+    };
+
+    // Validate delta exists
+    if diff.deltas().len() == 0 {
+        return Err(TrunkError::new(
+            "file_not_found",
+            format!("No staged changes for: {}", file_path),
+        ));
+    }
+
+    // Validate hunk_index
+    let patch = git2::Patch::from_diff(&diff, 0)?
+        .ok_or_else(|| TrunkError::new("file_not_found", "Binary or unchanged file"))?;
+    let num_hunks = patch.num_hunks();
+    if (hunk_index as usize) >= num_hunks {
+        return Err(TrunkError::new(
+            "stale_hunk_index",
+            format!("Hunk index {} out of range (file has {} hunks)", hunk_index, num_hunks),
+        ));
+    }
+    drop(patch);
+
+    // Apply reversed hunk to index
+    let target = hunk_index as usize;
+    let mut current: usize = 0;
+    let mut apply_opts = git2::ApplyOptions::new();
+    apply_opts.hunk_callback(move |_hunk| {
+        let apply = current == target;
+        current += 1;
+        apply
+    });
+
+    repo.apply(&diff, git2::ApplyLocation::Index, Some(&mut apply_opts))
+        .map_err(|e| TrunkError::new("hunk_apply_failed", e.message().to_owned()))?;
+
+    Ok(())
 }
 
 pub fn discard_hunk_inner(
@@ -249,7 +335,46 @@ pub fn discard_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    Err(TrunkError::new("not_implemented", "discard_hunk not yet implemented"))
+    let repo = open_repo_from_state(path, state_map)?;
+
+    // Generate reversed diff (workdir -> index) so applying to workdir undoes the change
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.pathspec(file_path).reverse(true);
+    let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
+
+    if diff.deltas().len() == 0 {
+        return Err(TrunkError::new(
+            "file_not_found",
+            format!("No unstaged changes for: {}", file_path),
+        ));
+    }
+
+    // Validate hunk_index
+    let patch = git2::Patch::from_diff(&diff, 0)?
+        .ok_or_else(|| TrunkError::new("file_not_found", "Binary or unchanged file"))?;
+    let num_hunks = patch.num_hunks();
+    if (hunk_index as usize) >= num_hunks {
+        return Err(TrunkError::new(
+            "stale_hunk_index",
+            format!("Hunk index {} out of range (file has {} hunks)", hunk_index, num_hunks),
+        ));
+    }
+    drop(patch);
+
+    // Apply reversed hunk to workdir
+    let target = hunk_index as usize;
+    let mut current: usize = 0;
+    let mut apply_opts = git2::ApplyOptions::new();
+    apply_opts.hunk_callback(move |_hunk| {
+        let apply = current == target;
+        current += 1;
+        apply
+    });
+
+    repo.apply(&diff, git2::ApplyLocation::WorkDir, Some(&mut apply_opts))
+        .map_err(|e| TrunkError::new("hunk_apply_failed", e.message().to_owned()))?;
+
+    Ok(())
 }
 
 pub fn unstage_all_inner(
