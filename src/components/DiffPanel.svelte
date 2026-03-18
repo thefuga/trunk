@@ -159,6 +159,7 @@
     }
 
     if (e.shiftKey && lastClickedIndex !== null) {
+      e.preventDefault();
       const start = Math.min(lastClickedIndex, lineIndex);
       const end = Math.max(lastClickedIndex, lineIndex);
       const newSet = new Set(selectedLineIndices);
@@ -551,6 +552,7 @@
                 background: {lineBackground(line.origin, isSelected)};
                 color: {lineColor(line.origin)};
                 cursor: {isSelectable ? 'pointer' : 'default'};
+                user-select: {isSelectable ? 'none' : 'auto'};
               "
               onclick={(e) => isSelectable && handleLineClick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, e)}
             >{originSymbol(line.origin)}{line.content}</div>
