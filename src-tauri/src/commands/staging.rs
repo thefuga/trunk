@@ -225,6 +225,33 @@ pub fn stage_all_inner(
     Ok(())
 }
 
+pub fn stage_hunk_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    Err(TrunkError::new("not_implemented", "stage_hunk not yet implemented"))
+}
+
+pub fn unstage_hunk_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    Err(TrunkError::new("not_implemented", "unstage_hunk not yet implemented"))
+}
+
+pub fn discard_hunk_inner(
+    path: &str,
+    file_path: &str,
+    hunk_index: u32,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    Err(TrunkError::new("not_implemented", "discard_hunk not yet implemented"))
+}
+
 pub fn unstage_all_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
@@ -403,6 +430,7 @@ pub async fn unstage_all(
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use crate::commands::diff::{diff_unstaged_inner, diff_staged_inner};
     use crate::git::repository::tests::make_test_repo;
     use crate::git::types::FileStatusType;
 
@@ -649,5 +677,158 @@ mod tests {
             "expected unstaged >= 1 for untracked file, got {}",
             counts.unstaged
         );
+    }
+
+    // --- Multi-hunk test fixture helper ---
+
+    fn create_multi_hunk_file(dir: &std::path::Path) {
+        // Original content: 30 lines to ensure context separation between hunks
+        let original = (1..=30)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        std::fs::write(dir.join("multi.txt"), &original).unwrap();
+
+        // Stage and commit the original
+        let repo = git2::Repository::open(dir).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("multi.txt")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Add multi.txt", &tree, &[&head]).unwrap();
+        drop(index);
+        drop(tree);
+        drop(head);
+        drop(repo);
+
+        // Modify lines near the top AND near the bottom (creates 2 hunks)
+        let mut lines: Vec<String> = original.split('\n').map(|s| s.to_string()).collect();
+        lines[1] = "MODIFIED line 2".to_string();   // Near top -> hunk 0
+        lines[28] = "MODIFIED line 29".to_string();  // Near bottom -> hunk 1
+        std::fs::write(dir.join("multi.txt"), lines.join("\n")).unwrap();
+    }
+
+    // Test 13 — stage_hunk_stages_single_hunk
+    #[test]
+    fn stage_hunk_stages_single_hunk() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_multi_hunk_file(dir.path());
+
+        // Stage only hunk 0
+        super::stage_hunk_inner(&path, "multi.txt", 0, &state_map)
+            .expect("stage_hunk_inner failed");
+
+        // Verify: staged diff should have 1 hunk (hunk 0 was staged)
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert_eq!(staged.len(), 1, "expected 1 file in staged diff");
+        assert_eq!(staged[0].hunks.len(), 1, "expected 1 hunk in staged diff");
+
+        // Verify: unstaged diff should have 1 hunk (hunk 1 remains)
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        assert_eq!(unstaged.len(), 1, "expected 1 file in unstaged diff");
+        assert_eq!(unstaged[0].hunks.len(), 1, "expected 1 hunk remaining in unstaged diff");
+    }
+
+    // Test 14 — stage_hunk_stale_index
+    #[test]
+    fn stage_hunk_stale_index() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_multi_hunk_file(dir.path());
+
+        // Try to stage hunk 5, which is out of range for a 2-hunk file
+        let result = super::stage_hunk_inner(&path, "multi.txt", 5, &state_map);
+        assert!(result.is_err(), "expected Err for out-of-range hunk index");
+        let err = result.unwrap_err();
+        assert_eq!(err.code, "stale_hunk_index", "expected stale_hunk_index error code");
+    }
+
+    // Test 15 — stage_hunk_file_not_found
+    #[test]
+    fn stage_hunk_file_not_found() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Do NOT create any changes — clean working tree
+        let result = super::stage_hunk_inner(&path, "README.md", 0, &state_map);
+        assert!(result.is_err(), "expected Err for file with no unstaged changes");
+        let err = result.unwrap_err();
+        assert_eq!(err.code, "file_not_found", "expected file_not_found error code");
+    }
+
+    // Test 16 — unstage_hunk_unstages_single_hunk
+    #[test]
+    fn unstage_hunk_unstages_single_hunk() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_multi_hunk_file(dir.path());
+
+        // Stage the entire file first
+        super::stage_file_inner(&path, "multi.txt", &state_map)
+            .expect("stage_file_inner failed");
+
+        // Unstage hunk 0 only
+        super::unstage_hunk_inner(&path, "multi.txt", 0, &state_map)
+            .expect("unstage_hunk_inner failed");
+
+        // Verify: staged diff should have 1 hunk remaining (hunk 1 stays staged)
+        let staged = diff_staged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_staged_inner failed");
+        assert_eq!(staged.len(), 1, "expected 1 file in staged diff");
+        assert_eq!(staged[0].hunks.len(), 1, "expected 1 hunk remaining in staged diff");
+
+        // Verify: unstaged diff should have 1 hunk (hunk 0 is back in unstaged)
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        assert_eq!(unstaged.len(), 1, "expected 1 file in unstaged diff");
+        assert_eq!(unstaged[0].hunks.len(), 1, "expected 1 hunk in unstaged diff");
+    }
+
+    // Test 17 — discard_hunk_discards_single_hunk
+    #[test]
+    fn discard_hunk_discards_single_hunk() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        create_multi_hunk_file(dir.path());
+
+        // Discard hunk 0 only
+        super::discard_hunk_inner(&path, "multi.txt", 0, &state_map)
+            .expect("discard_hunk_inner failed");
+
+        // Verify: unstaged diff should have 1 hunk remaining (hunk 1)
+        let unstaged = diff_unstaged_inner(&path, "multi.txt", &state_map)
+            .expect("diff_unstaged_inner failed");
+        assert_eq!(unstaged.len(), 1, "expected 1 file in unstaged diff");
+        assert_eq!(unstaged[0].hunks.len(), 1, "expected 1 hunk remaining after discard");
+    }
+
+    // Test 18 — discard_hunk_file_not_found
+    #[test]
+    fn discard_hunk_file_not_found() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Do NOT create any changes — clean working tree
+        let result = super::discard_hunk_inner(&path, "README.md", 0, &state_map);
+        assert!(result.is_err(), "expected Err for file with no unstaged changes");
+        let err = result.unwrap_err();
+        assert_eq!(err.code, "file_not_found", "expected file_not_found error code");
     }
 }
