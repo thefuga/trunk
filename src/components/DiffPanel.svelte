@@ -52,11 +52,38 @@
     hunkElements = {};
   });
 
+  async function handleStageFile() {
+    if (!selectedPath) return;
+    hunkOperationInFlight = true;
+    try {
+      await safeInvoke('stage_file', { path: repoPath, filePath: selectedPath });
+      await onhunkaction?.(selectedPath);
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Stage file failed', 'error');
+    } finally {
+      hunkOperationInFlight = false;
+    }
+  }
+
+  async function handleUnstageFile() {
+    if (!selectedPath) return;
+    hunkOperationInFlight = true;
+    try {
+      await safeInvoke('unstage_file', { path: repoPath, filePath: selectedPath });
+      await onhunkaction?.(selectedPath);
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Unstage file failed', 'error');
+    } finally {
+      hunkOperationInFlight = false;
+    }
+  }
+
   async function handleStageHunk(filePath: string, hunkIndex: number) {
     hunkOperationInFlight = true;
     try {
       await safeInvoke('stage_hunk', { path: repoPath, filePath, hunkIndex });
-      showToast('Staged hunk', 'success');
       await onhunkaction?.(filePath);
     } catch (e) {
       const err = e as TrunkError;
@@ -70,7 +97,6 @@
     hunkOperationInFlight = true;
     try {
       await safeInvoke('unstage_hunk', { path: repoPath, filePath, hunkIndex });
-      showToast('Unstaged hunk', 'success');
       await onhunkaction?.(filePath);
     } catch (e) {
       const err = e as TrunkError;
@@ -102,14 +128,14 @@
   }
 
   function lineBackground(origin: string): string {
-    if (origin === 'Add') return 'rgba(74, 222, 128, 0.1)';
-    if (origin === 'Delete') return 'rgba(248, 113, 113, 0.1)';
+    if (origin === 'Add') return 'var(--color-diff-add-bg)';
+    if (origin === 'Delete') return 'var(--color-diff-delete-bg)';
     return 'transparent';
   }
 
   function lineColor(origin: string): string {
-    if (origin === 'Add') return '#4ade80';
-    if (origin === 'Delete') return '#f87171';
+    if (origin === 'Add') return 'var(--color-diff-add)';
+    if (origin === 'Delete') return 'var(--color-diff-delete)';
     return 'var(--color-text)';
   }
 
@@ -146,6 +172,47 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     ">{#if selectedPath}{selectedPath}{/if}</span>
+    {#if diffKind === 'unstaged'}
+      <button
+        disabled={hunkOperationInFlight}
+        style="
+          background: var(--color-btn-stage-bg);
+          border: 1px solid var(--color-btn-stage-border);
+          border-radius: 3px;
+          color: var(--color-btn-stage);
+          font-size: 11px;
+          font-family: var(--font-sans, sans-serif);
+          padding: 2px 8px;
+          cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+          opacity: {hunkOperationInFlight ? 0.4 : 1};
+          white-space: nowrap;
+          flex-shrink: 0;
+        "
+        onclick={handleStageFile}
+      >
+        Stage File
+      </button>
+    {:else if diffKind === 'staged'}
+      <button
+        disabled={hunkOperationInFlight}
+        style="
+          background: var(--color-btn-unstage-bg);
+          border: 1px solid var(--color-btn-unstage-border);
+          border-radius: 3px;
+          color: var(--color-btn-unstage);
+          font-size: 11px;
+          font-family: var(--font-sans, sans-serif);
+          padding: 2px 8px;
+          cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+          opacity: {hunkOperationInFlight ? 0.4 : 1};
+          white-space: nowrap;
+          flex-shrink: 0;
+        "
+        onclick={handleUnstageFile}
+      >
+        Unstage File
+      </button>
+    {/if}
     <button
       onclick={onclose}
       aria-label="Close diff"
@@ -230,31 +297,13 @@
               <button
                 disabled={hunkOperationInFlight}
                 style="
-                  background: none;
-                  border: 1px solid var(--color-border);
+                  background: var(--color-btn-discard-bg);
+                  border: 1px solid var(--color-btn-discard-border);
                   border-radius: 3px;
-                  color: var(--color-text);
+                  color: var(--color-btn-discard);
                   font-size: 11px;
                   font-family: var(--font-sans, sans-serif);
-                  padding: 4px 8px;
-                  cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
-                  opacity: {hunkOperationInFlight ? 0.4 : 1};
-                  white-space: nowrap;
-                "
-                onclick={() => handleStageHunk(fd.path, hunkIdx)}
-              >
-                Stage Hunk
-              </button>
-              <button
-                disabled={hunkOperationInFlight}
-                style="
-                  background: none;
-                  border: 1px solid var(--color-border);
-                  border-radius: 3px;
-                  color: #f87171;
-                  font-size: 11px;
-                  font-family: var(--font-sans, sans-serif);
-                  padding: 4px 8px;
+                  padding: 2px 8px;
                   cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
                   opacity: {hunkOperationInFlight ? 0.4 : 1};
                   white-space: nowrap;
@@ -263,17 +312,35 @@
               >
                 Discard Hunk
               </button>
+              <button
+                disabled={hunkOperationInFlight}
+                style="
+                  background: var(--color-btn-stage-bg);
+                  border: 1px solid var(--color-btn-stage-border);
+                  border-radius: 3px;
+                  color: var(--color-btn-stage);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
+                  opacity: {hunkOperationInFlight ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => handleStageHunk(fd.path, hunkIdx)}
+              >
+                Stage Hunk
+              </button>
             {:else if diffKind === 'staged'}
               <button
                 disabled={hunkOperationInFlight}
                 style="
-                  background: none;
-                  border: 1px solid var(--color-border);
+                  background: var(--color-btn-unstage-bg);
+                  border: 1px solid var(--color-btn-unstage-border);
                   border-radius: 3px;
-                  color: var(--color-text);
+                  color: var(--color-btn-unstage);
                   font-size: 11px;
                   font-family: var(--font-sans, sans-serif);
-                  padding: 4px 8px;
+                  padding: 2px 8px;
                   cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
                   opacity: {hunkOperationInFlight ? 0.4 : 1};
                   white-space: nowrap;
@@ -311,7 +378,7 @@
     animation: hunk-flash 0.6s ease-out;
   }
   @keyframes hunk-flash {
-    0% { background-color: rgba(96, 165, 250, 0.3); }
+    0% { background-color: var(--color-hunk-flash); }
     100% { background-color: transparent; }
   }
 </style>

@@ -217,10 +217,10 @@
           <button
             onclick={(e) => { e.stopPropagation(); handleDiscardAll(); }}
             style="
-              background: #f87171;
-              color: white;
+              background: var(--color-btn-discard-bg);
+              color: var(--color-btn-discard);
               font-size: 11px;
-              border: none;
+              border: 1px solid var(--color-btn-discard-border);
               border-radius: 4px;
               cursor: pointer;
               padding: 2px 8px;
@@ -233,10 +233,10 @@
           <button
             onclick={(e) => { e.stopPropagation(); stageAll(); }}
             style="
-              background: #22c55e;
-              color: white;
+              background: var(--color-btn-stage-bg);
+              color: var(--color-btn-stage);
               font-size: 11px;
-              border: none;
+              border: 1px solid var(--color-btn-stage-border);
               border-radius: 4px;
               cursor: pointer;
               padding: 2px 8px;
@@ -310,10 +310,10 @@
           <button
             onclick={(e) => { e.stopPropagation(); unstageAll(); }}
             style="
-              background: #f87171;
-              color: white;
+              background: var(--color-btn-unstage-bg);
+              color: var(--color-btn-unstage);
               font-size: 11px;
-              border: none;
+              border: 1px solid var(--color-btn-unstage-border);
               border-radius: 4px;
               cursor: pointer;
               padding: 2px 8px;

@@ -10,6 +10,26 @@
   --color-accent: #388bfd;
   --color-selected-row: rgba(56, 139, 253, 0.1);
 
+  /* Diff line colors */
+  --color-diff-add: #4ade80;
+  --color-diff-add-bg: rgba(74, 222, 128, 0.1);
+  --color-diff-delete: #f87171;
+  --color-diff-delete-bg: rgba(248, 113, 113, 0.1);
+
+  /* Hunk action button colors */
+  --color-btn-stage: #4ade80;
+  --color-btn-stage-bg: rgba(74, 222, 128, 0.15);
+  --color-btn-stage-border: rgba(74, 222, 128, 0.3);
+  --color-btn-discard: #f87171;
+  --color-btn-discard-bg: rgba(248, 113, 113, 0.15);
+  --color-btn-discard-border: rgba(248, 113, 113, 0.3);
+  --color-btn-unstage: #fbbf24;
+  --color-btn-unstage-bg: rgba(251, 191, 36, 0.15);
+  --color-btn-unstage-border: rgba(251, 191, 36, 0.3);
+
+  /* Hunk highlight flash */
+  --color-hunk-flash: rgba(96, 165, 250, 0.3);
+
   /* Graph lane colors — vivid 8-color dark-theme palette, high contrast on #0d1117 */
   --lane-0: #58a6ff;
   --lane-1: #f78166;
