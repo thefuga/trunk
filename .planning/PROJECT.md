@@ -66,7 +66,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 <!-- v0.7 Hunk Staging & Search -->
 
 - [ ] Stage/unstage individual hunks within a file diff
-- [ ] Search commit graph for hashes, messages, and branches with cmd+f
+- [x] Search commit graph for hashes, messages, and branches with cmd+f — Validated in Phase 36: search-ui
 
 ### Planned
 
@@ -85,7 +85,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.6 with 31 phases complete across 6 milestones. Phase 35 (search backend) complete — TDD search_commits command with case-insensitive SHA/message/ref/author matching over cached commit graph. Building v0.7 Hunk Staging & Search.
+- **Current state**: Shipped v0.6 with 31 phases complete across 6 milestones. Phase 36 (search UI) complete — floating SearchBar with Cmd+F activation, match highlighting, prev/next navigation with auto-scroll, SVG dimming. Building v0.7 Hunk Staging & Search.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -141,4 +141,4 @@ A developer can open any Git repository, browse its full commit history as a vis
 | SVG ref pills with HTML hover overlay | SVG handles static pills, HTML sibling handles hover expansion for reliable multi-ref display | ✓ Good — avoids SVG text layout complexity |
 
 ---
-*Last updated: 2026-03-19 after Phase 35 (search backend) complete*
+*Last updated: 2026-03-19 after Phase 36 (search-ui) complete*
