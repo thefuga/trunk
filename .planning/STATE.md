@@ -105,7 +105,8 @@ Plan: 2 of 2
 
 ### Pending Todos
 
-0 pending todos.
+1 pending todos.
+- Fix merge commit line bend direction (ui)
 
 ### Known Limitations
 
