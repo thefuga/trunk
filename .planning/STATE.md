@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: Hunk Staging & Search
 status: unknown
-stopped_at: Phase 36 context gathered
-last_updated: "2026-03-19T02:25:10.731Z"
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-19T02:40:31.026Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 35 — search-backend
+**Current focus:** Phase 36 — search-ui
 
 ## Current Position
 
-Phase: 35 (search-backend) — COMPLETE
-Plan: 1 of 1 (done)
+Phase: 36 (search-ui) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: 1 of 1 (done)
 | Phase 34 P02 | 2min | 2 tasks | 2 files |
 | Phase 34 P03 | 1min | 1 tasks | 1 files |
 | Phase 35-search-backend P01 | 2min | 2 tasks | 4 files |
+| Phase 36-search-ui P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Plan: 1 of 1 (done)
 - [Phase 34]: onmousedown handler placed before onclick on same div -- mousedown fires before click, preventing text selection before it starts
 - [Phase 35-search-backend]: Pure in-memory scan over CommitCache — no spawn_blocking needed
 - [Phase 35-search-backend]: search_commits_inner as testable pure fn, search_commits as thin Tauri wrapper
+- [Phase 36-search-ui]: SearchBar is a pure presentation component -- no IPC calls, parent manages all state
+- [Phase 36-search-ui]: Cmd+F uses capture:true addEventListener to intercept before WebView native find
+- [Phase 36-search-ui]: Search navigation (Enter/Shift+Enter) both scrolls and selects the commit
 
 ### Roadmap Evolution
 
@@ -118,7 +122,7 @@ Plan: 1 of 1 (done)
 
 ## Session Continuity
 
-Last session: 2026-03-19T02:25:10.725Z
-Stopped at: Phase 36 context gathered
-Resume file: .planning/phases/36-search-ui/36-CONTEXT.md
+Last session: 2026-03-19T02:40:18.840Z
+Stopped at: Completed 36-01-PLAN.md
+Resume file: None
 Next action: Execute Phase 34 Plan 02 (line-level staging frontend)

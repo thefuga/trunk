@@ -21,13 +21,13 @@ Requirements for v0.7 Hunk Staging & Search. Each maps to roadmap phases.
 
 ### Commit Graph Search
 
-- [ ] **SRCH-01**: User can open a search overlay bar in the commit graph with Cmd+F (macOS) / Ctrl+F
+- [x] **SRCH-01**: User can open a search overlay bar in the commit graph with Cmd+F (macOS) / Ctrl+F
 - [x] **SRCH-02**: User can search commits by message text (case-insensitive substring match)
 - [x] **SRCH-03**: User can search commits by SHA or SHA prefix
 - [x] **SRCH-04**: User can search commits by branch or ref name
 - [x] **SRCH-05**: User can search commits by author name
 - [ ] **SRCH-06**: Matching commits are visually highlighted in the graph while non-matching commits remain visible
-- [ ] **SRCH-07**: Search overlay displays match count (e.g., "3 of 17 matches")
+- [x] **SRCH-07**: Search overlay displays match count (e.g., "3 of 17 matches")
 - [ ] **SRCH-08**: User can navigate between matches with Enter (next) and Shift+Enter (previous)
 - [ ] **SRCH-09**: Commit graph auto-scrolls to show the current match
 - [ ] **SRCH-10**: User can close the search overlay with Escape, preserving scroll position
