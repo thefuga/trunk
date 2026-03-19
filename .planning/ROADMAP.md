@@ -136,6 +136,9 @@ Full details: [milestones/v0.6-ROADMAP.md](milestones/v0.6-ROADMAP.md)
 - [ ] Phase 35: Search Backend (5 requirements)
   **Goal:** Implement a backend search command that queries CommitCache for commits matching SHA, message, branch/ref, or author — returning all matches regardless of frontend pagination.
   **Requirements:** SRCH-02, SRCH-03, SRCH-04, SRCH-05, SRCH-11
+  **Plans:** 1 plan
+  Plans:
+  - [ ] 35-01-PLAN.md — TDD: implement search_commits with SHA/message/ref/author matching + Tauri wiring + TS types
   **Success criteria:**
   1. `search_commits` command returns `Vec<SearchResult>` (OID + match type) from CommitCache
   2. SHA prefix search matches via `oid.starts_with(query)`
