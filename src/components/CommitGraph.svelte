@@ -110,6 +110,8 @@
   const searchMatchOids = $derived(new Set(searchResults.map(r => r.oid)));
   // Derived: OID of current match for strong highlight
   const searchCurrentOid = $derived(searchResults.length > 0 ? searchResults[searchCurrentIndex]?.oid ?? null : null);
+  // Derived: whether SVG dimming should be active (search open + query + results)
+  const searchDimmingActive = $derived(searchOpen && searchQuery.length > 0 && searchResults.length > 0);
 
   async function loadStashMap() {
     try {
@@ -696,7 +698,11 @@
           query: query.trim(),
         });
         searchResults = results;
-        searchCurrentIndex = results.length > 0 ? 0 : 0;
+        searchCurrentIndex = 0;
+        if (results.length > 0) {
+          scrollToOid(results[0].oid);
+          oncommitselect?.(results[0].oid);
+        }
       } catch {
         searchResults = [];
         searchCurrentIndex = 0;
@@ -847,7 +853,7 @@
           class="absolute top-0"
           width={refOffset + Math.max(graphColWidth, naturalGraphWidth)}
           height={contentHeight}
-          style="left: 0; pointer-events: none; z-index: 1;"
+          style="left: 0; pointer-events: none; z-index: 1; {searchDimmingActive ? 'opacity: 0.2;' : ''}"
         >
           <!-- GRAPH-02: clip graph content to column width -->
           <defs>
@@ -1091,7 +1097,7 @@
         overlaySnippet={graphOverlay}
       >
         {#snippet renderItem(commit, index)}
-          <CommitRow {commit} rowIndex={index} onselect={commit.oid === '__wip__' ? () => onWipClick?.() : oncommitselect} oncontextmenu={handleRowContextMenu} {maxColumns} {columnWidths} {columnVisibility} selected={commit.oid === selectedCommitOid && commit.oid !== '__wip__'} rowHeight={displaySettings.rowHeight} />
+          <CommitRow {commit} rowIndex={index} onselect={commit.oid === '__wip__' ? () => onWipClick?.() : oncommitselect} oncontextmenu={handleRowContextMenu} {maxColumns} {columnWidths} {columnVisibility} selected={commit.oid === selectedCommitOid && commit.oid !== '__wip__'} rowHeight={displaySettings.rowHeight} isSearchMatch={searchMatchOids.has(commit.oid)} isCurrentMatch={commit.oid === searchCurrentOid} isSearchActive={searchOpen && searchQuery.length > 0 && searchResults.length > 0} />
         {/snippet}
       </VirtualList>
       {/key}
