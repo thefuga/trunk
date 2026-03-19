@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: Hunk Staging & Search
 status: completed
-stopped_at: Completed 34-02-PLAN.md
-last_updated: "2026-03-18T22:56:56.892Z"
-last_activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line selection UI, toolbar mode switching, IPC handlers)
+stopped_at: Completed 34-03-PLAN.md
+last_updated: "2026-03-19T00:56:59.730Z"
+last_activity: "2026-03-19 — Completed 34-03 gap-closure: shift+click text selection fix"
 progress:
   total_phases: 3
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-03-17 after v0.7 milestone started)
 ## Current Position
 
 Phase: 34 (Line-Level Staging) — Complete
-Plan: 02 of 02 complete
-Status: Phase 34 complete - line-level staging backend + frontend done
-Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line selection UI, toolbar mode switching, IPC handlers)
+Plan: 03 of 03 complete (includes gap-closure plan)
+Status: Phase 34 complete - line-level staging backend + frontend + shift+click text selection fix
+Last activity: 2026-03-19 — Completed 34-03 gap-closure: shift+click text selection fix
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line 
 | Phase 33 P01 | 2min | 2 tasks | 2 files |
 | Phase 34 P01 | 11min | 3 tasks | 2 files |
 | Phase 34 P02 | 2min | 2 tasks | 2 files |
+| Phase 34 P03 | 1min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,7 @@ Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line 
 | LAYOUT-01 in Phase 30 (not 31) | Right pane auto-open is triggered by ref navigation (GRAPH-03) — natural companion |
 | 5 phases (standard granularity) | 20 requirements cluster into 5 natural delivery boundaries; no artificial splits |
 | Phase 27 includes bug fixes | FIX-01/FIX-02 are trivial (1-line fixes), high-value, and unblock clean testing |
+
 - [Phase 27-foundation-icons-toast-bug-fixes]: Used @lucide/svelte (Svelte 5 package) not lucide-svelte for Svelte 5 compatibility — Svelte 5 requires @lucide/svelte; lucide-svelte causes SvelteComponent type errors
 - [Phase 27-foundation-icons-toast-bug-fixes]: Extracted get_dirty_counts_inner as sync fn for testability (mirrors get_status_inner pattern) — Enables unit tests to call inner fn directly without Tauri async runtime
 - [Phase 27-foundation-icons-toast-bug-fixes]: message column resize handle is never guarded by lastVisibleColumn — It targets author column width from the left edge; suppressing it would break author column resizing
@@ -88,6 +90,7 @@ Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line 
 - [Phase 34]: Single build_partial_patch_text with reverse flag instead of separate forward/reverse builders -- less code duplication
 - [Phase 34]: No new dependencies -- all patterns reused from existing codebase (safeInvoke, showToast, ask(), CSS custom properties)
 - [Phase 34]: Selection state uses Set<number> reassigned on mutation for Svelte 5 reactivity
+- [Phase 34]: onmousedown handler placed before onclick on same div -- mousedown fires before click, preventing text selection before it starts
 
 ### Roadmap Evolution
 
@@ -115,7 +118,7 @@ Last activity: 2026-03-18 — Completed 34-02 line-level staging frontend (line 
 
 ## Session Continuity
 
-Last session: 2026-03-18T06:57:16.030Z
-Stopped at: Completed 34-02-PLAN.md
+Last session: 2026-03-19T00:56:59.727Z
+Stopped at: Completed 34-03-PLAN.md
 Resume file: None
 Next action: Execute Phase 34 Plan 02 (line-level staging frontend)
