@@ -200,3 +200,20 @@ pub struct CommitDetail {
     pub committer_timestamp: i64,
     pub parent_oids: Vec<String>,
 }
+
+#[derive(Debug, Serialize, Clone)]
+pub enum OperationType {
+    None,
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct OperationInfo {
+    pub op_type: OperationType,
+    pub source_branch: Option<String>,
+    pub target_branch: Option<String>,
+    pub progress: Option<String>,
+}
