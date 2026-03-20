@@ -1,288 +1,302 @@
-# Features Research: Trunk v0.7 — Hunk Staging & Commit Graph Search
+# Feature Landscape: Conflict Resolution & Interactive Rebase
 
-**Domain:** Desktop Git GUI — granular staging, commit search
-**Researched:** 2026-03-17
+**Domain:** Git GUI conflict resolution and history rewriting (GitKraken-parity)
+**Researched:** 2026-03-20
+**Target milestone:** v0.8
 
-## Context
+## Table Stakes
 
-Trunk v0.7 adds two features: (1) stage/unstage individual hunks within file diffs, and (2) search the commit graph by SHA, message, and branch name via cmd+f. Trunk already has whole-file staging, a DiffPanel that renders hunks with headers and colored +/- lines, a commit graph with SVG overlay and virtualized scrolling, and a branch sidebar with search filtering.
+Features users expect from a Git GUI that claims to handle conflicts and rebase. Missing any of these makes the milestone feel incomplete.
 
-This research covers how GitKraken, Fork, Sublime Merge, lazygit, GitUI, and VS Code (Source Control) implement these features — what's table stakes, what differentiates, and what to avoid.
+### Conflict Resolution
 
----
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Conflicted file list in staging panel | Every Git GUI shows conflicted files distinctly from staged/unstaged. Users need to see what needs resolving at a glance. | Low | `WorkingTreeStatus.conflicted` field and `FileStatusType::Conflicted` already exist in the codebase. Need to render the conflicted list as a third section in StagingPanel with a distinct visual treatment (e.g., orange/yellow warning color). |
+| Three-panel merge editor (current / incoming / output) | GitKraken, Sublime Merge, SmartGit, Tower all use this layout. It is the universal standard for visual conflict resolution. | High | Top-left shows "current" (ours) file version, top-right shows "incoming" (theirs) version, bottom shows the editable merged output. All three panels scroll in sync. |
+| Per-hunk checkbox selection | GitKraken's core interaction: a checkbox next to each conflicting hunk lets the user add that entire chunk to the output with one click. | Med | Each conflict section (ours side and theirs side) gets a checkbox. Checking it adds those lines to the output panel. Unchecking removes them. |
+| Per-line click selection | GitKraken allows clicking individual highlighted lines (not just whole hunks) to add them to the output. | Med | Click a line number or the line itself on either the current or incoming panel to toggle it into/out of the output. Finer granularity than per-hunk. |
+| Editable output panel | The bottom output panel must be directly editable as a text editor. Users often need to manually tweak the merged result beyond what ours/theirs selection provides. | Med | Standard textarea/code editor in the output section. Users can type freely to adjust the merge result. |
+| "Take All Current" / "Take All Incoming" buttons | Quick resolution for files where the user already knows which side wins entirely. GitKraken has this as right-click on conflicted file AND as buttons in the merge tool header. | Low | Two buttons in the merge tool toolbar. Also available as right-click options on conflicted files in the staging panel (resolve without opening the editor). |
+| Conflict navigation arrows | GitKraken has arrow buttons (prev/next conflict) to jump between conflict sections within a file. Essential for large files with multiple conflicts. | Low | Up/Down arrow buttons in the merge tool toolbar. Jump to the next/previous conflict marker section within the current file. |
+| "Save and Mark Resolved" button | After resolving, user clicks this single button to save the output, stage the file (mark resolved), and move to the next conflicted file. | Low | Single action: write merged content to disk, `git add` the file (removes it from conflict state), auto-open next conflicted file if any remain. |
+| Conflict count badge / indicator | User needs to know how many files remain conflicted at all times. | Low | Badge on the conflicted section header in StagingPanel showing count. Update reactively as files are resolved. |
+| Merge/rebase operation banner | When in a merge or rebase state, a persistent banner at the top of the app indicates the operation in progress with Continue/Abort buttons. | Med | Detect `.git/MERGE_HEAD` or `.git/rebase-merge/` or `.git/rebase-apply/` to show contextual banner. Buttons invoke `git merge --continue`, `git rebase --continue`, `git rebase --abort`, etc. |
 
-## Hunk Staging
+### Interactive Rebase
 
-### How Each Tool Does It
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Rebase editor with commit list | The core interactive rebase UI: a modal/panel showing all commits that will be rebased, each with an action selector. Commits listed in application order (oldest first, matching `git rebase -i` todo format). | Med | Each row: commit SHA (short), commit message summary, action selector (dropdown or inline), drag handle. Default action is "Pick" for all commits. |
+| Pick action | Keep the commit as-is. The default action on every commit when the rebase editor opens. | Low | No transformation needed. Commit is cherry-picked onto the new base. |
+| Squash action | Combine the commit with its parent (the previous commit in the list). Merges commit messages. | Med | When set, the commit's changes fold into the previous commit. A message editor appears to let the user edit the combined commit message before starting. |
+| Drop action | Remove the commit entirely from history. | Low | Commit is skipped during replay. Visual indicator (strikethrough or dimmed row) shows it will be removed. |
+| Reword action | Edit the commit message without changing the commit's content. | Med | When the rebase executes and reaches a Reword commit, a dialog appears for the user to edit the commit summary and description. GitKraken opens a modal for this. |
+| Drag-and-drop commit reordering | Reorder commits by dragging rows up/down in the rebase editor list. | Med | Standard drag-and-drop list reordering. Visual feedback during drag (insertion line indicator, row elevation). Updates the commit application order. |
+| Keyboard shortcuts for actions | GitKraken: P=Pick, S=Squash, R=Reword, D=Drop. Quick action assignment without mouse. | Low | When a commit row is focused/selected, pressing the shortcut key changes its action. |
+| "Start Rebase" / "Cancel" buttons | Confirmation before executing the rebase. Cancel discards the rebase plan. | Low | "Start Rebase" validates the plan (e.g., can't squash the first commit) and executes. "Cancel" closes the editor with no changes. |
+| Reset button | Undo all changes in the rebase editor, returning all commits to their original "Pick" state and order. | Low | Single button resets the editor to its initial state without closing it. |
 
-**GitKraken:**
-- Click a file in WIP node to open diff view. Diff shows hunks separated by hunk headers.
-- Three diff view modes: **Hunk View** (collapsed context, shows only changed blocks), **Inline View** (full file with inline changes), **Split View** (side-by-side).
-- In Hunk View, each hunk has a **"Revert"** button to revert that hunk.
-- To stage specific lines: highlight lines in the diff, right-click → "Stage selected lines". Same for unstaging.
-- "Stage File" / "Unstage File" buttons remain on each file header for whole-file operations.
-- Discard hunks: right-click in diff → "Discard hunk". Available since late 2024.
-- No explicit "Stage Hunk" button per hunk — staging granularity is line-based via selection, or whole-file.
+### Merge Workflow
 
-**Fork:**
-- Diff view shows unified diff with hunk headers.
-- Features **line-by-line staging**: click a line to select it, shift-click for range, then stage selection.
-- "Stage / unstage changes line-by-line" is listed as a headline feature on their marketing page.
-- Stage Hunk: click the hunk header area to stage the entire hunk.
-- Split (side-by-side) diff view supported.
-- No per-hunk stage/unstage buttons visible in the UI — staging is selection-based.
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Merge via drag-and-drop on graph | GitKraken's primary merge initiation: drag source branch onto target branch, select "Merge" from context menu. | Med | Drag a branch ref pill (or branch row in sidebar) onto another branch. Show a context menu with "Merge [source] into [target]" option. |
+| Merge via right-click context menu | Right-click a branch in the sidebar or graph, select "Merge [branch] into [current branch]". | Low | Add "Merge into current branch" to branch context menu. Only enabled when the branch is not the current branch. |
+| Fast-forward merge handling | When merge is a fast-forward, just advance the branch pointer. No merge commit needed. | Low | Detect fast-forward possibility, perform it silently, refresh graph. Show toast: "Fast-forwarded [branch] to [target]". |
+| Merge commit creation (no conflicts) | When merge has no conflicts, auto-create the merge commit with the standard merge message. | Low | Create merge commit with default message "Merge branch '[source]' into [target]". Refresh graph to show the new merge commit. |
 
-**Sublime Merge:**
-- Diff is shown per file with collapsible hunks. Three staging granularities with explicit buttons:
-  - **"Stage file"** button at file level
-  - **"Stage hunk"** button at each hunk header
-  - **"Stage lines"**: select individual lines, then click "Stage lines" button
-- Context dragging: click and drag the edge of a hunk to expand/collapse context lines around changes.
-- Full file context toggle: button on hunk header toggles between hunk view and full file view.
-- This is the gold standard for hunk staging UX — explicit buttons at every level, no ambiguity.
+### Rebase Workflow
 
-**lazygit (TUI):**
-- In the files panel, press enter to view diff. Diff shows hunks.
-- Press **space** on a line to stage/unstage that single line.
-- Press **v** to enter visual (range) selection mode, then space to stage the range.
-- Press **a** to stage/unstage the entire current hunk.
-- Navigation: arrow keys move between lines, tab switches between staged/unstaged panels.
-- No mouse support for hunk staging — entirely keyboard-driven.
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Rebase via drag-and-drop on graph | GitKraken's primary rebase initiation: drag source branch onto target, select "Rebase [source] onto [target]" from context menu. | Med | Same drag interaction as merge, but the context menu offers "Rebase" as an alternative to "Merge". |
+| Rebase via right-click context menu | Right-click a branch, select "Rebase current branch onto [branch]". | Low | Context menu option on branches. |
+| Interactive rebase from right-click on commit | Right-click a parent commit in the graph, select "Interactive Rebase" to rebase current branch onto that commit. | Low | Opens the rebase editor with commits from current HEAD down to (not including) the selected commit. |
+| Mid-rebase conflict resolution | When a rebase hits a conflict, pause and show the merge tool for each conflicting file. After resolving all conflicts for the current commit, allow "Continue Rebase". | High | The rebase pauses at the conflicting commit. Conflicted files appear in the staging panel. User resolves each file using the merge tool. "Continue Rebase" button (in the operation banner) resumes. |
+| Abort rebase | Cancel an in-progress rebase and restore the repository to its pre-rebase state. | Low | "Abort Rebase" button in the operation banner. Runs `git rebase --abort`. Refreshes graph. |
+| Skip commit during rebase | Skip the current conflicting commit and continue with the next one. | Low | "Skip" button in the operation banner. Runs `git rebase --skip`. |
 
-**GitUI (TUI, Rust + git2):**
-- Stage, unstage, revert and reset at file, hunk, and line granularity.
-- In diff view: navigate to a hunk, press enter/space to stage it.
-- Line-level staging via visual selection mode.
-- Uses git2 crate (same as Trunk) for all operations.
+## Differentiators
 
-**VS Code Source Control:**
-- Gutter icons: each hunk in the diff editor has inline stage/unstage/revert gutter buttons.
-- Can also select lines and use "Stage Selected Ranges" from context menu or command palette.
-- Hunk headers shown as collapsible sections with "Stage Change" / "Revert Change" buttons in the gutter.
+Features that go beyond basic parity. Not strictly required but add significant value.
 
-### Table Stakes (must have)
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Fixup action in interactive rebase | Like Squash but discards the commit message. Standard git operation that GitKraken does NOT support (only Pick/Reword/Squash/Drop). Trunk can differentiate here. | Low | git2's `RebaseOperationType::Fixup` is fully supported. Add "Fixup" to the action selector with keyboard shortcut F. |
+| Edit action in interactive rebase | Pause rebase at a specific commit to let user amend it. GitKraken does NOT support this. | Med | git2's `RebaseOperationType::Edit` is supported. When rebase reaches an Edit commit, it pauses. The operation banner shows "Amend this commit, then Continue Rebase". |
+| Multi-commit selection for bulk actions | Select multiple commits in the rebase editor and set them all to the same action at once. | Low | Shift-click or Cmd-click to select multiple rows, then press a shortcut or use a dropdown to set all selected to the same action. |
+| Base (ancestor) version toggle in merge editor | Show the common ancestor version alongside current/incoming. Helps understand what changed on each side. GitKraken mentions "3-way" but primarily shows current+incoming+output. SmartGit explicitly shows the base. | Med | Optional fourth panel or toggle that shows the ancestor version. Helps with complex conflicts where understanding the original is crucial. |
+| Undo/redo for rebase operations | GitKraken 10.8+ added support for undoing interactive rebase. Trunk already has undo/redo infrastructure. | Med | Use existing undo/redo pattern. After a rebase completes, push the pre-rebase HEAD onto the undo stack so the user can `git reset --hard` back. |
+| Conflict diff syntax highlighting | Syntax-highlight the code in the merge editor panels based on file extension. | Med | Reuse whatever syntax highlighting exists in the diff panel. Apply to all three merge editor panels. |
+| "Rebase Last N Commits" shortcut | GitKraken 11.10 added this: shift-click a range of commits at the branch tip, then drag onto another branch to rebase just those commits. No editor, no list, no CLI. | Med | Select commit range in graph via shift-click, right-click or drag onto target branch, rebase only that range. Quick workflow for common case. |
+| Squash message editor | When squash is selected, show a combined message editor before starting the rebase so the user can craft the final message. | Low | Modal with the concatenated messages from all squashed commits, editable before execution. |
+| Cherry-pick multiple commits with rebase editor | GitKraken 10.8 added this: select multiple commits and cherry-pick them through the interactive rebase editor (reorder, squash, reword, drop). | Med | Reuse the rebase editor UI for cherry-pick operations on non-contiguous commits. |
 
-| Feature | Evidence | Notes |
-|---------|----------|-------|
-| **Per-hunk stage button** | Sublime Merge, VS Code, GitUI all have explicit hunk-level stage buttons. Fork and lazygit also support it (click header / press 'a'). | Button on each hunk header: "Stage Hunk" (unstaged view) or "Unstage Hunk" (staged view). Universally expected. |
-| **Per-hunk unstage button** | Mirrors stage. All tools that support hunk staging also support hunk unstaging at the same granularity. | Button on each hunk header in staged diff view. |
-| **Visual hunk boundaries** | Every tool shows hunk headers (`@@ -X,Y +A,B @@`) with distinct styling (muted color, background band). Hunks are visually separated sections. | Trunk already renders hunk headers — need to add interactive affordance (button) to them. |
-| **Hunk header as clickable/actionable region** | Sublime Merge, Fork, VS Code all make the hunk header row interactive. It's the natural place for the stage/unstage button. | Hunk header row becomes a flex container: `[hunk header text] [Stage Hunk / Unstage Hunk button]`. |
-| **Hover affordance on stage/unstage buttons** | All GUI tools show buttons on hover or always-visible. Not hidden behind right-click. Hunk staging must be discoverable. | Button always visible or appears on hover over hunk header. Green for stage, red for unstage — matching Trunk's existing color semantics. |
-| **Diff context awareness (unstaged vs staged)** | When viewing an unstaged file, hunks can be staged. When viewing a staged file, hunks can be unstaged. Different diff source = different action. | Trunk already has `diff_workdir` and `diff_staged` commands. The DiffPanel needs to know which context it's in to show the right button. |
-| **Discard hunk** | GitKraken ("Revert Hunk"), VS Code ("Revert Change"), Sublime Merge (context menu). Discarding individual hunks from working tree is expected alongside staging. | Third action on hunk header: "Discard Hunk" (only for unstaged hunks). Requires confirmation or undo capability. |
-| **Refresh after stage/unstage** | After staging a hunk, the diff must refresh to reflect the change. If a file has 3 hunks and you stage 1, the unstaged diff now shows 2 hunks. | IPC round-trip: stage hunk → re-fetch diff → re-render. Must feel instant (<100ms). |
+## Anti-Features
 
-### Differentiators (nice to have)
+Features to explicitly NOT build in v0.8.
 
-| Feature | Evidence | Complexity | Notes |
-|---------|----------|------------|-------|
-| **Line-level staging** | GitKraken (select lines → right-click → "Stage selected lines"), Fork (click/shift-click lines), Sublime Merge ("Stage lines" button), lazygit (space on line, v for range). | HIGH | Requires: (1) making individual diff lines selectable/highlightable, (2) computing the partial patch from selected lines, (3) applying that patch via git2. Significantly more complex than hunk staging. Fork, GitKraken, and Sublime Merge all have it, making it a differentiator but approaching table stakes for premium GUIs. |
-| **Split (side-by-side) diff view** | GitKraken, Fork, Sublime Merge all offer split view. Old file left, new file right. | MEDIUM-HIGH | Different rendering mode for DiffPanel. Requires computing line-to-line mapping between old and new. Not needed for hunk staging but pairs well with it. |
-| **Context expansion (show more lines)** | Sublime Merge: drag hunk edges to reveal more context. VS Code: "Show More Lines" button between hunks. | MEDIUM | Requires backend support to re-fetch diff with different context line count. git2's DiffOptions has `context_lines()` setting. |
-| **Hunk splitting** | `git add -p` in CLI has the `s` (split) command that breaks large hunks into smaller ones. None of the GUI tools expose explicit "split hunk" UI. Sublime Merge handles it via line-level staging. lazygit and GitUI handle it via line selection. | HIGH (if manual), N/A (via line staging) | git2 doesn't expose hunk splitting. The standard approach is: support line-level staging, which implicitly gives split-hunk capability. Explicit "split hunk" button is an anti-feature — nobody does it in GUIs. |
-| **Keyboard shortcuts for hunk navigation** | lazygit: arrow keys between hunks. VS Code: `Alt+F3` / `Alt+F5` jump between changes. | LOW | Add `[` / `]` or `↑` / `↓` keyboard shortcuts to jump between hunks in diff view. Low effort, high value for keyboard users. |
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| AI-powered conflict resolution | GitKraken's "Auto-resolve with AI" is a paid feature in Preview. Adds massive complexity (LLM integration, API keys, cost management) for questionable value. Not core UX. | Focus on making manual resolution fast and intuitive. Consider as a post-1.0 feature if there's demand. |
+| Conflict prevention / team detection | GitKraken's conflict prevention requires organization/team infrastructure, cloud sync, and real-time monitoring of teammates' branches. Way beyond scope. | Out of scope entirely. This is a team collaboration feature, not a conflict resolution feature. |
+| External merge tool integration | Spawning kdiff3, meld, Beyond Compare, etc. Adds configuration complexity and dependency on external tools. | Build the merge tool in-app. If users want external tools, they can use `git mergetool` in terminal. Consider as a future option. |
+| `git rebase --exec` support | The Exec operation runs arbitrary shell commands during rebase. Niche use case, security concerns with arbitrary command execution. | Support Pick, Reword, Edit, Squash, Fixup, Drop. Exec is for CI/automation, not GUI users. |
+| Rebase across remotes / force push flow | After rebase, the user needs to force push. Building a force push flow with safety checks adds scope. | Show a toast/warning after rebase: "Branch history has changed. You may need to force push." Let the user handle force push via toolbar or terminal. |
+| In-memory rebase | git2 supports `inmemory` rebase mode. Adds complexity for marginal UX benefit. | Use standard on-disk rebase. Working directory changes are expected and visible. |
 
-### Anti-Features (avoid)
+## Feature Dependencies
 
-| Feature | Why Avoid |
-|---------|-----------|
-| **Explicit "Split Hunk" button** | No GUI tool has this. The CLI's `git add -p` split is a workaround for not having line-level staging. GUIs solve this with line selection instead. Adding a split button adds confusion. |
-| **Inline editing in diff view** | Some tools (GitKraken, VS Code) allow editing files directly in the diff. This is a separate, complex feature. Mixing editing with staging creates ambiguous state. Defer entirely. |
-| **Three diff view modes (hunk/inline/split)** | GitKraken has all three. Adding view mode switching adds UI complexity. For v0.7, ship one good unified diff view with hunk staging. Split view is a separate future feature. |
-| **Drag-to-expand context lines** | Sublime Merge's context dragging is elegant but complex — requires re-diffing with different context sizes per hunk. Defer to future polish. |
-| **Staging from commit diff view** | Staging should only work from WIP (working directory) diffs. Allowing staging from historical commit diffs creates confusion. Keep commit diffs read-only. |
+```
+Conflicted file detection (staging panel) --> Merge editor (three-panel)
+                                          --> Right-click "Take All" resolution
 
----
+Operation state detection (.git/MERGE_HEAD, .git/rebase-*) --> Operation banner (Continue/Abort/Skip)
 
-## Commit Graph Search
+Merge via drag-drop / context menu --> Conflict detection --> Merge editor --> "Save and Mark Resolved" --> Merge commit
 
-### How Each Tool Does It
+Rebase editor UI --> Start Rebase execution --> Mid-rebase conflict --> Merge editor --> Continue Rebase
 
-**GitKraken:**
-- **Search bar** in upper-right corner of the app, always visible. Defaults to commit search.
-- Searches by: **commit message**, **SHA**, and **author name/email**.
-- Results update **live** as you type (incremental search).
-- Matching commit is **highlighted in the graph** — the graph scrolls to show the match.
-- Does NOT filter/hide non-matching commits — the full graph remains visible with the match highlighted.
-- No prev/next navigation for multiple results mentioned in docs — appears to highlight the first match.
-- Also has a **Command Palette** (Cmd+P) for actions, but commit search is the dedicated search bar.
+Merge editor (three-panel) --> Per-hunk checkboxes --> Per-line selection --> Editable output
+                           --> Conflict navigation arrows
+                           --> "Save and Mark Resolved"
 
-**Fork:**
-- **Filter bar** at the top of the commit list. Typing filters the visible commits.
-- Searches by: commit message, SHA, author, branch name.
-- Approach: **filters the commit list** to show only matching commits. Non-matches are hidden.
-- Can toggle between "Filter" mode (hide non-matches) and "Search" mode (highlight matches).
-- Supports regex in search queries.
+Drag-and-drop on graph --> Context menu with Merge/Rebase options
+```
 
-**Sublime Merge:**
-- **Cmd+F** (or Ctrl+F) opens a **search overlay bar** at the top of the commit graph.
-- `toggle_search` command bound to `super+f`.
-- Searches by: commit message, SHA, author, file path, branch name.
-- Rich query syntax: can prefix with `author:`, `path:`, `sha:`, `branch:` for scoped search.
-- Results: **filters the graph** to show only matching commits. The graph topology is preserved (connecting lines drawn between visible matching commits).
-- Has prev/next navigation buttons (or Enter/Shift+Enter) to jump between results.
-- Also supports `--` for regex and various git-log-style options.
+## MVP Recommendation
 
-**lazygit (TUI):**
-- Press **`/`** in any panel to enter **filter mode**. Types filter the visible list.
-- In commits panel: filters commits by message text.
-- In branches panel: filters branches by name.
-- Separate **search commits** feature: press `Ctrl+S` to search commits by message/SHA with prev/next navigation.
-- Does NOT search across panels simultaneously — each panel has its own filter.
+### Phase 1: Conflict Detection + Basic Resolution (foundation)
 
-**GitUI (TUI):**
-- Search/filter in commit log panel.
-- Searches by commit message text.
-- Filter mode narrows visible commits.
+Prioritize:
+1. **Conflicted file list in staging panel** -- renders the already-existing `conflicted` field from `WorkingTreeStatus`
+2. **Operation state banner** -- detect merge/rebase in progress, show Continue/Abort buttons
+3. **Right-click "Take All Current" / "Take All Incoming"** on conflicted files -- quickest path to functional conflict resolution without building the merge editor
+4. **Merge via context menu** -- right-click branch, "Merge into current branch"
+5. **Rebase via context menu** -- right-click branch, "Rebase onto"
 
-**VS Code Source Control (Timeline/Git Graph extension):**
-- Git Graph extension: Cmd+F opens search bar. Searches by message, SHA, author. Highlights matches in graph, with prev/next jump.
-- Does NOT filter the graph — highlights within it.
+Rationale: This gives users a complete merge/rebase workflow using quick resolution (take all ours/theirs). The three-panel merge editor is the biggest single component and can come in Phase 2.
 
-### Table Stakes (must have)
+### Phase 2: Three-Panel Merge Editor
 
-| Feature | Evidence | Notes |
-|---------|----------|-------|
-| **Cmd+F keyboard shortcut** | Sublime Merge, VS Code, and web browsers all use Cmd+F. Universal muscle memory. GitKraken has a dedicated search bar always visible but Cmd+F is the expected shortcut. | Must intercept Cmd+F when commit graph has focus. |
-| **Search overlay bar** | Sublime Merge and VS Code show a floating search bar at the top of the content area (not a sidebar, not a modal). This is the standard UX for in-place search. | Overlay bar at top of CommitGraph: text input + match count + prev/next buttons + close. |
-| **Search by commit message** | Every tool searches messages. This is the primary use case: "find the commit where I changed X". | Substring match (case-insensitive) against `summary` and optionally `body`. |
-| **Search by SHA (full or prefix)** | Every tool supports SHA search. Developers copy SHAs from GitHub, CI logs, error messages. Must find commits by hash. | Match against `oid` or `short_oid`. Prefix matching (typing `abc` matches `abc1234...`). |
-| **Search by branch/ref name** | GitKraken, Fork, Sublime Merge all support branch name search. Essential for finding where a branch points in a large graph. | Match against ref labels on commits. If a commit's refs contain a match, highlight that commit. |
-| **Highlight matches in graph** | GitKraken highlights matching commit. VS Code/Git Graph extension highlights. This preserves graph context — user sees where the match sits in the topology. | Highlight the matching row (background color change, or ring around the dot). Do NOT hide other commits. |
-| **Scroll to first match** | When search finds a result, the graph must scroll to show it. Otherwise the user has no feedback. | Auto-scroll virtual list to the row index of the first match. |
-| **Match count display** | "3 of 17 matches" — standard for search UIs (browsers, VS Code, Sublime Text). Gives user confidence about search completeness. | Display next to search input: `N of M` or `N results`. |
-| **Prev/Next navigation** | Enter (or Down arrow) → next match. Shift+Enter (or Up arrow) → previous match. Sublime Merge and VS Code both support this. Standard search pattern. | Prev/Next buttons in search bar + keyboard shortcuts. Wraps around at ends. |
-| **Escape to close** | Universal: Escape closes the search overlay and returns focus to the graph. | Clear search state, remove highlighting, close overlay. |
-| **Dismiss without clearing** | Pressing Escape should close the overlay but ideally keep the current scroll position (don't jump back to where user was before search). | Close overlay, preserve scroll position, remove highlights. |
+Prioritize:
+1. **Three-panel merge editor** with synced scrolling
+2. **Per-hunk checkbox selection**
+3. **Per-line click selection**
+4. **Editable output panel**
+5. **Conflict navigation arrows**
+6. **"Save and Mark Resolved" button**
+7. **"Take All" buttons in merge tool header**
 
-### Differentiators (nice to have)
+Rationale: This is the highest-complexity, highest-value feature. It replaces the need for external merge tools.
 
-| Feature | Evidence | Complexity | Notes |
-|---------|----------|------------|-------|
-| **Search by author** | GitKraken, Sublime Merge, Fork all support author search. | LOW | Match against `author_name` or `author_email`. Easy to add since data already exists in GraphCommit. |
-| **Live/incremental search** | GitKraken updates results as you type. Sublime Merge also live-filters. | MEDIUM | Debounce input (150-200ms), re-search on each keystroke. Must be fast enough for large repos (searching 10k+ commit messages). Consider running search in Rust backend for speed. |
-| **Scoped search prefixes** | Sublime Merge: `author:jane`, `sha:abc`, `branch:feature/`. Explicit scope narrows results. | LOW-MEDIUM | Parse input for `key:value` prefix. Route to appropriate field match. Good power-user feature. |
-| **Filter mode (hide non-matches)** | Fork and Sublime Merge can filter the graph to show only matching commits. Topology is preserved with connecting lines. | HIGH | Requires re-computing visible rows, adjusting SVG overlay to draw connections between non-adjacent visible rows. Complex interaction with virtual list and lane algorithm. |
-| **Regex support** | Fork supports regex. Sublime Merge has regex toggle. | LOW | Use Rust `regex` crate in backend search. Toggle button in search bar. |
-| **Search by file path** | Sublime Merge supports `path:` scoped search. "Find the commit that last changed this file." | HIGH | Requires walking commit trees to find path changes — expensive. Not a v0.7 priority. |
-| **Persist search across panel switches** | If user switches to diff panel and back, search state should be preserved. | LOW | Store search state in a shared `$state` module. |
+### Phase 3: Interactive Rebase Editor
 
-### Anti-Features (avoid)
+Prioritize:
+1. **Rebase editor with commit list** (Pick/Squash/Drop/Reword actions)
+2. **Drag-and-drop reordering**
+3. **Keyboard shortcuts** (P/S/R/D)
+4. **Start Rebase / Cancel / Reset buttons**
+5. **Mid-rebase conflict resolution** (reuses merge editor from Phase 2)
+6. **Fixup and Edit actions** (differentiators over GitKraken)
+7. **Interactive rebase from right-click on commit**
 
-| Feature | Why Avoid |
-|---------|-----------|
-| **Full graph filtering (hide non-matches)** | Extremely complex to implement with SVG overlay + virtual list + lane algorithm. Hiding rows breaks the virtual list's index assumptions and requires re-rendering all SVG paths. Fork and Sublime Merge took years to get this right. Not worth it for v0.7. Highlight-in-place is sufficient. |
-| **Search replacing sidebar filter** | The branch sidebar already has a text filter for branch names. Commit graph search is a separate feature. Don't merge them — they serve different purposes (find branch vs find commit). |
-| **Search modal/dialog** | A search modal (centered popup) blocks the graph view. The user needs to see the graph while searching. An overlay bar at the top (like Ctrl+F in browsers) is correct. |
-| **Fuzzy matching** | Fuzzy search (like fzf) sounds cool but commit messages and SHAs are not fuzzy targets. Substring match is what every tool uses and what users expect. Fuzzy matching would produce confusing results. |
-| **Saved searches / search history** | Over-engineering for v0.7. Users can type the same search again. |
-| **Cross-panel search** | Searching commits, branches, and files simultaneously creates ambiguous results. Each panel should have its own search. For v0.7, search is commit-graph-only. |
+Defer: Cherry-pick multiple commits via rebase editor, "Rebase Last N" shortcut, base ancestor toggle, undo/redo for rebase. These are differentiators that can ship in a later milestone.
 
----
+## GitKraken UX Reference: Detailed Flows
 
-## Complexity Notes
+### Merge Conflict Resolution Flow (Step-by-Step)
 
-### Hunk Staging
+1. **Initiation**: User drags branch A onto branch B in graph (or right-clicks branch and selects "Merge"). A context menu appears: "Merge [A] into [B]" / "Rebase [A] onto [B]" / "Interactive Rebase".
+2. **Conflict detection**: If merge produces conflicts, the commit panel (staging panel) shows conflicted files with a distinct warning icon. A banner appears at the top: "Merge in progress - resolve conflicts to continue."
+3. **File selection**: User clicks a conflicted file in the staging panel to open the merge tool.
+4. **Merge tool opens**: Three-panel layout appears:
+   - **Top-left**: Current branch version (ours). Read-only. Conflicting hunks highlighted.
+   - **Top-right**: Incoming branch version (theirs). Read-only. Conflicting hunks highlighted.
+   - **Bottom**: Output panel (editable). Initially contains the conflicted file with markers OR empty sections for conflict regions.
+5. **Hunk selection**: Each conflicting section on both left and right panels has a checkbox. Clicking the checkbox adds that entire hunk to the output. User can check hunks from both sides (selecting "both" for a conflict section).
+6. **Line selection**: User can click individual highlighted lines to add just those lines to the output. Finer control than hunk-level.
+7. **Direct editing**: User can type directly in the output panel to manually adjust the merged result.
+8. **Navigation**: Arrow buttons in the toolbar jump between conflict sections within the file.
+9. **"Take All" shortcut**: Button in toolbar to take all from current side or all from incoming side for the entire file.
+10. **Save**: User clicks "Save and Mark Resolved". The file is saved to disk, staged (`git add`), and removed from the conflicted list. The next conflicted file auto-opens.
+11. **Completion**: When all conflicted files are resolved, the user clicks "Continue Merge" (or "Commit") in the operation banner. The merge commit is created.
 
-| Task | Complexity | Why |
-|------|-----------|-----|
-| **Backend: stage hunk (Rust/git2)** | MEDIUM | git2 has `Repository::apply()` for applying patches. Need to: (1) construct a `git2::Diff` for a single hunk, (2) apply it to the index. Alternative: use `git2::Index::add_frombuffer()` to write the partially-staged file content to the index. Another approach: shell out to `git apply --cached` with a patch constructed from the hunk. git2's apply API is the cleanest but requires careful patch construction. |
-| **Backend: unstage hunk** | MEDIUM | Reverse of stage: construct a reverse patch for the hunk, apply to index. Or: recompute the file content without the hunk and write to index. |
-| **Backend: discard hunk** | MEDIUM | Apply reverse patch to working directory (not index). Or write the original content (from HEAD) for just those lines back to the file. |
-| **Frontend: hunk header buttons** | LOW | Add a button element to the existing hunk header div in DiffPanel.svelte. Wire to new Tauri command. |
-| **Frontend: diff refresh after hunk op** | LOW-MEDIUM | After staging a hunk, re-invoke `diff_workdir` / `diff_staged` and re-render. Must handle the case where staging the last hunk removes the file from the unstaged list. |
-| **Frontend: context awareness** | LOW | DiffPanel needs a prop or context to know if it's showing unstaged or staged diff. This determines whether buttons say "Stage" or "Unstage". |
+### Interactive Rebase Flow (Step-by-Step)
 
-**Total hunk staging estimate: MEDIUM complexity.** The main challenge is the git2 patch construction for partial staging. Once the backend command works, the frontend is straightforward.
+1. **Initiation**: User right-clicks a commit in the graph and selects "Interactive Rebase onto [commit]". OR drags branch onto target and selects "Interactive Rebase".
+2. **Editor opens**: A modal/panel shows the list of commits that will be rebased. Each commit row shows:
+   - Action selector (dropdown: Pick / Reword / Squash / Drop; with keyboard shortcuts P/R/S/D)
+   - Short SHA
+   - Commit message summary
+   - Drag handle for reordering
+3. **Default state**: All commits are set to "Pick".
+4. **User configures**: User changes actions on individual commits (dropdown or keyboard shortcut). Reorders by dragging rows. Can select multiple and batch-change actions.
+5. **Validation**: Can't squash the first commit (nothing to squash into). Visual warning if attempted.
+6. **Start**: User clicks "Start Rebase". The editor closes.
+7. **Execution**: Rebase begins applying commits in order.
+   - For **Pick**: Cherry-pick and auto-commit.
+   - For **Reword**: A dialog pops up for message editing, then commit.
+   - For **Squash**: Changes fold into previous commit. If multiple squashes in sequence, a message editor appears with all combined messages.
+   - For **Drop**: Commit is skipped.
+   - For **Edit** (differentiator): Rebase pauses. Banner shows "Amend this commit, then Continue Rebase."
+   - For **Fixup** (differentiator): Like squash but discards the commit message silently.
+8. **Conflict during rebase**: If a commit conflicts:
+   - Rebase pauses at the conflicting commit.
+   - Operation banner: "Rebase in progress - resolve conflicts to continue. [Continue] [Skip] [Abort]"
+   - Conflicted files appear in staging panel.
+   - User resolves each file using the merge tool (same flow as merge conflicts).
+   - User clicks "Continue Rebase" to proceed to the next commit.
+9. **Abort**: At any point, "Abort Rebase" restores the repository to its pre-rebase state.
+10. **Completion**: After all commits are processed, the rebase finishes. Graph refreshes showing the rewritten history. Toast: "Rebase complete."
 
-### Commit Graph Search
+### Merge Tool Component Anatomy
 
-| Task | Complexity | Why |
-|------|-----------|-----|
-| **Backend: search command** | LOW | Search is a filter over `GraphCommit[]` data that's already cached in `CommitCache`. New Tauri command `search_commits(repo, query)` iterates cached commits and returns matching indices/OIDs. Fast: 10k commits × string contains check = <1ms. |
-| **Frontend: search overlay component** | MEDIUM | New Svelte component: SearchBar.svelte. Text input, match count, prev/next buttons, close button. Positioned absolutely at top of CommitGraph container. Cmd+F keybinding to toggle. |
-| **Frontend: highlight matching rows** | LOW | Pass `Set<string>` of matching OIDs to CommitRow. Matching rows get a subtle background highlight (yellow/amber tint). |
-| **Frontend: scroll to match** | LOW | Virtual list `scrollToIndex()` already needed (and may already exist from v0.6 ref navigation). Jump to first match on search, advance on prev/next. |
-| **Frontend: keyboard handling** | LOW | Cmd+F to open, Escape to close, Enter for next, Shift+Enter for previous. Standard event handlers. |
+```
++------------------------------------------------------------------+
+|  Merge Tool Toolbar                                               |
+|  [<< Prev Conflict] [Next Conflict >>]  [Take All Current]       |
+|  [Take All Incoming]                    [Save and Mark Resolved]  |
++-----------------------------------+------------------------------+
+|  Current (Ours)                   |  Incoming (Theirs)            |
+|                                   |                               |
+|  [x] hunk 1 (lines 10-15)        |  [x] hunk 1 (lines 10-18)    |
+|      context line                 |      context line             |
+|  +   added line (clickable)       |  +   added line (clickable)   |
+|  +   added line (clickable)       |  +   added line (clickable)   |
+|      context line                 |      context line             |
+|                                   |                               |
+|  [ ] hunk 2 (lines 30-35)        |  [ ] hunk 2 (lines 30-33)    |
+|      context line                 |      context line             |
+|  -   removed line                 |  +   added line               |
+|      context line                 |      context line             |
++-----------------------------------+------------------------------+
+|  Output (Editable)                                                |
+|                                                                   |
+|      context line                                                 |
+|      added line (from checked current hunk 1)                     |
+|      added line (from checked current hunk 1)                     |
+|      added line (from checked incoming hunk 1)                    |
+|      added line (from checked incoming hunk 1)                    |
+|      context line                                                 |
+|                                                                   |
+|      << unresolved conflict section (hunk 2) >>                   |
+|                                                                   |
++------------------------------------------------------------------+
+```
 
-**Total search estimate: LOW-MEDIUM complexity.** Mostly frontend work. The search itself is trivial (string matching on cached data). The UX component is the main effort.
+### Interactive Rebase Editor Anatomy
 
----
+```
++------------------------------------------------------------------+
+|  Interactive Rebase: [source-branch] onto [target-branch]         |
+|                                                     [Reset]       |
++------------------------------------------------------------------+
+|  Action    |  SHA      |  Message                    |  Drag     |
++------------------------------------------------------------------+
+|  [Pick v]  |  a1b2c3d  |  Add user authentication    |  :::      |
+|  [Squash v]|  e4f5g6h  |  Fix typo in auth module    |  :::      |
+|  [Pick v]  |  i7j8k9l  |  Add password reset flow    |  :::      |
+|  [Drop v]  |  m0n1o2p  |  WIP: debugging             |  :::      |
+|  [Reword v]|  q3r4s5t  |  Update dependencies        |  :::      |
++------------------------------------------------------------------+
+|  Keyboard: P=Pick  S=Squash  R=Reword  D=Drop  F=Fixup  E=Edit  |
++------------------------------------------------------------------+
+|                              [Cancel]  [Start Rebase]             |
++------------------------------------------------------------------+
+```
 
-## Dependencies on Existing Features
+### Operation Banner Anatomy
 
-### Hunk Staging depends on:
+```
++------------------------------------------------------------------+
+|  MERGE IN PROGRESS                    [Continue]  [Abort]         |
++------------------------------------------------------------------+
 
-| Existing Feature | How Used | Status |
-|-----------------|----------|--------|
-| **DiffPanel.svelte** | Already renders hunks with headers and colored lines. Hunk staging adds buttons to each hunk header div. | Ready — extend, not replace |
-| **DiffHunk type (Rust + TS)** | Already has `header`, `old_start`, `old_lines`, `new_start`, `new_lines`, `lines[]`. Contains all data needed to construct a patch for staging. | Ready — no changes needed |
-| **`diff_workdir` / `diff_staged` commands** | Already return `FileDiff[]` with hunks. Used to refresh diff after staging a hunk. | Ready — reuse as-is |
-| **`stage_file` / `unstage_file` commands** | Existing whole-file staging. Hunk staging is a new parallel command (`stage_hunk`, `unstage_hunk`) — does not replace whole-file staging. | Ready — parallel path |
-| **StagingPanel.svelte** | Shows unstaged/staged file lists. After hunk staging, file may split between lists (partially staged). StagingPanel already handles this case if the file appears in both lists. | Ready — but verify partial staging display |
-| **Filesystem watcher + auto-refresh** | After staging a hunk, the watcher should trigger a status refresh. Existing `repo-changed` event flow handles this. | Ready |
-| **Toast notifications (v0.6)** | Can show success/error toasts for stage/unstage/discard operations. | Ready |
++------------------------------------------------------------------+
+|  REBASE IN PROGRESS (3/7 commits applied)                        |
+|  Current commit: a1b2c3d "Add user auth"                         |
+|                                       [Continue]  [Skip]  [Abort]|
++------------------------------------------------------------------+
+```
 
-### Commit Graph Search depends on:
+## Implementation Notes (git2 / git CLI boundaries)
 
-| Existing Feature | How Used | Status |
-|-----------------|----------|--------|
-| **CommitGraph.svelte** | Container for the search overlay. Search results highlight rows within it. | Ready — add overlay child |
-| **CommitRow.svelte** | Needs to accept a `highlighted` or `isSearchMatch` prop for visual styling. | Ready — add prop |
-| **VirtualList.svelte** | Needs `scrollToIndex(idx)` method for jumping to search results. | May need enhancement — check if already exposed from v0.6 ref navigation feature |
-| **CommitCache (Rust)** | Search queries run against cached commits. No additional data loading needed. | Ready — `GraphResult` has all commit data |
-| **GraphCommit type** | Has `oid`, `short_oid`, `summary`, `author_name`, `refs[]` — all searchable fields. | Ready |
-| **BranchSidebar search** | Sidebar already has a text filter for branches (implemented in v0.6). Separate from commit graph search but establishes the search UX pattern. | Ready — separate feature, consistent pattern |
+### What git2 can handle natively:
+- Merge: `repo.merge()`, `index.conflicts()`, `index.conflict_get(path)`, `index.has_conflicts()`
+- Conflict entries: `IndexConflict` provides ancestor/ours/theirs blob OIDs for each conflicted file
+- Rebase: `repo.rebase()` with full `RebaseOperationType` support (Pick, Reword, Edit, Squash, Fixup, Exec)
+- Rebase iteration: `Rebase` implements `Iterator<Item = Result<RebaseOperation>>` with `next()`, `commit()`, `abort()`, `finish()`
 
----
+### What should use git CLI (subprocess):
+- Mid-rebase continue/abort/skip: `git rebase --continue`, `git rebase --abort`, `git rebase --skip` (matches existing pattern of shelling out for complex state machine operations like cherry-pick/revert)
+- Merge continue: `git merge --continue` or `git commit` after resolving all conflicts
+- Interactive rebase: While git2 has the Rebase API, the interactive rebase flow is complex enough that using `git rebase -i` with a custom `GIT_SEQUENCE_EDITOR` script may be simpler and more reliable for the initial implementation
 
-## Implementation Recommendations
-
-### Hunk Staging — Recommended Approach
-
-**Backend (Rust):** The cleanest approach with git2 is:
-1. `stage_hunk(repo_path, file_path, hunk_index)`: Read the working directory file. Read the index (staged) version. Construct the "desired index content" by taking the current index content and applying only the target hunk's changes. Write this content to the index via `Index::add_frombuffer()`.
-2. Alternative: Build a minimal unified diff patch string for the single hunk and apply via `git2::Repository::apply()` with `ApplyLocation::Index`.
-3. `unstage_hunk`: Same approach in reverse — construct index content with the hunk removed.
-4. `discard_hunk`: Build reverse patch, apply to working directory file.
-
-**Frontend (Svelte):** 
-1. Add `diffContext: 'unstaged' | 'staged' | 'commit'` prop to DiffPanel.
-2. When `diffContext` is `'unstaged'`: show "Stage Hunk" + "Discard Hunk" buttons on each hunk header.
-3. When `diffContext` is `'staged'`: show "Unstage Hunk" button on each hunk header.
-4. When `diffContext` is `'commit'`: no buttons (read-only).
-5. On button click: invoke `stage_hunk` / `unstage_hunk` / `discard_hunk` → re-fetch diff → re-render.
-
-### Commit Graph Search — Recommended Approach
-
-**Backend (Rust):**
-1. `search_commits(repo_path, query)` — iterate `CommitCache` entries, match `query` (case-insensitive substring) against `summary`, `oid`, `short_oid`, and ref names. Return `Vec<usize>` (matching row indices) + total count.
-2. Consider: doing search on frontend since `GraphCommit[]` is already available in JS. Avoids IPC round-trip. 10k commits × 3 string comparisons is fast in JS.
-
-**Frontend (Svelte):**
-1. New `SearchOverlay.svelte` component: positioned absolute at top of CommitGraph.
-2. Cmd+F toggles visibility. Escape closes.
-3. Input field with debounced search (100-150ms).
-4. Display: "N of M matches" + [Prev] [Next] buttons.
-5. Pass `matchingOids: Set<string>` to CommitGraph for row highlighting.
-6. On result navigation: call `virtualList.scrollToIndex(matchIndex)`.
-
----
+### Existing codebase hooks:
+- `WorkingTreeStatus.conflicted: Vec<FileStatus>` already exists in types
+- `FileStatusType::Conflicted` variant exists
+- `classify_index()` already handles `Status::CONFLICTED`
+- DiffPanel already has per-hunk navigation, hunk actions, line selection -- these patterns directly inform the merge editor design
+- Context menu infrastructure exists for right-click actions on branches and commits
+- Toast notification system exists for operation feedback
+- Operation state (merge/rebase in progress) can be detected by checking for `.git/MERGE_HEAD`, `.git/rebase-merge/`, `.git/rebase-apply/` files
 
 ## Sources
 
-- GitKraken Desktop docs — staging (Feb 2026): explicit line staging via right-click, hunk revert in Hunk View [HIGH confidence — fetched directly]
-- GitKraken Desktop docs — diff (Mar 2026): Hunk/Inline/Split views, revert hunk button per hunk [HIGH confidence — fetched directly]
-- GitKraken Desktop docs — search (Jan 2026): search bar searches by message/SHA/author, highlights in graph, live results [HIGH confidence — fetched directly]
-- Fork homepage: "Stage / unstage changes line-by-line" as headline feature [HIGH confidence — fetched directly]
-- Sublime Merge docs — getting started: "Stage file" / "Stage hunk" / "Stage lines" explicit buttons, screenshot reference [HIGH confidence — fetched directly]
-- Sublime Merge docs — key bindings: `toggle_search` bound to `super+f`, search_mode context key [HIGH confidence — fetched directly]
-- Sublime Merge docs — diff context: context dragging and full-file toggle [HIGH confidence — fetched directly]
-- lazygit README: space to stage line, `v` for range selection, `a` for whole hunk, `/` for filter mode [HIGH confidence — fetched directly]
-- GitUI README: "Stage, unstage, revert and reset files, hunks and lines", search commit log [HIGH confidence — fetched directly]
-- Trunk codebase: DiffPanel.svelte, types.ts (DiffHunk/DiffLine/FileDiff), src-tauri/src/commands/diff.rs, src-tauri/src/git/types.rs [HIGH confidence — direct code review]
-
----
-*Feature landscape for: Trunk v0.7 — Hunk Staging & Commit Graph Search*
-*Researched: 2026-03-17*
+- [GitKraken Merge Conflict Tool](https://www.gitkraken.com/features/merge-conflict-resolution-tool) -- MEDIUM confidence
+- [GitKraken Branching and Merging docs](https://help.gitkraken.com/gitkraken-desktop/branching-and-merging/) -- HIGH confidence
+- [GitKraken Interactive Rebase docs](https://help.gitkraken.com/gitkraken-desktop/interactive-rebase/) -- HIGH confidence
+- [GitKraken Conflict Prevention docs](https://help.gitkraken.com/gitkraken-desktop/conflict-prevention/) -- MEDIUM confidence
+- [GitKraken merge conflict blog post](https://www.gitkraken.com/blog/merge-conflict-tool) -- MEDIUM confidence
+- [GitKraken merge conflict tutorial](https://www.gitkraken.com/learn/git/tutorials/how-to-resolve-merge-conflict-in-git) -- MEDIUM confidence
+- [GitKraken rebase tutorial](https://www.gitkraken.com/learn/git/problems/git-rebase-branch) -- MEDIUM confidence
+- [GitKraken interactive rebase tutorial](https://www.gitkraken.com/learn/git/problems/git-interactive-rebase) -- MEDIUM confidence
+- [GitKraken Desktop 11.10 release](https://www.gitkraken.com/blog/gitkraken-desktop-11-10-from-top-requests-to-todays-release) -- MEDIUM confidence
+- [GitKraken Desktop 10.x release notes](https://help.gitkraken.com/gitkraken-desktop/10x/) -- HIGH confidence
+- [SmartGit conflict resolution](https://www.smartgit.dev/features/conflict-resolution/) -- MEDIUM confidence
+- [git2 Index API (conflicts)](https://docs.rs/git2/latest/git2/struct.Index.html) -- HIGH confidence
+- [git2 Rebase API](https://docs.rs/git2/latest/git2/struct.Rebase.html) -- HIGH confidence
+- [git2 RebaseOperationType](https://docs.rs/git2/latest/git2/enum.RebaseOperationType.html) -- HIGH confidence
+- [git2-rs rebase source](https://github.com/rust-lang/git2-rs/blob/master/src/rebase.rs) -- HIGH confidence
