@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FileDiff, CommitDetail, DiffStatus } from '../lib/types.js';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
   const STATUS_ICONS: Record<DiffStatus, { symbol: string; color: string }> = {
     Added:     { symbol: '+',  color: '#4ade80' },
@@ -17,9 +18,23 @@
     selectedFile: string | null;
     onfileselect: (path: string) => void;
     onclose: () => void;
+    repoPath?: string;
   }
 
-  let { commitDetail, fileDiffs, selectedFile, onfileselect, onclose }: Props = $props();
+  let { commitDetail, fileDiffs, selectedFile, onfileselect, onclose, repoPath = '' }: Props = $props();
+
+  async function showFileContextMenu(e: MouseEvent, filePath: string) {
+    e.preventDefault();
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + filePath;
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+      ],
+    });
+    await menu.popup();
+  }
 
   let authorDate = $derived(
     new Date(commitDetail.author_timestamp * 1000).toLocaleString()
@@ -144,6 +159,7 @@
           <button
             type="button"
             onclick={() => onfileselect(fd.path)}
+            oncontextmenu={(e) => showFileContextMenu(e, fd.path)}
             style="
               width: 100%;
               height: 26px;

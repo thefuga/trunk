@@ -3,6 +3,7 @@
   import { safeInvoke, type TrunkError } from '../lib/invoke.js';
   import type { WorkingTreeStatus, FileStatusType } from '../lib/types.js';
   import { showToast } from '../lib/toast.svelte.js';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import FileRow from './FileRow.svelte';
   import CommitForm from './CommitForm.svelte';
   import { ChevronDown, ChevronRight } from '@lucide/svelte';
@@ -87,15 +88,34 @@
     }
   }
 
-  async function showFileContextMenu(e: MouseEvent, filePath: string, fileStatus: FileStatusType) {
-    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+  async function showUnstagedContextMenu(e: MouseEvent, filePath: string, fileStatus: FileStatusType) {
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
     const isUntracked = fileStatus === 'New';
+    const absPath = repoPath + '/' + filePath;
     const menu = await Menu.new({
       items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
+        await MenuItem.new({ text: 'Stage File', action: () => { stageFile(filePath); } }),
         await MenuItem.new({
           text: isUntracked ? 'Delete File' : 'Discard Changes',
           action: () => { handleDiscardFile(filePath, fileStatus).catch(() => {}); },
         }),
+      ],
+    });
+    await menu.popup();
+  }
+
+  async function showStagedContextMenu(e: MouseEvent, filePath: string) {
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + filePath;
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
+        await MenuItem.new({ text: 'Unstage File', action: () => { unstageFile(filePath); } }),
       ],
     });
     await menu.popup();
@@ -259,7 +279,7 @@
               isLoading={loadingFiles.has(f.path)}
               onaction={() => stageFile(f.path)}
               onclick={() => onfileselect?.(f.path, 'unstaged')}
-              oncontextmenu={(e) => showFileContextMenu(e, f.path, f.status)}
+              oncontextmenu={(e) => showUnstagedContextMenu(e, f.path, f.status)}
             />
           {/each}
           {#each status?.conflicted ?? [] as f (f.path)}
@@ -269,7 +289,7 @@
               isLoading={loadingFiles.has(f.path)}
               onaction={() => stageFile(f.path)}
               onclick={() => onfileselect?.(f.path, 'unstaged')}
-              oncontextmenu={(e) => showFileContextMenu(e, f.path, f.status)}
+              oncontextmenu={(e) => showUnstagedContextMenu(e, f.path, f.status)}
             />
           {/each}
         </div>
@@ -335,6 +355,7 @@
               isLoading={loadingFiles.has(f.path)}
               onaction={() => unstageFile(f.path)}
               onclick={() => onfileselect?.(f.path, 'staged')}
+              oncontextmenu={(e) => showStagedContextMenu(e, f.path)}
             />
           {/each}
         </div>

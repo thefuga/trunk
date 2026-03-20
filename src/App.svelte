@@ -429,6 +429,7 @@
             selectedFile={selectedCommitFile}
             onfileselect={handleCommitFileSelect}
             onclose={clearCommit}
+            repoPath={repoPath!}
           />
         {:else}
           <StagingPanel repoPath={repoPath!} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} />
