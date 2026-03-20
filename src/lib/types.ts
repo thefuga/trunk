@@ -202,4 +202,5 @@ export interface OverlayRefPill {
   dotCy: number;          // target commit dot Y coordinate
   commitColorIndex: number; // commit's lane color for connector line
   rowIndex: number;       // for virtualization filtering
+  isHollow: boolean;      // true for merge/stash/WIP dots (stroke-only, no fill)
 }

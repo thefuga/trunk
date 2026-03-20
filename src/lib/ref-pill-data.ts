@@ -133,6 +133,7 @@ export function buildRefPillData(
       dotCy: cy(node.y),
       commitColorIndex: node.colorIndex,
       rowIndex: node.y,
+      isHollow: node.isMerge || node.isStash || node.isWip,
     });
   }
 

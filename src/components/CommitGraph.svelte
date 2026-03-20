@@ -926,10 +926,11 @@
                 <!-- Connector line from pill to commit dot (uses sticky X position, scroll-adjusted) -->
                 {#if columnVisibility.graph}
                   {@const stickyDotCx = Math.max(displaySettings.laneWidth / 2, Math.min(graphColWidth - 2 * COLUMN_PADDING_X - displaySettings.dotRadius, pill.dotCx - scrollX))}
+                  {@const connectorEndX = refOffset + COLUMN_PADDING_X + stickyDotCx - (pill.isHollow ? displaySettings.dotRadius : 0)}
                   <line
                     x1={pill.x + pill.width}
                     y1={pill.y}
-                    x2={refOffset + COLUMN_PADDING_X + stickyDotCx}
+                    x2={connectorEndX}
                     y2={pill.dotCy}
                     stroke={laneColor(pill.commitColorIndex)}
                     stroke-width={displaySettings.pillStroke}

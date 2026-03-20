@@ -186,6 +186,7 @@ describe('getVisibleOverlayElements', () => {
         x: 4,
         y: rowIndex * 36 + 18,
         width: 60,
+        textWidth: 52,
         height: 20,
         label: 'main',
         truncatedLabel: 'main',
@@ -200,6 +201,7 @@ describe('getVisibleOverlayElements', () => {
         dotCy: rowIndex * 36 + 18,
         commitColorIndex: 0,
         rowIndex,
+        isHollow: false,
       };
     }
 
