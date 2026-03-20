@@ -98,6 +98,8 @@ pub fn diff_unstaged_inner(
     let repo = open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
+    opts.include_untracked(true);
+    opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
     walk_diff_into_file_diffs(diff)
 }
@@ -379,7 +381,29 @@ mod tests {
         assert!(!detail.author_name.is_empty(), "expected non-empty author_name");
     }
 
-    // Test 8: get_commit_detail_committer_fields
+    // Test 8: diff_unstaged_untracked_file_shows_content
+    #[test]
+    fn diff_unstaged_untracked_file_shows_content() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Create a new untracked file (not staged, not committed)
+        std::fs::write(dir.path().join("new_file.txt"), "line1\nline2\nline3\n").unwrap();
+
+        let result = super::diff_unstaged_inner(&path, "new_file.txt", &state_map);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+
+        let file_diffs = result.unwrap();
+        assert!(!file_diffs.is_empty(), "expected non-empty file_diffs for untracked file");
+
+        let fd = &file_diffs[0];
+        assert_eq!(fd.path, "new_file.txt");
+        assert!(!fd.hunks.is_empty(), "expected hunks with content for untracked file");
+        assert!(!fd.hunks[0].lines.is_empty(), "expected lines in hunk for untracked file");
+    }
+
+    // Test 9: get_commit_detail_committer_fields
     #[test]
     fn get_commit_detail_committer_fields() {
         let dir = make_test_repo();
