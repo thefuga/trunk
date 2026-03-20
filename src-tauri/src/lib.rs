@@ -69,6 +69,12 @@ pub fn run() {
             commands::remote::git_pull,
             commands::remote::git_push,
             commands::remote::cancel_remote_op,
+            commands::operation_state::get_operation_state,
+            commands::operation_state::merge_continue,
+            commands::operation_state::merge_abort,
+            commands::operation_state::rebase_continue,
+            commands::operation_state::rebase_skip,
+            commands::operation_state::rebase_abort,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
