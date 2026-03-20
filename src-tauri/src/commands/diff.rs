@@ -422,4 +422,132 @@ mod tests {
         assert!(!detail.committer_email.is_empty(), "expected non-empty committer_email");
         assert!(detail.committer_timestamp > 0, "expected committer_timestamp > 0");
     }
+
+    // Test 10: diff_conflicted_shows_conflict_markers
+    #[test]
+    fn diff_conflicted_shows_conflict_markers() {
+        let dir = make_test_repo();
+        let state_map = make_state_map(dir.path());
+
+        // make_test_repo leaves HEAD on main with README.md = "hello"
+        // We need to create a conflict: modify README.md on main, then merge feature
+        // which also modifies README.md differently.
+
+        // First, create a new branch "conflict-branch" from the initial commit
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        let sig = git2::Signature::now("Test User", "test@example.com").unwrap();
+
+        // Find the initial commit (root)
+        let mut revwalk = repo.revwalk().unwrap();
+        revwalk.push_head().unwrap();
+        let root_oid = revwalk
+            .filter_map(|id| id.ok())
+            .find(|&id| {
+                repo.find_commit(id)
+                    .map(|c| c.parent_count() == 0)
+                    .unwrap_or(false)
+            })
+            .expect("no root commit found");
+        let root_commit = repo.find_commit(root_oid).unwrap();
+
+        // Create conflict-branch from root
+        repo.branch("conflict-branch", &root_commit, false).unwrap();
+
+        // Commit a change to README.md on main (current HEAD)
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        std::fs::write(dir.path().join("README.md"), "main-side change").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        repo.commit(
+            Some("refs/heads/main"),
+            &sig,
+            &sig,
+            "Main change to README",
+            &tree,
+            &[&head_commit],
+        )
+        .unwrap();
+
+        // Commit a different change to README.md on conflict-branch
+        repo.set_head("refs/heads/conflict-branch").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force())).unwrap();
+        std::fs::write(dir.path().join("README.md"), "conflict-branch-side change").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let cb_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(
+            Some("refs/heads/conflict-branch"),
+            &sig,
+            &sig,
+            "Conflict branch change to README",
+            &tree,
+            &[&cb_commit],
+        )
+        .unwrap();
+
+        // Switch back to main
+        repo.set_head("refs/heads/main").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force())).unwrap();
+        drop(repo);
+
+        // Start a merge that will conflict using git CLI
+        let output = std::process::Command::new("git")
+            .args(["merge", "conflict-branch"])
+            .current_dir(dir.path())
+            .env("GIT_EDITOR", "true")
+            .output()
+            .expect("failed to run git merge");
+
+        // Merge should fail with conflict (exit code != 0)
+        assert!(!output.status.success(), "expected merge to fail with conflict, but it succeeded");
+
+        // Verify README.md has conflict markers
+        let readme_content = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
+        assert!(readme_content.contains("<<<<<<<"), "expected conflict markers in README.md, got: {}", readme_content);
+
+        let path = dir.path().to_string_lossy().to_string();
+        let result = super::diff_conflicted_inner(&path, "README.md", &state_map);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+
+        let file_diffs = result.unwrap();
+        assert!(!file_diffs.is_empty(), "expected non-empty file_diffs for conflicted file");
+
+        let fd = &file_diffs[0];
+        assert!(!fd.hunks.is_empty(), "expected non-empty hunks for conflicted file");
+
+        // Verify the diff content contains conflict markers
+        let all_content: String = fd.hunks.iter()
+            .flat_map(|h| h.lines.iter())
+            .map(|l| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(all_content.contains("<<<<<<<"), "expected conflict markers in diff output, got: {}", all_content);
+    }
+
+    // Test 11: diff_conflicted_clean_file
+    #[test]
+    fn diff_conflicted_clean_file() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Modify a tracked file (no conflict, just a normal workdir change)
+        std::fs::write(dir.path().join("README.md"), "modified for conflicted diff test").unwrap();
+
+        let result = super::diff_conflicted_inner(&path, "README.md", &state_map);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+
+        let file_diffs = result.unwrap();
+        assert!(!file_diffs.is_empty(), "expected non-empty file_diffs for modified (non-conflicted) file");
+
+        let fd = &file_diffs[0];
+        assert_eq!(fd.path, "README.md");
+        assert!(!fd.hunks.is_empty(), "expected non-empty hunks for modified file");
+    }
 }
