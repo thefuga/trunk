@@ -126,8 +126,8 @@
     if (!repoPath) return;
     try {
       if (kind === 'conflicted') {
-        // For conflicted files, use diff_unstaged to show content with conflict markers
-        stagingDiffFiles = await safeInvoke<FileDiff[]>('diff_unstaged', { path: repoPath, filePath: path });
+        // For conflicted files, use diff_conflicted (HEAD tree vs workdir) to show conflict markers
+        stagingDiffFiles = await safeInvoke<FileDiff[]>('diff_conflicted', { path: repoPath, filePath: path });
       } else {
         const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
         stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
@@ -203,7 +203,7 @@
   async function refetchFileDiff(path: string, kind: 'unstaged' | 'staged' | 'conflicted') {
     if (!repoPath) return;
     try {
-      const command = kind === 'conflicted' ? 'diff_unstaged' : (kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged');
+      const command = kind === 'conflicted' ? 'diff_conflicted' : (kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged');
       stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
     } catch {
       stagingDiffFiles = [];
