@@ -32,7 +32,7 @@
   let wipSubject = $state('');
 
   // Staging file selection (from StagingPanel)
-  let selectedFile = $state<{ path: string; kind: 'unstaged' | 'staged' } | null>(null);
+  let selectedFile = $state<{ path: string; kind: 'unstaged' | 'staged' | 'conflicted' } | null>(null);
   let stagingDiffFiles = $state<FileDiff[]>([]);
 
   // Commit selection (from CommitGraph)
@@ -117,7 +117,7 @@
     else clearCommitFileDiff();
   }
 
-  async function handleFileSelect(path: string, kind: 'unstaged' | 'staged') {
+  async function handleFileSelect(path: string, kind: 'unstaged' | 'staged' | 'conflicted') {
     if (selectedFile?.path === path && selectedFile?.kind === kind) {
       clearStagingDiff();
       return;
@@ -125,8 +125,13 @@
     selectedFile = { path, kind };
     if (!repoPath) return;
     try {
-      const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
-      stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
+      if (kind === 'conflicted') {
+        // For conflicted files, use diff_unstaged to show content with conflict markers
+        stagingDiffFiles = await safeInvoke<FileDiff[]>('diff_unstaged', { path: repoPath, filePath: path });
+      } else {
+        const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
+        stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
+      }
     } catch {
       stagingDiffFiles = [];
     }
@@ -195,10 +200,10 @@
     selectedCommitFile = path;
   }
 
-  async function refetchFileDiff(path: string, kind: 'unstaged' | 'staged') {
+  async function refetchFileDiff(path: string, kind: 'unstaged' | 'staged' | 'conflicted') {
     if (!repoPath) return;
     try {
-      const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
+      const command = kind === 'conflicted' ? 'diff_unstaged' : (kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged');
       stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
     } catch {
       stagingDiffFiles = [];
@@ -405,7 +410,7 @@
             fileDiffs={currentDiffFiles}
             commitDetail={null}
             selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-            diffKind={selectedCommitFile ? 'commit' : selectedFile?.kind ?? 'commit'}
+            diffKind={selectedCommitFile ? 'commit' : (selectedFile?.kind === 'conflicted' ? 'commit' : selectedFile?.kind ?? 'commit')}
             repoPath={repoPath!}
             onhunkaction={async (filePath) => {
               if (selectedFile) {

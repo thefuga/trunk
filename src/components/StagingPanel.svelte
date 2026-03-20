@@ -1,17 +1,18 @@
 <script lang="ts">
   import { listen } from '@tauri-apps/api/event';
   import { safeInvoke, type TrunkError } from '../lib/invoke.js';
-  import type { WorkingTreeStatus, FileStatusType } from '../lib/types.js';
+  import type { WorkingTreeStatus, FileStatusType, OperationInfo } from '../lib/types.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import FileRow from './FileRow.svelte';
   import CommitForm from './CommitForm.svelte';
-  import { ChevronDown, ChevronRight } from '@lucide/svelte';
+  import OperationBanner from './OperationBanner.svelte';
+  import { ChevronDown, ChevronRight, AlertTriangle } from '@lucide/svelte';
 
   interface Props {
     repoPath: string;
     currentBranch?: string;
-    onfileselect?: (path: string, kind: 'unstaged' | 'staged') => void;
+    onfileselect?: (path: string, kind: 'unstaged' | 'staged' | 'conflicted') => void;
     onsubjectchange?: (value: string) => void;
   }
 
@@ -27,6 +28,8 @@
   let staged_expanded = $state(true);
   let loadingFiles = $state<Set<string>>(new Set());
   let loadSeq = 0;
+  let conflicted_expanded = $state(true);
+  let operationInfo = $state<OperationInfo | null>(null);
 
   let totalCount = $derived(
     (status?.unstaged.length ?? 0) +
@@ -34,12 +37,18 @@
     (status?.conflicted.length ?? 0)
   );
 
+  async function loadOperationState() {
+    const result = await safeInvoke<OperationInfo>('get_operation_state', { path: repoPath });
+    operationInfo = result;
+  }
+
   async function loadStatus() {
     const seq = ++loadSeq;
     const result = await safeInvoke<WorkingTreeStatus>('get_status', { path: repoPath });
     if (seq === loadSeq) {
       status = result;
     }
+    await loadOperationState();
   }
 
   async function stageFile(filePath: string) {
@@ -121,8 +130,20 @@
     await menu.popup();
   }
 
+  async function showConflictedContextMenu(e: MouseEvent, filePath: string) {
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + filePath;
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+      ],
+    });
+    await menu.popup();
+  }
+
   async function handleDiscardAll() {
-    const count = (status?.unstaged.length ?? 0) + (status?.conflicted.length ?? 0);
+    const count = status?.unstaged.length ?? 0;
     if (count === 0) return;
     const { ask } = await import('@tauri-apps/plugin-dialog');
     const confirmed = await ask(
@@ -201,8 +222,77 @@
     {/if}
   </div>
 
+  <!-- Operation banner (merge/rebase in progress) -->
+  {#if operationInfo && operationInfo.op_type !== 'None'}
+    <OperationBanner
+      info={operationInfo}
+      {repoPath}
+      onaction={() => { loadStatus(); }}
+    />
+  {/if}
+
   <!-- File sections flex container (50/50 split when both expanded) -->
   <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+    <!-- Conflicted Files section (top, above unstaged/staged) -->
+    {#if (status?.conflicted.length ?? 0) > 0}
+      <div style="
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+        flex-shrink: 0;
+        max-height: 40%;
+      ">
+        <div
+          role="button"
+          tabindex="0"
+          onclick={() => (conflicted_expanded = !conflicted_expanded)}
+          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') conflicted_expanded = !conflicted_expanded; }}
+          style="
+            height: 28px;
+            border-bottom: 1px solid var(--color-border);
+            padding: 0 8px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+          "
+        >
+          <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
+            <AlertTriangle size={12} />
+          </span>
+          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+            Conflicted Files
+          </span>
+          <span style="
+            background: var(--color-badge-warning-bg);
+            color: var(--color-badge-warning);
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 9999px;
+            padding: 0 6px;
+            line-height: 16px;
+          ">
+            {status?.conflicted.length ?? 0}
+          </span>
+        </div>
+
+        {#if conflicted_expanded}
+          <div style="flex: 1; overflow-y: auto; min-height: 0;" role="list">
+            {#each status?.conflicted ?? [] as f (f.path)}
+              <FileRow
+                file={f}
+                actionLabel=""
+                onaction={() => {}}
+                onclick={() => onfileselect?.(f.path, 'conflicted')}
+                oncontextmenu={(e) => showConflictedContextMenu(e, f.path)}
+              />
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Unstaged Files section -->
     <div style="
       {unstaged_expanded && staged_expanded ? 'flex: 1;' : unstaged_expanded ? 'max-height: calc(100% - 28px);' : ''}
@@ -230,9 +320,9 @@
           {#if unstaged_expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
         </span>
         <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
-          Unstaged Files ({(status?.unstaged.length ?? 0) + (status?.conflicted.length ?? 0)})
+          Unstaged Files ({status?.unstaged.length ?? 0})
         </span>
-        {#if (status?.unstaged.length ?? 0) > 0 || (status?.conflicted.length ?? 0) > 0}
+        {#if (status?.unstaged.length ?? 0) > 0}
           <button
             onclick={(e) => { e.stopPropagation(); handleDiscardAll(); }}
             style="
@@ -272,16 +362,6 @@
       {#if unstaged_expanded}
         <div style="flex: 1; overflow-y: auto; min-height: 0;" role="list">
           {#each status?.unstaged ?? [] as f (f.path)}
-            <FileRow
-              file={f}
-              actionLabel="+"
-              isLoading={loadingFiles.has(f.path)}
-              onaction={() => stageFile(f.path)}
-              onclick={() => onfileselect?.(f.path, 'unstaged')}
-              oncontextmenu={(e) => showUnstagedContextMenu(e, f.path, f.status)}
-            />
-          {/each}
-          {#each status?.conflicted ?? [] as f (f.path)}
             <FileRow
               file={f}
               actionLabel="+"

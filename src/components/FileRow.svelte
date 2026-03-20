@@ -77,8 +77,8 @@
     {file.path}
   </span>
 
-  <!-- Hover action button (hidden during loading) -->
-  {#if hovered && !isLoading}
+  <!-- Hover action button (hidden during loading or when no actionLabel) -->
+  {#if hovered && !isLoading && actionLabel}
     <button
       onclick={(e) => { e.stopPropagation(); onaction(); }}
       aria-label={actionLabel === '+' ? 'Stage file' : 'Unstage file'}
