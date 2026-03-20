@@ -159,18 +159,18 @@ export interface OverlayNode {
   isWip: boolean;
 }
 
-export interface OverlayEdge {
-  fromX: number;        // source swimlane
-  fromY: number;        // source row
-  toX: number;          // target swimlane
-  toY: number;          // target row
+export interface OverlayConnection {
+  childX: number;   // child column
+  childY: number;   // child row
+  parentX: number;  // parent column
+  parentY: number;  // parent row
   colorIndex: number;
   dashed: boolean;
 }
 
 export interface OverlayGraphData {
   nodes: OverlayNode[];
-  edges: OverlayEdge[];
+  connections: OverlayConnection[];
   maxColumns: number;
 }
 
@@ -178,7 +178,6 @@ export interface OverlayPath {
   d: string;
   colorIndex: number;
   dashed: boolean;
-  kind: 'rail' | 'connection';
   minRow: number;
   maxRow: number;
 }

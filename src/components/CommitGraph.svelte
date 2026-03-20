@@ -870,17 +870,8 @@
           <!-- GRAPH-02: Layer A — rails + connections, scrolled and clipped.
                Translated left by scrollX to pan through lanes. -->
           <g clip-path="url(#graph-clip)">
-            <g class="overlay-rails" transform="translate({refOffset + COLUMN_PADDING_X - scrollX}, 0)">
-              {#each visible.rails as path}
-                <path d={path.d} fill="none"
-                  stroke={laneColor(path.colorIndex)}
-                  stroke-width={displaySettings.edgeStroke}
-                  stroke-linecap="butt"
-                  stroke-dasharray={path.dashed ? '3 3' : 'none'} />
-              {/each}
-            </g>
-            <g class="overlay-connections" transform="translate({refOffset + COLUMN_PADDING_X - scrollX}, 0)">
-              {#each visible.connections as path}
+            <g class="overlay-paths" transform="translate({refOffset + COLUMN_PADDING_X - scrollX}, 0)">
+              {#each visible.paths as path}
                 <path d={path.d} fill="none"
                   stroke={laneColor(path.colorIndex)}
                   stroke-width={displaySettings.edgeStroke}

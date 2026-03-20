@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildOverlayPaths } from './overlay-paths.js';
 import { LANE_WIDTH, ROW_HEIGHT, DOT_RADIUS } from './graph-constants.js';
-import type { OverlayEdge, OverlayNode, OverlayGraphData, OverlayPath } from './types.js';
+import type { OverlayConnection, OverlayNode, OverlayGraphData } from './types.js';
 
 // Coordinate helpers — derived from graph-constants so they stay in sync automatically
 const LANE = LANE_WIDTH;
@@ -11,23 +11,23 @@ const DOT_R = DOT_RADIUS;
 const DASH_GAP = 3; // matches stroke-dasharray gap
 function cx(col: number): number { return col * LANE + LANE / 2; }
 function cy(row: number): number { return row * ROW + ROW / 2; }
-function rowTop(row: number): number { return row * ROW; }
-function rowBottom(row: number): number { return (row + 1) * ROW; }
 
-/** Factory: minimal OverlayEdge */
-function makeOverlayEdge(overrides: Partial<OverlayEdge> & { fromX: number; toX: number; fromY: number; toY: number }): OverlayEdge {
+/** Factory: minimal OverlayConnection */
+function makeConn(overrides: Partial<OverlayConnection> & {
+  childX: number; childY: number; parentX: number; parentY: number;
+}): OverlayConnection {
   return {
-    fromX: overrides.fromX,
-    fromY: overrides.fromY,
-    toX: overrides.toX,
-    toY: overrides.toY,
+    childX: overrides.childX,
+    childY: overrides.childY,
+    parentX: overrides.parentX,
+    parentY: overrides.parentY,
     colorIndex: overrides.colorIndex ?? 0,
     dashed: overrides.dashed ?? false,
   };
 }
 
 /** Factory: minimal OverlayNode */
-function makeOverlayNode(overrides: Partial<OverlayNode> & { oid: string; x: number; y: number }): OverlayNode {
+function makeNode(overrides: Partial<OverlayNode> & { oid: string; x: number; y: number }): OverlayNode {
   return {
     oid: overrides.oid,
     x: overrides.x,
@@ -42,392 +42,298 @@ function makeOverlayNode(overrides: Partial<OverlayNode> & { oid: string; x: num
 
 /** Build minimal OverlayGraphData */
 function makeGraphData(
-  edges: OverlayEdge[],
+  connections: OverlayConnection[],
   nodes: OverlayNode[] = [],
   maxColumns = 4,
 ): OverlayGraphData {
-  return { nodes, edges, maxColumns };
+  return { nodes, connections, maxColumns };
 }
 
 describe('buildOverlayPaths', () => {
   describe('empty input', () => {
-    it('returns empty array for empty edges', () => {
+    it('returns empty array for empty connections', () => {
       const result = buildOverlayPaths(makeGraphData([]));
       expect(result).toEqual([]);
     });
 
-    it('returns empty array for empty edges with nodes present', () => {
-      const nodes = [makeOverlayNode({ oid: 'a', x: 0, y: 0 })];
+    it('returns empty array for empty connections with nodes present', () => {
+      const nodes = [makeNode({ oid: 'a', x: 0, y: 0 })];
       const result = buildOverlayPaths(makeGraphData([], nodes));
       expect(result).toEqual([]);
     });
   });
 
-  describe('rail paths (same-lane edges)', () => {
-    it('produces M...V path for basic rail edge (no nodes → ends at curve corner)', () => {
-      // Rail from row 0 to row 3, col 0, no nodes → ends at cy(3) - R (curve corner)
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+  describe('same-column paths (vertical lines)', () => {
+    it('produces M...V path from child cy to parent cy', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 3 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
 
       expect(result).toHaveLength(1);
-      expect(result[0].d).toBe(`M ${cx(0)} ${rowTop(0)} V ${cy(3) - R}`);
+      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0)} V ${cy(3)}`);
     });
 
-    it('rail has kind=rail', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].kind).toBe('rail');
-    });
-
-    it('rail carries colorIndex through', () => {
-      const edge = makeOverlayEdge({ fromX: 1, toX: 1, fromY: 0, toY: 1, colorIndex: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('carries colorIndex through', () => {
+      const conn = makeConn({ childX: 1, childY: 0, parentX: 1, parentY: 1, colorIndex: 3 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].colorIndex).toBe(3);
     });
 
-    it('rail carries dashed flag through', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2, dashed: true });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('carries dashed flag through', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2, dashed: true });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].dashed).toBe(true);
     });
 
-    it('solid rail has dashed=false', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2, dashed: false });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('solid connection has dashed=false', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2, dashed: false });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].dashed).toBe(false);
     });
 
-    it('rail uses rowTop(fromY) as start when no branch tip at fromY', () => {
-      // Row 1 to row 3, col 0 — no nodes → starts at rowTop(1), ends at cy(3) - R
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 1, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].d).toBe(`M ${cx(0)} ${rowTop(1)} V ${cy(3) - R}`);
-    });
-
-    it('rail starts at cy(fromY) when fromY node is a branch tip', () => {
-      // Branch tip at (x=0, y=0) — rail starting at row 0 should begin at cy(0)
-      // No node at (0, 2) → ends at cy(2) - R (curve corner)
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 });
-      const nodes = [makeOverlayNode({ oid: 'tip', x: 0, y: 0, isBranchTip: true })];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0)} V ${cy(2) - R}`);
-    });
-
-    it('rail ends at cy(toY) when toY node is a branch tip', () => {
-      // Branch tip at (x=0, y=2) — rail ending at row 2 should end at cy(2)
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 });
-      const nodes = [makeOverlayNode({ oid: 'tip', x: 0, y: 2, isBranchTip: true })];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${rowTop(0)} V ${cy(2)}`);
-    });
-
-    it('rail ends at rowBottom(toY) when non-tip node exists at (col, toY)', () => {
-      // Non-tip node at (0, 3) → rail extends to rowBottom(3) for seamless continuation
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 3 });
-      const nodes = [makeOverlayNode({ oid: 'mid', x: 0, y: 3, isBranchTip: false })];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${rowTop(0)} V ${rowBottom(3)}`);
-    });
-
-    it('rail ends at cy(toY) - R when no node at (col, toY) — lane terminates at curve corner', () => {
-      // No node at col 1, row 4 → lane terminates at curve corner point
-      const edge = makeOverlayEdge({ fromX: 1, toX: 1, fromY: 0, toY: 4 });
-      const nodes = [makeOverlayNode({ oid: 'other', x: 0, y: 4 })]; // node in different column
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(1)} ${rowTop(0)} V ${cy(4) - R}`);
-    });
-
-    it('rail starts at cy(fromY) and ends at cy(toY) when both ends are branch tips', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 1, toY: 3 });
+    it('hollow stash tip child: starts at dot edge + dash gap', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 0, parentY: 3, dashed: true });
       const nodes = [
-        makeOverlayNode({ oid: 'tipA', x: 0, y: 1, isBranchTip: true }),
-        makeOverlayNode({ oid: 'tipB', x: 0, y: 3, isBranchTip: true }),
+        makeNode({ oid: 'stash', x: 0, y: 1, isBranchTip: true, isStash: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${cy(1)} V ${cy(3)}`);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toBe(`M ${cx(0)} ${cy(1) + DOT_R + DASH_GAP} V ${cy(3)}`);
     });
 
-    it('hollow stash tip: rail starts at dot edge + dash gap', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 1, toY: 3, dashed: true });
+    it('hollow merge tip parent: ends at dot edge - dash gap', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2 });
       const nodes = [
-        makeOverlayNode({ oid: 'stash', x: 0, y: 1, isBranchTip: true, isStash: true }),
+        makeNode({ oid: 'merge', x: 0, y: 2, isBranchTip: true, isMerge: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${cy(1) + DOT_R + DASH_GAP} V ${cy(3) - R}`);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0)} V ${cy(2) - DOT_R - DASH_GAP}`);
     });
 
-    it('hollow merge node: rail ends at dot edge - dash gap', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 });
+    it('hollow WIP child: starts at dot edge + dash gap', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2, dashed: true });
       const nodes = [
-        makeOverlayNode({ oid: 'merge', x: 0, y: 2, isBranchTip: true, isMerge: true }),
+        makeNode({ oid: 'wip', x: 0, y: 0, isWip: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${rowTop(0)} V ${cy(2) - DOT_R - DASH_GAP}`);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0) + DOT_R + DASH_GAP} V ${cy(2)}`);
     });
 
-    it('hollow WIP node: rail starts at dot edge + dash gap', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2, dashed: true });
+    it('filled normal tip: starts at cy (no gap)', () => {
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2 });
       const nodes = [
-        makeOverlayNode({ oid: 'wip', x: 0, y: 0, isBranchTip: true, isWip: true }),
+        makeNode({ oid: 'tip', x: 0, y: 0, isBranchTip: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0) + DOT_R + DASH_GAP} V ${cy(2) - R}`);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0)} V ${cy(2)}`);
     });
 
-    it('filled normal tip: rail starts at dot center (cy)', () => {
-      // Non-hollow branch tip — rail goes through center (filled dot hides it)
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 });
+    it('returns empty d when startY >= endY', () => {
+      // Hollow WIP tip at row 0 → parent at row 0 (same row, different node)
+      // This shouldn't happen in practice, but the safety check handles it
+      const conn = makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 0, dashed: true });
       const nodes = [
-        makeOverlayNode({ oid: 'tip', x: 0, y: 0, isBranchTip: true }),
+        makeNode({ oid: 'wip', x: 0, y: 0, isWip: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData([edge], nodes));
-      expect(result[0].d).toBe(`M ${cx(0)} ${cy(0)} V ${cy(2) - R}`);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toBe('');
     });
 
-    it('produces one path per rail edge', () => {
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 }),
-        makeOverlayEdge({ fromX: 1, toX: 1, fromY: 0, toY: 3 }),
-      ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      const rails = result.filter(p => p.kind === 'rail');
-      expect(rails).toHaveLength(2);
+    it('in column 2 uses cx(2) for x coordinate', () => {
+      const conn = makeConn({ childX: 2, childY: 0, parentX: 2, parentY: 1 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].d).toBe(`M ${cx(2)} ${cy(0)} V ${cy(1)}`);
     });
 
-    it('rail in column 2 uses cx(2) for x coordinate', () => {
-      const edge = makeOverlayEdge({ fromX: 2, toX: 2, fromY: 0, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // cx(2) = 2*16 + 8 = 40, no node at (2, 1) → ends at cy(1) - R
-      expect(result[0].d).toBe(`M ${cx(2)} ${rowTop(0)} V ${cy(1) - R}`);
+    it('produces one path per connection', () => {
+      const conns = [
+        makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2 }),
+        makeConn({ childX: 1, childY: 0, parentX: 1, parentY: 3 }),
+      ];
+      const result = buildOverlayPaths(makeGraphData(conns));
+      expect(result).toHaveLength(2);
     });
   });
 
-  describe('connection paths (cross-lane edges)', () => {
-    it('has kind=connection', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].kind).toBe('connection');
-    });
-
-    it('connection carries colorIndex through', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 2, fromY: 1, toY: 1, colorIndex: 5 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].colorIndex).toBe(5);
-    });
-
-    it('connection carries dashed flag through', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2, dashed: true });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].dashed).toBe(true);
-    });
-
-    it('right-going connection d-string starts at cx(fromX), cy(fromY)', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 2, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+  describe('cross-column paths (vertical + curve + horizontal)', () => {
+    it('starts at cx(childX), cy(childY)', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].d).toMatch(new RegExp(`^M ${cx(0)} ${cy(1)}`));
     });
 
-    it('connection path contains a cubic bezier C command', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 2, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('contains V, C, and H segments', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].d).toContain('V');
       expect(result[0].d).toContain('C');
-    });
-
-    it('connection path contains a horizontal H segment', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 2, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
       expect(result[0].d).toContain('H');
     });
 
-    it('connection path ends at bezier corner (no vertical tail)', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 2, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // Path ends at the bezier corner point — no V segment after the C command
-      expect(result[0].d).not.toContain('V');
+    it('vertical segment stops R above parent row center', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].d).toContain(`V ${cy(5) - R}`);
     });
 
-    it('merge-pattern: rail in toX starts at fromY row → corner curves down', () => {
-      // Connection from col 0 to col 1, row 2
-      // Rail in col 1 starts at row 2 (merge pattern) → corner should curve down
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 }), // connection
-        makeOverlayEdge({ fromX: 1, toX: 1, fromY: 2, toY: 4 }), // rail starts at row 2 = merge
+    it('curve corner is at cy(parentY) in child column', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      // Bezier end point: cx(childX) + R toward parent, cy(parentY)
+      const hStart = cx(0) + R; // going right
+      expect(result[0].d).toContain(`${hStart} ${cy(5)}`);
+    });
+
+    it('horizontal ends at parent cx', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].d).toContain(`H ${cx(2)}`);
+    });
+
+    it('horizontal ends at hollow parent dot edge - dash gap', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 2, y: 5, isBranchTip: true, isMerge: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      const conn = result.find((p: OverlayPath) => p.kind === 'connection')!;
-      // Corner Y should be cy(2) + R (curves down) — no V tail
-      const cornerY = cy(2) + R;
-      expect(conn.d).toContain(`${cx(1)} ${cornerY}`);
-      expect(conn.d).not.toContain('V');
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      // going right → stops at cx(2) - (DOT_R + DASH_GAP)
+      expect(result[0].d).toContain(`H ${cx(2) - DOT_R - DASH_GAP}`);
     });
 
-    it('fork-pattern: rail in toX ends at fromY row → corner curves up', () => {
-      // Connection from col 0 to col 1, row 2
-      // Rail in col 1 ends at row 2 (fork pattern) → corner should curve up
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 }), // connection
-        makeOverlayEdge({ fromX: 1, toX: 1, fromY: 0, toY: 2 }), // rail ends at row 2 = fork
-      ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      const conn = result.find((p: OverlayPath) => p.kind === 'connection')!;
-      // Corner Y should be cy(2) - R (curves up) — no V tail
-      const cornerY = cy(2) - R;
-      expect(conn.d).toContain(`${cx(1)} ${cornerY}`);
-      expect(conn.d).not.toContain('V');
-    });
-
-    it('left-going connection also produces a path with C command', () => {
-      const edge = makeOverlayEdge({ fromX: 2, toX: 0, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].d).toContain('C');
-    });
-
-    it('left-going connection starts at cx(fromX), cy(fromY)', () => {
-      const edge = makeOverlayEdge({ fromX: 2, toX: 0, fromY: 1, toY: 1 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // cx(2)=40, cy(1)=39
+    it('left-going: starts at cx(childX), cy(childY)', () => {
+      const conn = makeConn({ childX: 2, childY: 1, parentX: 0, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].d).toMatch(new RegExp(`^M ${cx(2)} ${cy(1)}`));
     });
 
-    it('uses fixed 8px corner radius regardless of distance (adjacent lanes)', () => {
-      // Adjacent: col 0 to col 1 — corner at cx(1)±R
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // Horizontal segment ends R before target: H (cx(1) - R) = H (24 - 8) = H 16
-      expect(result[0].d).toContain(`H ${cx(1) - R}`);
+    it('left-going: horizontal ends at parent cx', () => {
+      const conn = makeConn({ childX: 2, childY: 1, parentX: 0, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].d).toContain(`H ${cx(0)}`);
     });
 
-    it('uses fixed 8px corner radius regardless of distance (distant lanes)', () => {
-      // Distant: col 0 to col 5 — corner still at cx(5)±R
-      const edge = makeOverlayEdge({ fromX: 0, toX: 5, fromY: 2, toY: 2 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // H (cx(5) - R) = H (5*16+8 - 8) = H 80
-      expect(result[0].d).toContain(`H ${cx(5) - R}`);
-    });
-
-    it('multiple connections at same row produce separate paths', () => {
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 }),
-        makeOverlayEdge({ fromX: 0, toX: 2, fromY: 2, toY: 2 }),
+    it('hollow child tip: vertical starts at dot edge + dash gap', () => {
+      const conn = makeConn({ childX: 1, childY: 0, parentX: 0, parentY: 3 });
+      const nodes = [
+        makeNode({ oid: 'stash', x: 1, y: 0, isBranchTip: true, isStash: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      const conns = result.filter(p => p.kind === 'connection');
-      expect(conns).toHaveLength(2);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toMatch(new RegExp(`^M ${cx(1)} ${cy(0) + DOT_R + DASH_GAP}`));
+    });
+
+    it('multiple cross-column connections produce separate paths', () => {
+      const conns = [
+        makeConn({ childX: 0, childY: 0, parentX: 1, parentY: 3 }),
+        makeConn({ childX: 0, childY: 0, parentX: 2, parentY: 5 }),
+      ];
+      const result = buildOverlayPaths(makeGraphData(conns));
+      expect(result).toHaveLength(2);
+    });
+
+    it('carries colorIndex through', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5, colorIndex: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].colorIndex).toBe(5);
+    });
+
+    it('carries dashed flag through', () => {
+      const conn = makeConn({ childX: 0, childY: 1, parentX: 2, parentY: 5, dashed: true });
+      const result = buildOverlayPaths(makeGraphData([conn]));
+      expect(result[0].dashed).toBe(true);
     });
   });
 
-  describe('fixed radius for all distances (CURV-04)', () => {
-    it('adjacent connection (1 column gap) uses R=8 corner', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 3, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      // Corner point is at cx(toX)±R
-      expect(result[0].d).toContain(`H ${cx(1) - R}`);
-    });
-
-    it('distant connection (5 column gap) uses same R=8 corner', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 5, fromY: 3, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].d).toContain(`H ${cx(5) - R}`);
-    });
-
-    it('two connections of different distances produce same corner style', () => {
-      const adjacent = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 1, toY: 1 });
-      const distant = makeOverlayEdge({ fromX: 0, toX: 8, fromY: 3, toY: 3 });
-      const results = buildOverlayPaths(makeGraphData([adjacent, distant]));
-      const conns = results.filter(p => p.kind === 'connection');
-      // Both should have C command (cubic bezier corner)
-      expect(conns[0].d).toContain('C');
-      expect(conns[1].d).toContain('C');
-    });
-  });
-
-  describe('output fields', () => {
-    it('all paths have d, colorIndex, dashed, kind fields', () => {
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2 }),
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 1, toY: 1 }),
+  describe('merge cross-column paths (horizontal + curve + vertical)', () => {
+    it('starts at cx(childX), cy(childY)', () => {
+      const conn = makeConn({ childX: 1, childY: 0, parentX: 0, parentY: 3 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 1, y: 0, isMerge: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      for (const path of result) {
-        expect(path).toHaveProperty('d');
-        expect(path).toHaveProperty('colorIndex');
-        expect(path).toHaveProperty('dashed');
-        expect(path).toHaveProperty('kind');
-        expect(typeof path.d).toBe('string');
-        expect(path.d.length).toBeGreaterThan(0);
-      }
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toMatch(new RegExp(`^M ${cx(1)} ${cy(0)}`));
     });
 
-    it('produces both rail and connection paths from mixed edges', () => {
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 3 }), // rail
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 2, toY: 2 }), // connection
+    it('horizontal segment stops R before parent column', () => {
+      // merge at col 1, parent at col 0 (going left)
+      const conn = makeConn({ childX: 1, childY: 0, parentX: 0, parentY: 3 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 1, y: 0, isMerge: true }),
       ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      expect(result.some(p => p.kind === 'rail')).toBe(true);
-      expect(result.some(p => p.kind === 'connection')).toBe(true);
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      // going left: hTarget = cx(0) + R
+      expect(result[0].d).toContain(`H ${cx(0) + R}`);
+    });
+
+    it('curve corner at parent column, cy(childY) + R', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 0, y: 2, isMerge: true }),
+      ];
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      const cornerY = cy(2) + R;
+      expect(result[0].d).toContain(`${cx(1)} ${cornerY}`);
+    });
+
+    it('vertical tail ends at parent cy', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 0, y: 2, isMerge: true }),
+      ];
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toContain(`V ${cy(5)}`);
+    });
+
+    it('vertical tail ends at hollow parent dot edge - dash gap', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 0, y: 2, isMerge: true }),
+        makeNode({ oid: 'tip', x: 1, y: 5, isBranchTip: true, isMerge: true }),
+      ];
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toContain(`V ${cy(5) - DOT_R - DASH_GAP}`);
+    });
+
+    it('contains H, C, and V segments', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 1, parentY: 5 });
+      const nodes = [
+        makeNode({ oid: 'merge', x: 0, y: 2, isMerge: true }),
+      ];
+      const result = buildOverlayPaths(makeGraphData([conn], nodes));
+      expect(result[0].d).toContain('H');
+      expect(result[0].d).toContain('C');
+      expect(result[0].d).toContain('V');
     });
   });
 
   describe('minRow/maxRow metadata', () => {
-    it('rail edge: minRow equals edge.fromY', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 2, toY: 5 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('same-column: minRow=childY, maxRow=parentY', () => {
+      const conn = makeConn({ childX: 0, childY: 2, parentX: 0, parentY: 5 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].minRow).toBe(2);
-    });
-
-    it('rail edge: maxRow equals edge.toY', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 2, toY: 5 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
       expect(result[0].maxRow).toBe(5);
     });
 
-    it('connection edge: minRow equals edge.fromY (single-row)', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 3, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
+    it('cross-column: minRow=childY, maxRow=parentY', () => {
+      const conn = makeConn({ childX: 0, childY: 3, parentX: 1, parentY: 7 });
+      const result = buildOverlayPaths(makeGraphData([conn]));
       expect(result[0].minRow).toBe(3);
-    });
-
-    it('connection edge: maxRow equals edge.fromY (single-row)', () => {
-      const edge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 3, toY: 3 });
-      const result = buildOverlayPaths(makeGraphData([edge]));
-      expect(result[0].maxRow).toBe(3);
-    });
-
-    it('mixed edges: all paths have minRow and maxRow', () => {
-      const edges = [
-        makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 10 }), // rail
-        makeOverlayEdge({ fromX: 0, toX: 1, fromY: 5, toY: 5 }),   // connection
-      ];
-      const result = buildOverlayPaths(makeGraphData(edges));
-      for (const path of result) {
-        expect(typeof path.minRow).toBe('number');
-        expect(typeof path.maxRow).toBe('number');
-      }
+      expect(result[0].maxRow).toBe(7);
     });
   });
 
-  describe('WIP edges (dashed=true)', () => {
-    it('WIP rail produces identical geometry with dashed=true', () => {
-      const solidEdge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2, dashed: false });
-      const dashedEdge = makeOverlayEdge({ fromX: 0, toX: 0, fromY: 0, toY: 2, dashed: true });
-
-      const solidResult = buildOverlayPaths(makeGraphData([solidEdge]));
-      const dashedResult = buildOverlayPaths(makeGraphData([dashedEdge]));
-
-      expect(solidResult[0].d).toBe(dashedResult[0].d);
-      expect(dashedResult[0].dashed).toBe(true);
-    });
-
-    it('WIP connection produces identical geometry with dashed=true', () => {
-      const solidEdge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 1, toY: 1, dashed: false });
-      const dashedEdge = makeOverlayEdge({ fromX: 0, toX: 1, fromY: 1, toY: 1, dashed: true });
-
-      const solidResult = buildOverlayPaths(makeGraphData([solidEdge]));
-      const dashedResult = buildOverlayPaths(makeGraphData([dashedEdge]));
-
-      expect(solidResult[0].d).toBe(dashedResult[0].d);
-      expect(dashedResult[0].dashed).toBe(true);
+  describe('output fields', () => {
+    it('all paths have d, colorIndex, dashed, minRow, maxRow', () => {
+      const conns = [
+        makeConn({ childX: 0, childY: 0, parentX: 0, parentY: 2 }),
+        makeConn({ childX: 0, childY: 1, parentX: 1, parentY: 5 }),
+      ];
+      const result = buildOverlayPaths(makeGraphData(conns));
+      for (const path of result) {
+        expect(path).toHaveProperty('d');
+        expect(path).toHaveProperty('colorIndex');
+        expect(path).toHaveProperty('dashed');
+        expect(path).toHaveProperty('minRow');
+        expect(path).toHaveProperty('maxRow');
+        expect(typeof path.d).toBe('string');
+      }
     });
   });
 });
