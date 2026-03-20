@@ -184,7 +184,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 37. Conflict Detection & Operation State | v0.8 | 0/2 | Planning complete | - |
+| 37. Conflict Detection & Operation State | 1/2 | In Progress|  | - |
 | 38. Merge Editor | v0.8 | 0/? | Not started | - |
 | 39. Merge Workflow | v0.8 | 0/? | Not started | - |
 | 40. Rebase Workflow | v0.8 | 0/? | Not started | - |

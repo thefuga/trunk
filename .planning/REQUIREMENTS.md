@@ -21,9 +21,9 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 
 ### Operation State
 
-- [ ] **OPS-01**: Persistent banner displays when a merge is in progress (detected via .git/MERGE_HEAD) with Continue and Abort buttons
-- [ ] **OPS-02**: Persistent banner displays when a rebase is in progress (detected via .git/rebase-merge/ or .git/rebase-apply/) with Continue, Skip, and Abort buttons
-- [ ] **OPS-03**: Continue/Abort/Skip buttons invoke the corresponding git CLI commands and refresh the UI
+- [x] **OPS-01**: Persistent banner displays when a merge is in progress (detected via .git/MERGE_HEAD) with Continue and Abort buttons
+- [x] **OPS-02**: Persistent banner displays when a rebase is in progress (detected via .git/rebase-merge/ or .git/rebase-apply/) with Continue, Skip, and Abort buttons
+- [x] **OPS-03**: Continue/Abort/Skip buttons invoke the corresponding git CLI commands and refresh the UI
 
 ### Merge Workflow
 
@@ -90,9 +90,9 @@ Deferred differentiators beyond GitKraken parity.
 | CONF-07 | Phase 38 | Pending |
 | CONF-08 | Phase 38 | Pending |
 | CONF-09 | Phase 38 | Pending |
-| OPS-01 | Phase 37 | Pending |
-| OPS-02 | Phase 37 | Pending |
-| OPS-03 | Phase 37 | Pending |
+| OPS-01 | Phase 37 | Complete |
+| OPS-02 | Phase 37 | Complete |
+| OPS-03 | Phase 37 | Complete |
 | MERGE-01 | Phase 39 | Pending |
 | MERGE-02 | Phase 39 | Pending |
 | MERGE-03 | Phase 39 | Pending |
