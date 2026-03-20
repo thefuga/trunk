@@ -9,7 +9,7 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 
 ### Conflict Resolution
 
-- [ ] **CONF-01**: Conflicted files display as a distinct third section in the staging panel with warning styling and count badge
+- [x] **CONF-01**: Conflicted files display as a distinct third section in the staging panel with warning styling and count badge
 - [ ] **CONF-02**: Three-panel merge editor opens when user clicks a conflicted file (current/incoming on top, editable output on bottom)
 - [ ] **CONF-03**: Merge editor panels scroll in sync across all three panels
 - [ ] **CONF-04**: Per-hunk checkboxes on current and incoming panels add/remove hunk content to/from the output
@@ -81,7 +81,7 @@ Deferred differentiators beyond GitKraken parity.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | Phase 37 | Pending |
+| CONF-01 | Phase 37 | Complete |
 | CONF-02 | Phase 38 | Pending |
 | CONF-03 | Phase 38 | Pending |
 | CONF-04 | Phase 38 | Pending |

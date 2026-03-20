@@ -110,7 +110,7 @@ Full details: [milestones/v0.7-ROADMAP.md](milestones/v0.7-ROADMAP.md)
 
 **Milestone Goal:** GitKraken-parity conflict resolution and interactive rebase -- three-panel merge editor, full interactive rebase editor, merge/rebase initiation, mid-operation conflict resolution.
 
-- [ ] **Phase 37: Conflict Detection & Operation State** - Conflicted file display in staging panel and merge/rebase operation banners
+- [x] **Phase 37: Conflict Detection & Operation State** - Conflicted file display in staging panel and merge/rebase operation banners (completed 2026-03-20)
 - [ ] **Phase 38: Merge Editor** - Three-panel merge editor with per-hunk/per-line selection, editable output, navigation, and resolution workflow
 - [ ] **Phase 39: Merge Workflow** - Merge initiation via context menu and drag-and-drop, fast-forward and auto-commit handling
 - [ ] **Phase 40: Rebase Workflow** - Rebase initiation via context menu and drag-and-drop, mid-rebase conflict resolution, abort/skip
@@ -184,7 +184,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 37. Conflict Detection & Operation State | 1/2 | In Progress|  | - |
+| 37. Conflict Detection & Operation State | 2/2 | Complete   | 2026-03-20 | - |
 | 38. Merge Editor | v0.8 | 0/? | Not started | - |
 | 39. Merge Workflow | v0.8 | 0/? | Not started | - |
 | 40. Rebase Workflow | v0.8 | 0/? | Not started | - |
