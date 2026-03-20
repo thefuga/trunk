@@ -802,9 +802,15 @@
   <!-- Content area (grows to fill remaining space) -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="flex-1 overflow-hidden" style="position: relative; padding: 0 {COLUMN_PADDING_X}px;" onwheel={(e) => {
-    // GRAPH-02: horizontal pan on trackpad swipe or shift+wheel
+    // GRAPH-02: horizontal pan on trackpad swipe or shift+wheel — only when pointer is over the graph column
     if (maxGraphScrollX > 0 && e.deltaX !== 0) {
-      graphScrollX = Math.max(0, Math.min(maxGraphScrollX, graphScrollX + e.deltaX));
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pointerX = e.clientX - rect.left - COLUMN_PADDING_X;
+      const graphStart = columnVisibility.ref ? columnWidths.ref : 0;
+      const graphEnd = graphStart + (columnVisibility.graph ? columnWidths.graph : 0);
+      if (pointerX >= graphStart && pointerX <= graphEnd) {
+        graphScrollX = Math.max(0, Math.min(maxGraphScrollX, graphScrollX + e.deltaX));
+      }
     }
   }}>
     {#if searchOpen}
