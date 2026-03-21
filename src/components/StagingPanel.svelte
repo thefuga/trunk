@@ -312,7 +312,7 @@
           onclick={() => (conflicted_expanded = !conflicted_expanded)}
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') conflicted_expanded = !conflicted_expanded; }}
           style="
-            height: 28px;
+            height: 34px;
             border-bottom: 1px solid var(--color-border);
             padding: 0 8px;
             display: flex;
@@ -370,7 +370,7 @@
         onclick={() => (unstaged_expanded = !unstaged_expanded)}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') unstaged_expanded = !unstaged_expanded; }}
         style="
-          height: 28px;
+          height: 34px;
           border-bottom: 1px solid var(--color-border);
           padding: 0 8px;
           display: flex;
@@ -492,7 +492,7 @@
         onclick={() => (staged_expanded = !staged_expanded)}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') staged_expanded = !staged_expanded; }}
         style="
-          height: 28px;
+          height: 34px;
           border-bottom: 1px solid var(--color-border);
           padding: 0 8px;
           display: flex;
@@ -565,7 +565,7 @@
         disabled={!allResolved || mergeLoading}
         style="
           flex: 3;
-          height: 28px;
+          height: 34px;
           background: var(--color-btn-continue-bg);
           color: var(--color-btn-continue);
           border: 1px solid var(--color-btn-continue-border);
@@ -582,7 +582,7 @@
         disabled={mergeLoading}
         style="
           flex: 2;
-          height: 28px;
+          height: 34px;
           background: var(--color-btn-abort-bg);
           color: var(--color-btn-abort);
           border: 1px solid var(--color-btn-abort-border);
