@@ -25,32 +25,62 @@ function splitLines(text: string): string[] {
 }
 
 /**
+ * Build an index mapping line content → sorted array of positions.
+ * Used to turn O(n) indexOf scans into O(log n) binary searches.
+ */
+function buildLineIndex(lines: string[]): Map<string, number[]> {
+  const index = new Map<string, number[]>();
+  for (let i = 0; i < lines.length; i++) {
+    const positions = index.get(lines[i]);
+    if (positions) {
+      positions.push(i);
+    } else {
+      index.set(lines[i], [i]);
+    }
+  }
+  return index;
+}
+
+/**
+ * Binary search for the first value >= minVal in a sorted array.
+ * Returns the value, or -1 if none found.
+ */
+function findFirstGe(positions: number[], minVal: number): number {
+  let lo = 0;
+  let hi = positions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (positions[mid] < minVal) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < positions.length ? positions[lo] : -1;
+}
+
+/**
  * Find the next position where all three arrays have the same value,
  * starting the search from the given offsets. Returns the offsets
  * of the sync point, or null if no sync point is found.
  *
- * Strategy: scan ahead in base. For each base[bi], check if ours
- * and theirs contain that value at or after their current offsets.
- * When a match is found, return the sync offsets.
+ * Uses pre-built line indexes for O(log n) lookups instead of O(n) indexOf.
  */
 function findSyncPoint(
   base: string[],
-  ours: string[],
-  theirs: string[],
   bi: number,
   oi: number,
   ti: number,
+  oursIndex: Map<string, number[]>,
+  theirsIndex: Map<string, number[]>,
 ): { bi: number; oi: number; ti: number } | null {
-  // Try each base line as a potential sync point
   for (let b = bi; b < base.length; b++) {
     const needle = base[b];
-    // Find this value in ours at or after oi
-    const oIdx = ours.indexOf(needle, oi);
+    const oPositions = oursIndex.get(needle);
+    if (!oPositions) continue;
+    const oIdx = findFirstGe(oPositions, oi);
     if (oIdx === -1) continue;
-    // Find this value in theirs at or after ti
-    const tIdx = theirs.indexOf(needle, ti);
+    const tPositions = theirsIndex.get(needle);
+    if (!tPositions) continue;
+    const tIdx = findFirstGe(tPositions, ti);
     if (tIdx === -1) continue;
-    // Found a sync point where all three match
     return { bi: b, oi: oIdx, ti: tIdx };
   }
   return null;
@@ -84,6 +114,9 @@ export function parseConflictRegions(
     // Otherwise, the entire file is one conflict
     return [{ type: 'conflict', baseLines: [], oursLines, theirsLines }];
   }
+
+  const oursIndex = buildLineIndex(oursLines);
+  const theirsIndex = buildLineIndex(theirsLines);
 
   const regions: ConflictRegion[] = [];
   let bi = 0;
@@ -120,7 +153,7 @@ export function parseConflictRegions(
       regions.push({ type: 'context', baseLines: ctxBase, oursLines: ctxOurs, theirsLines: ctxTheirs });
     } else {
       // Lines diverge -- find the next sync point
-      const sync = findSyncPoint(baseLines, oursLines, theirsLines, bi + 1, oi + 1, ti + 1);
+      const sync = findSyncPoint(baseLines, bi + 1, oi + 1, ti + 1, oursIndex, theirsIndex);
 
       if (sync) {
         // Everything between current position and sync point is conflict

@@ -23,6 +23,11 @@
 
   let { repoPath, filePath, onclose, onresolved }: Props = $props();
 
+  // ---------- Constants ----------
+  const LINE_HEIGHT = 18;
+  const HEADER_HEIGHT = 24;
+  const OVERSCAN = 20;
+
   // ---------- State ----------
   let regions = $state<ConflictRegion[]>([]);
   let takenLines = $state<Set<string>>(new Set());
@@ -34,6 +39,75 @@
   let saving = $state(false);
 
   let panelRefs: HTMLElement[] = [];
+  let panelScrollTop = $state(0);
+  let panelViewportHeight = $state(400);
+
+  // ---------- Flat row types for virtualization ----------
+  interface FlatRow {
+    type: 'context' | 'conflict-header' | 'conflict-line';
+    regionIdx: number;
+    lineIdx: number;
+    text: string;
+    key: string;
+    lineNum: number;
+    conflictNum: number;
+  }
+
+  function flattenPanel(regions: ConflictRegion[], side: 'ours' | 'theirs'): FlatRow[] {
+    const rows: FlatRow[] = [];
+    let lineNum = 1;
+    let conflictCount = 0;
+    for (let i = 0; i < regions.length; i++) {
+      const region = regions[i];
+      const lines = side === 'ours' ? region.oursLines : region.theirsLines;
+      if (region.type === 'conflict') {
+        conflictCount++;
+        rows.push({ type: 'conflict-header', regionIdx: i, lineIdx: -1, text: '', key: '', lineNum: 0, conflictNum: conflictCount });
+        for (let j = 0; j < lines.length; j++) {
+          rows.push({ type: 'conflict-line', regionIdx: i, lineIdx: j, text: lines[j], key: `${side}-${i}-${j}`, lineNum: lineNum + j, conflictNum: 0 });
+        }
+      } else {
+        for (let j = 0; j < lines.length; j++) {
+          rows.push({ type: 'context', regionIdx: i, lineIdx: j, text: lines[j], key: '', lineNum: lineNum + j, conflictNum: 0 });
+        }
+      }
+      lineNum += lines.length;
+    }
+    return rows;
+  }
+
+  function computeOffsets(rows: FlatRow[]): number[] {
+    const offsets = new Array(rows.length + 1);
+    offsets[0] = 0;
+    for (let i = 0; i < rows.length; i++) {
+      offsets[i + 1] = offsets[i] + (rows[i].type === 'conflict-header' ? HEADER_HEIGHT : LINE_HEIGHT);
+    }
+    return offsets;
+  }
+
+  function getVisibleRange(scrollTop: number, viewportHeight: number, offsets: number[]): [number, number] {
+    const totalRows = offsets.length - 1;
+    if (totalRows === 0) return [0, 0];
+    // Binary search for first visible row
+    let lo = 0, hi = totalRows;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (offsets[mid + 1] <= scrollTop) lo = mid + 1;
+      else hi = mid;
+    }
+    const start = Math.max(0, lo - OVERSCAN);
+    // Find last visible row
+    const bottom = scrollTop + viewportHeight;
+    lo = start;
+    hi = totalRows;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (offsets[mid] < bottom) lo = mid + 1;
+      else hi = mid;
+    }
+    const end = Math.min(totalRows, lo + OVERSCAN);
+    return [start, end];
+  }
 
   // ---------- Derived ----------
   let conflictIndices = $derived(getConflictIndices(regions));
@@ -44,6 +118,16 @@
   let hasPrev = $derived(focusedConflictIdx > 0);
   let hasNext = $derived(focusedConflictIdx < conflictIndices.length - 1);
   let hasConflicts = $derived(conflictIndices.length > 0);
+
+  // Virtualization derived state
+  let oursFlat = $derived(flattenPanel(regions, 'ours'));
+  let theirsFlat = $derived(flattenPanel(regions, 'theirs'));
+  let oursOffsets = $derived(computeOffsets(oursFlat));
+  let theirsOffsets = $derived(computeOffsets(theirsFlat));
+  let oursTotalHeight = $derived(oursOffsets[oursFlat.length] ?? 0);
+  let theirsTotalHeight = $derived(theirsOffsets[theirsFlat.length] ?? 0);
+  let oursVisible = $derived(getVisibleRange(panelScrollTop, panelViewportHeight, oursOffsets));
+  let theirsVisible = $derived(getVisibleRange(panelScrollTop, panelViewportHeight, theirsOffsets));
 
   // ---------- Data loading ----------
   $effect(() => {
@@ -59,6 +143,7 @@
         manualEdit = false;
         manualText = '';
         focusedConflictIdx = 0;
+        panelScrollTop = 0;
         loading = false;
       })
       .catch((e) => {
@@ -76,9 +161,10 @@
     scrolling = true;
     const source = panelRefs[sourceIdx];
     if (!source) { scrolling = false; return; }
-    const scrollTop = source.scrollTop;
+    const st = source.scrollTop;
+    panelScrollTop = st;
     panelRefs.forEach((el, i) => {
-      if (el && i !== sourceIdx) el.scrollTop = scrollTop;
+      if (el && i !== sourceIdx) el.scrollTop = st;
     });
     requestAnimationFrame(() => { scrolling = false; });
   }
@@ -124,11 +210,17 @@
   function scrollToConflict(idx: number) {
     const regionIndex = conflictIndices[idx];
     if (regionIndex == null) return;
+    // Find the conflict header row in the flat array
+    const rowIdx = oursFlat.findIndex(r => r.type === 'conflict-header' && r.regionIdx === regionIndex);
+    if (rowIdx === -1) return;
+    const targetTop = oursOffsets[rowIdx];
+    const scrollTo = Math.max(0, targetTop - panelViewportHeight / 2 + HEADER_HEIGHT / 2);
+    scrolling = true;
     for (const panel of panelRefs) {
-      if (!panel) continue;
-      const el = panel.querySelector(`[data-region-idx="${regionIndex}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (panel) panel.scrollTop = scrollTo;
     }
+    panelScrollTop = scrollTo;
+    requestAnimationFrame(() => { scrolling = false; });
   }
 
   async function handleSaveAndResolve() {
@@ -158,27 +250,107 @@
     if (lines.length === 0) return false;
     return lines.every((_, j) => takenLines.has(`${side}-${regionIdx}-${j}`));
   }
-
-  /** Track conflict number (1-indexed among conflict regions only) */
-  function conflictNumber(regionIdx: number): number {
-    let count = 0;
-    for (let i = 0; i <= regionIdx; i++) {
-      if (regions[i]?.type === 'conflict') count++;
-    }
-    return count;
-  }
-
-  /** Compute cumulative line number for a side at a given region/line index */
-  function lineNumber(side: 'ours' | 'theirs', regionIdx: number, lineIdx: number): number {
-    let num = 1;
-    for (let i = 0; i < regionIdx; i++) {
-      const r = regions[i];
-      const lines = side === 'ours' ? r.oursLines : r.theirsLines;
-      num += lines.length;
-    }
-    return num + lineIdx;
-  }
 </script>
+
+{#snippet conflictHeader(side: 'ours' | 'theirs', row: FlatRow)}
+  <div
+    onclick={() => handleToggleHunk(side, row.regionIdx)}
+    style="
+      width: 100%;
+      height: {HEADER_HEIGHT}px;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--color-text-muted);
+    "
+  >
+    {#if isHunkAllTaken(side, row.regionIdx)}
+      <Check size={14} style="color: var(--color-merge-taken-check);" />
+    {:else}
+      <span style="width: 14px; height: 14px; display: inline-block;"></span>
+    {/if}
+    Conflict {row.conflictNum}
+  </div>
+{/snippet}
+
+{#snippet conflictLine(row: FlatRow, bgColor: string)}
+  {@const taken = takenLines.has(row.key)}
+  <div
+    onclick={() => handleToggleLine(row.key)}
+    class="merge-line"
+    style="
+      display: flex;
+      height: {LINE_HEIGHT}px;
+      background: {bgColor};
+      opacity: {taken ? 1 : 'var(--color-merge-dimmed)'};
+      cursor: pointer;
+    "
+  >
+    <span style="
+      width: 48px;
+      flex-shrink: 0;
+      text-align: right;
+      padding-right: 8px;
+      color: var(--color-text-muted);
+      -webkit-user-select: none;
+      user-select: none;
+    ">{row.lineNum}</span>
+    <span style="
+      width: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    " class="icon-gutter">
+      {#if taken}
+        <span class="taken-icon"><Check size={14} style="color: var(--color-merge-taken-check);" /></span>
+        <span class="remove-icon"><CircleX size={14} style="color: var(--color-merge-remove-icon);" /></span>
+      {:else}
+        <span class="untaken-icon"><CircleCheck size={14} style="color: var(--color-text-muted); opacity: 0.4;" /></span>
+      {/if}
+    </span>
+    <span style="
+      padding-left: 4px;
+      white-space: pre;
+      overflow-x: auto;
+      flex: 1;
+      min-width: 0;
+    ">{row.text}</span>
+  </div>
+{/snippet}
+
+{#snippet contextLine(row: FlatRow)}
+  <div style="
+    display: flex;
+    height: {LINE_HEIGHT}px;
+    background: transparent;
+  ">
+    <span style="
+      width: 48px;
+      flex-shrink: 0;
+      text-align: right;
+      padding-right: 8px;
+      color: var(--color-text-muted);
+      -webkit-user-select: none;
+      user-select: none;
+    ">{row.lineNum}</span>
+    <span style="width: 20px; flex-shrink: 0;"></span>
+    <span style="
+      padding-left: 4px;
+      white-space: pre;
+      overflow-x: auto;
+      flex: 1;
+      min-width: 0;
+      color: var(--color-text);
+    ">{row.text}</span>
+  </div>
+{/snippet}
 
 <div style="
   height: 100%;
@@ -260,125 +432,30 @@
           >Take All Current</button>
         </div>
 
-        <!-- Scrollable content -->
+        <!-- Virtualized scrollable content -->
         <div
           bind:this={panelRefs[0]}
+          bind:clientHeight={panelViewportHeight}
           onscroll={() => handleScroll(0)}
           style="
             flex: 1;
             overflow-y: auto;
             font-family: var(--font-mono);
             font-size: 12px;
-            line-height: 18px;
+            line-height: {LINE_HEIGHT}px;
           "
         >
-          {#each regions as region, regionIdx}
-            {#if region.type === 'conflict'}
-              <!-- Hunk header row -->
-              <div
-                data-region-idx={regionIdx}
-                onclick={() => handleToggleHunk('ours', regionIdx)}
-                style="
-                  width: 100%;
-                  height: 24px;
-                  background: var(--color-surface);
-                  border-top: 1px solid var(--color-border);
-                  border-bottom: 1px solid var(--color-border);
-                  display: flex;
-                  align-items: center;
-                  padding: 0 8px;
-                  gap: 4px;
-                  cursor: pointer;
-                  font-size: 11px;
-                  color: var(--color-text-muted);
-                "
-              >
-                {#if isHunkAllTaken('ours', regionIdx)}
-                  <Check size={14} style="color: var(--color-merge-taken-check);" />
-                {:else}
-                  <span style="width: 14px; height: 14px; display: inline-block;"></span>
-                {/if}
-                Conflict {conflictNumber(regionIdx)}
-              </div>
-
-              <!-- Ours lines -->
-              {#each region.oursLines as line, lineIdx}
-                {@const key = `ours-${regionIdx}-${lineIdx}`}
-                {@const taken = takenLines.has(key)}
-                <div
-                  onclick={() => handleToggleLine(key)}
-                  class="merge-line"
-                  style="
-                    display: flex;
-                    background: var(--color-diff-add-bg);
-                    opacity: {taken ? 1 : 'var(--color-merge-dimmed)'};
-                    cursor: pointer;
-                  "
-                >
-                  <!-- Line number gutter -->
-                  <span style="
-                    width: 48px;
-                    flex-shrink: 0;
-                    text-align: right;
-                    padding-right: 8px;
-                    color: var(--color-text-muted);
-                    -webkit-user-select: none;
-                    user-select: none;
-                  ">{lineNumber('ours', regionIdx, lineIdx)}</span>
-                  <!-- Check icon gutter -->
-                  <span style="
-                    width: 20px;
-                    flex-shrink: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                  " class="icon-gutter">
-                    {#if taken}
-                      <span class="taken-icon"><Check size={14} style="color: var(--color-merge-taken-check);" /></span>
-                      <span class="remove-icon"><CircleX size={14} style="color: var(--color-merge-remove-icon);" /></span>
-                    {:else}
-                      <span class="untaken-icon"><CircleCheck size={14} style="color: var(--color-text-muted); opacity: 0.4;" /></span>
-                    {/if}
-                  </span>
-                  <!-- Line content -->
-                  <span style="
-                    padding-left: 4px;
-                    white-space: pre;
-                    overflow-x: auto;
-                    flex: 1;
-                    min-width: 0;
-                  ">{line}</span>
-                </div>
-              {/each}
+          <div style="height: {oursOffsets[oursVisible[0]]}px;"></div>
+          {#each oursFlat.slice(oursVisible[0], oursVisible[1]) as row (oursVisible[0] + row.regionIdx * 10000 + row.lineIdx + 1)}
+            {#if row.type === 'conflict-header'}
+              {@render conflictHeader('ours', row)}
+            {:else if row.type === 'conflict-line'}
+              {@render conflictLine(row, 'var(--color-diff-add-bg)')}
             {:else}
-              <!-- Context lines -->
-              {#each region.oursLines as line, lineIdx}
-                <div style="
-                  display: flex;
-                  background: transparent;
-                ">
-                  <span style="
-                    width: 48px;
-                    flex-shrink: 0;
-                    text-align: right;
-                    padding-right: 8px;
-                    color: var(--color-text-muted);
-                    -webkit-user-select: none;
-                    user-select: none;
-                  ">{lineNumber('ours', regionIdx, lineIdx)}</span>
-                  <span style="width: 20px; flex-shrink: 0;"></span>
-                  <span style="
-                    padding-left: 4px;
-                    white-space: pre;
-                    overflow-x: auto;
-                    flex: 1;
-                    min-width: 0;
-                    color: var(--color-text);
-                  ">{line}</span>
-                </div>
-              {/each}
+              {@render contextLine(row)}
             {/if}
           {/each}
+          <div style="height: {oursTotalHeight - (oursOffsets[oursVisible[1]] ?? oursTotalHeight)}px;"></div>
         </div>
       </div>
 
@@ -414,7 +491,7 @@
           >Take All Incoming</button>
         </div>
 
-        <!-- Scrollable content -->
+        <!-- Virtualized scrollable content -->
         <div
           bind:this={panelRefs[1]}
           onscroll={() => handleScroll(1)}
@@ -423,116 +500,20 @@
             overflow-y: auto;
             font-family: var(--font-mono);
             font-size: 12px;
-            line-height: 18px;
+            line-height: {LINE_HEIGHT}px;
           "
         >
-          {#each regions as region, regionIdx}
-            {#if region.type === 'conflict'}
-              <!-- Hunk header row -->
-              <div
-                data-region-idx={regionIdx}
-                onclick={() => handleToggleHunk('theirs', regionIdx)}
-                style="
-                  width: 100%;
-                  height: 24px;
-                  background: var(--color-surface);
-                  border-top: 1px solid var(--color-border);
-                  border-bottom: 1px solid var(--color-border);
-                  display: flex;
-                  align-items: center;
-                  padding: 0 8px;
-                  gap: 4px;
-                  cursor: pointer;
-                  font-size: 11px;
-                  color: var(--color-text-muted);
-                "
-              >
-                {#if isHunkAllTaken('theirs', regionIdx)}
-                  <Check size={14} style="color: var(--color-merge-taken-check);" />
-                {:else}
-                  <span style="width: 14px; height: 14px; display: inline-block;"></span>
-                {/if}
-                Conflict {conflictNumber(regionIdx)}
-              </div>
-
-              <!-- Theirs lines -->
-              {#each region.theirsLines as line, lineIdx}
-                {@const key = `theirs-${regionIdx}-${lineIdx}`}
-                {@const taken = takenLines.has(key)}
-                <div
-                  onclick={() => handleToggleLine(key)}
-                  class="merge-line"
-                  style="
-                    display: flex;
-                    background: var(--color-diff-delete-bg);
-                    opacity: {taken ? 1 : 'var(--color-merge-dimmed)'};
-                    cursor: pointer;
-                  "
-                >
-                  <!-- Line number gutter -->
-                  <span style="
-                    width: 48px;
-                    flex-shrink: 0;
-                    text-align: right;
-                    padding-right: 8px;
-                    color: var(--color-text-muted);
-                    -webkit-user-select: none;
-                    user-select: none;
-                  ">{lineNumber('theirs', regionIdx, lineIdx)}</span>
-                  <!-- Check icon gutter -->
-                  <span style="
-                    width: 20px;
-                    flex-shrink: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                  " class="icon-gutter">
-                    {#if taken}
-                      <span class="taken-icon"><Check size={14} style="color: var(--color-merge-taken-check);" /></span>
-                      <span class="remove-icon"><CircleX size={14} style="color: var(--color-merge-remove-icon);" /></span>
-                    {:else}
-                      <span class="untaken-icon"><CircleCheck size={14} style="color: var(--color-text-muted); opacity: 0.4;" /></span>
-                    {/if}
-                  </span>
-                  <!-- Line content -->
-                  <span style="
-                    padding-left: 4px;
-                    white-space: pre;
-                    overflow-x: auto;
-                    flex: 1;
-                    min-width: 0;
-                  ">{line}</span>
-                </div>
-              {/each}
+          <div style="height: {theirsOffsets[theirsVisible[0]]}px;"></div>
+          {#each theirsFlat.slice(theirsVisible[0], theirsVisible[1]) as row (theirsVisible[0] + row.regionIdx * 10000 + row.lineIdx + 1)}
+            {#if row.type === 'conflict-header'}
+              {@render conflictHeader('theirs', row)}
+            {:else if row.type === 'conflict-line'}
+              {@render conflictLine(row, 'var(--color-diff-delete-bg)')}
             {:else}
-              <!-- Context lines -->
-              {#each region.theirsLines as line, lineIdx}
-                <div style="
-                  display: flex;
-                  background: transparent;
-                ">
-                  <span style="
-                    width: 48px;
-                    flex-shrink: 0;
-                    text-align: right;
-                    padding-right: 8px;
-                    color: var(--color-text-muted);
-                    -webkit-user-select: none;
-                    user-select: none;
-                  ">{lineNumber('theirs', regionIdx, lineIdx)}</span>
-                  <span style="width: 20px; flex-shrink: 0;"></span>
-                  <span style="
-                    padding-left: 4px;
-                    white-space: pre;
-                    overflow-x: auto;
-                    flex: 1;
-                    min-width: 0;
-                    color: var(--color-text);
-                  ">{line}</span>
-                </div>
-              {/each}
+              {@render contextLine(row)}
             {/if}
           {/each}
+          <div style="height: {theirsTotalHeight - (theirsOffsets[theirsVisible[1]] ?? theirsTotalHeight)}px;"></div>
         </div>
       </div>
     </div>
@@ -645,7 +626,7 @@
           color: var(--color-text);
           font-family: var(--font-mono);
           font-size: 12px;
-          line-height: 18px;
+          line-height: {LINE_HEIGHT}px;
           padding: 4px 8px;
           outline: none;
           box-sizing: border-box;
