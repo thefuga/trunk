@@ -290,7 +290,7 @@
   async function handleRebaseBranch(ontoBranch: string) {
     try {
       await safeInvoke('rebase_branch', { path: repoPath, ontoBranch });
-      showToast(`Rebased onto ${ontoBranch}`, 'success');
+      // No toast on success -- graph refresh via repo-changed event is sufficient
     } catch (e) {
       const err = e as TrunkError;
       showToast(err.message ?? 'Rebase failed', 'error');
@@ -461,6 +461,10 @@
               text: `Merge ${pill.label} into ${headBranchName}`,
               action: () => { handleMergeBranch(pill.label).catch(() => {}); },
             }),
+            await MenuItem.new({
+              text: `Rebase ${headBranchName} onto ${pill.label}`,
+              action: () => { handleRebaseBranch(pill.label).catch(() => {}); },
+            }),
             await PredefinedMenuItem.new({ item: 'Separator' }),
           ] : []),
           await MenuItem.new({
@@ -483,6 +487,10 @@
             await MenuItem.new({
               text: `Merge ${pill.label} into ${headBranchName}`,
               action: () => { handleMergeBranch(pill.label).catch(() => {}); },
+            }),
+            await MenuItem.new({
+              text: `Rebase ${headBranchName} onto ${pill.label}`,
+              action: () => { handleRebaseBranch(pill.label).catch(() => {}); },
             }),
           ],
         });
@@ -517,6 +525,10 @@
               text: `Merge ${ref.short_name} into ${headBranchName}`,
               action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
             }),
+            await MenuItem.new({
+              text: `Rebase ${headBranchName} onto ${ref.short_name}`,
+              action: () => { handleRebaseBranch(ref.short_name).catch(() => {}); },
+            }),
             await PredefinedMenuItem.new({ item: 'Separator' }),
           ] : []),
           await MenuItem.new({
@@ -539,6 +551,10 @@
             await MenuItem.new({
               text: `Merge ${ref.short_name} into ${headBranchName}`,
               action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
+            }),
+            await MenuItem.new({
+              text: `Rebase ${headBranchName} onto ${ref.short_name}`,
+              action: () => { handleRebaseBranch(ref.short_name).catch(() => {}); },
             }),
           ],
         });
