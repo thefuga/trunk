@@ -217,3 +217,10 @@ pub struct OperationInfo {
     pub target_branch: Option<String>,
     pub progress: Option<String>,
 }
+
+#[derive(Debug, Serialize, Clone)]
+pub struct MergeSides {
+    pub base: String,
+    pub ours: String,
+    pub theirs: String,
+}

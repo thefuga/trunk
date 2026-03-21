@@ -7,5 +7,6 @@ pub mod repo;
 pub mod staging;
 pub mod remote;
 pub mod stash;
+pub mod merge_editor;
 pub mod operation_state;
 
