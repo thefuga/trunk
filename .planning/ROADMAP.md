@@ -205,7 +205,7 @@ Plans:
 | 38. Merge Editor | 6/6 | Complete    | 2026-03-21 | - |
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
-| 41. Interactive Rebase Editor | v0.8 | 0/4 | Not started | - |
+| 41. Interactive Rebase Editor | 1/4 | In Progress|  | - |
 
 ---
 *Roadmap created: 2026-03-13*

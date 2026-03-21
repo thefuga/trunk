@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Phase 41 UI-SPEC approved
-last_updated: "2026-03-21T22:37:44.405Z"
+stopped_at: Completed 41-01-PLAN.md
+last_updated: "2026-03-21T23:13:36.355Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 12
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 40 — rebase-workflow
+**Current focus:** Phase 41 — interactive-rebase-editor
 
 ## Current Position
 
-Phase: 40 (rebase-workflow) — COMPLETE
-Plan: 1 of 1 (done)
+Phase: 41 (interactive-rebase-editor) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 1 of 1 (done)
 | Phase 38 P06 | 1min | 1 tasks | 1 files |
 | Phase 39 P01 | 3min | 2 tasks | 3 files |
 | Phase 40 P01 | 2min | 2 tasks | 2 files |
+| Phase 41 P01 | 4min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Plan: 1 of 1 (done)
 - [Phase 39]: Detached HEAD hides merge items entirely rather than showing disabled items
 - [Phase 40]: No success toast on rebase -- graph refresh via repo-changed event is sufficient (matches merge pattern)
 - [Phase 40]: Rebase items always adjacent to merge items in context menus, no separator between them
+- [Phase 41]: Revwalk with hide(base) + reverse for oldest-first commit listing
+- [Phase 41]: get_fork_point uses git merge-base CLI instead of git2 merge_base for simpler error handling
+- [Phase 41]: Validation Rule 2 (first non-drop squash) takes precedence over Rule 3 (no predecessor) to avoid duplicate errors
 
 ### Pending Todos
 
@@ -97,7 +101,7 @@ Plan: 1 of 1 (done)
 ## Session Continuity
 
 Last activity: 2026-03-21
-Last session: 2026-03-21T22:37:44.402Z
-Stopped at: Phase 41 UI-SPEC approved
-Resume file: .planning/phases/41-interactive-rebase-editor/41-UI-SPEC.md
+Last session: 2026-03-21T23:13:36.352Z
+Stopped at: Completed 41-01-PLAN.md
+Resume file: None
 Next action: Phase 40 complete -- all plans done. v0.8 milestone complete.

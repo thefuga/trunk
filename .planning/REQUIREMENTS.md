@@ -43,11 +43,11 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 
 ### Interactive Rebase Editor
 
-- [ ] **IREB-01**: Interactive rebase opens a modal/panel showing all commits to be rebased with action selectors (Pick/Squash/Reword/Drop)
+- [x] **IREB-01**: Interactive rebase opens a modal/panel showing all commits to be rebased with action selectors (Pick/Squash/Reword/Drop)
 - [ ] **IREB-02**: User can reorder commits by dragging rows up/down in the rebase editor
 - [ ] **IREB-03**: Keyboard shortcuts assign actions to focused commit rows (P=Pick, S=Squash, R=Reword, D=Drop)
-- [ ] **IREB-04**: Start Rebase button validates the plan (e.g., can't squash first commit) and executes the rebase
-- [ ] **IREB-05**: Cancel button closes the editor with no changes; Reset button restores all commits to original Pick state and order
+- [x] **IREB-04**: Start Rebase button validates the plan (e.g., can't squash first commit) and executes the rebase
+- [x] **IREB-05**: Cancel button closes the editor with no changes; Reset button restores all commits to original Pick state and order
 - [ ] **IREB-06**: Reword action shows a message editor dialog when the rebase reaches that commit
 - [ ] **IREB-07**: Squash action combines the commit with its predecessor; a message editor shows the concatenated messages before execution
 
@@ -103,11 +103,11 @@ Deferred differentiators beyond GitKraken parity.
 | REB-04 | Phase 40 | Complete |
 | REB-05 | Phase 40 | Complete |
 | REB-06 | Phase 40 | Complete |
-| IREB-01 | Phase 41 | Pending |
+| IREB-01 | Phase 41 | Complete |
 | IREB-02 | Phase 41 | Pending |
 | IREB-03 | Phase 41 | Pending |
-| IREB-04 | Phase 41 | Pending |
-| IREB-05 | Phase 41 | Pending |
+| IREB-04 | Phase 41 | Complete |
+| IREB-05 | Phase 41 | Complete |
 | IREB-06 | Phase 41 | Pending |
 | IREB-07 | Phase 41 | Pending |
 
