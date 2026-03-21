@@ -224,6 +224,61 @@ pub fn rebase_abort_inner(
     graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from)
 }
 
+// --- Start merge/rebase ---
+
+pub fn merge_branch_inner(
+    path: &str,
+    branch: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<GraphResult, TrunkError> {
+    let path_buf = state_map.get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let output = std::process::Command::new("git")
+        .args(["merge", branch, "--no-edit"])
+        .current_dir(path_buf)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_EDITOR", "true")
+        .output()
+        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.to_lowercase().contains("conflict") {
+            // Conflicts: rebuild graph so UI picks up the merge state
+            let mut repo = git2::Repository::open(path_buf)?;
+            return graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from);
+        }
+        return Err(TrunkError::new("merge_error", stderr.to_string()));
+    }
+    let mut repo = git2::Repository::open(path_buf)?;
+    graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from)
+}
+
+pub fn rebase_branch_inner(
+    path: &str,
+    onto_branch: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<GraphResult, TrunkError> {
+    let path_buf = state_map.get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let output = std::process::Command::new("git")
+        .args(["rebase", onto_branch])
+        .current_dir(path_buf)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_EDITOR", "true")
+        .output()
+        .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.to_lowercase().contains("conflict") {
+            let mut repo = git2::Repository::open(path_buf)?;
+            return graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from);
+        }
+        return Err(TrunkError::new("rebase_error", stderr.to_string()));
+    }
+    let mut repo = git2::Repository::open(path_buf)?;
+    graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from)
+}
+
 // --- Tauri command wrappers ---
 
 #[tauri::command]
@@ -355,6 +410,48 @@ pub async fn rebase_abort(
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
         rebase_abort_inner(&path_clone, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn merge_branch(
+    path: String,
+    branch: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let graph_result = tauri::async_runtime::spawn_blocking(move || {
+        merge_branch_inner(&path_clone, &branch, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rebase_branch(
+    path: String,
+    onto_branch: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let graph_result = tauri::async_runtime::spawn_blocking(move || {
+        rebase_branch_inner(&path_clone, &onto_branch, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?

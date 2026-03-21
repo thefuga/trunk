@@ -277,10 +277,51 @@
     }
   }
 
+  async function handleMergeBranch(branch: string) {
+    try {
+      await safeInvoke('merge_branch', { path: repoPath, branch });
+      showToast(`Merged ${branch}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      if (err.code === 'merge_error') {
+        showToast(err.message ?? 'Merge failed', 'error');
+      } else {
+        showToast(err.message ?? 'Merge failed', 'error');
+      }
+    }
+  }
+
+  async function handleRebaseBranch(ontoBranch: string) {
+    try {
+      await safeInvoke('rebase_branch', { path: repoPath, ontoBranch });
+      showToast(`Rebased onto ${ontoBranch}`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Rebase failed', 'error');
+    }
+  }
+
   async function showCommitContextMenu(e: MouseEvent, commit: GraphCommit) {
     e.preventDefault();
+
+    // Determine if merge/rebase options should be shown
+    const clickedBranch = commit.refs.find(r => r.ref_type === 'LocalBranch' && !r.is_head);
+    const headCommit = commits.find(c => c.is_head);
+    const headRef = headCommit?.refs.find(r => r.ref_type === 'LocalBranch' && r.is_head);
+    const headBranchName = headRef?.short_name;
+
+    const mergeRebaseItems: (Awaited<ReturnType<typeof MenuItem.new>> | Awaited<ReturnType<typeof PredefinedMenuItem.new>>)[] = [];
+    if (clickedBranch && headBranchName) {
+      mergeRebaseItems.push(
+        await MenuItem.new({ text: `Merge ${clickedBranch.short_name} into ${headBranchName}`, action: () => { handleMergeBranch(clickedBranch.short_name).catch(() => {}); } }),
+        await MenuItem.new({ text: `Rebase ${headBranchName} onto ${clickedBranch.short_name}`, action: () => { handleRebaseBranch(clickedBranch.short_name).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
+      );
+    }
+
     const menu = await Menu.new({
       items: [
+        ...mergeRebaseItems,
         await MenuItem.new({ text: 'Copy SHA', action: () => { writeText(commit.oid).catch(() => {}); } }),
         await MenuItem.new({ text: 'Copy Message', action: () => { writeText(commit.summary).catch(() => {}); } }),
         await PredefinedMenuItem.new({ item: 'Separator' }),
