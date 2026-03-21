@@ -131,7 +131,7 @@ Full details: [milestones/v0.7-ROADMAP.md](milestones/v0.7-ROADMAP.md)
 Plans:
 - [x] 37-01-PLAN.md -- Backend: operation state types, detection, and CLI commands
 - [x] 37-02-PLAN.md -- Frontend: conflict section, operation banner, and wiring
-- [ ] 37-03-PLAN.md -- Gap closure: fix conflicted file diff (diff_tree_to_workdir)
+- [x] 37-03-PLAN.md -- Gap closure: fix conflicted file diff (diff_tree_to_workdir)
 
 ### Phase 38: Merge Editor
 **Goal**: Users can resolve conflicted files through a visual three-panel merge editor with granular hunk and line selection
@@ -142,8 +142,13 @@ Plans:
   2. User can check/uncheck per-hunk checkboxes on current and incoming panels to add or remove entire hunks from the output, and can click individual lines to toggle them into or out of the output
   3. User can directly type in the output panel to manually adjust the merged result
   4. "Take All Current" and "Take All Incoming" buttons resolve the entire file with one click (available in toolbar and as right-click on conflicted file); Prev/Next conflict arrows navigate between conflict sections within the file
-  5. "Save and Mark Resolved" saves the output to disk, stages the file, and auto-opens the next conflicted file if any remain
-**Plans**: TBD
+  5. "Save and Mark Resolved" saves the output to disk, stages the file, and returns to the staging panel
+**Plans**: 4 plans
+Plans:
+- [ ] 38-01-PLAN.md -- Backend: MergeSides type, get_merge_sides and save_merge_result commands
+- [ ] 38-02-PLAN.md -- Merge parser: conflict region parsing, selection helpers, output computation
+- [ ] 38-03-PLAN.md -- MergeEditor component: three-panel layout, selection, sync scroll, navigation
+- [ ] 38-04-PLAN.md -- Integration: App.svelte routing, StagingPanel context menu, resolution flow
 
 ### Phase 39: Merge Workflow
 **Goal**: Users can initiate and complete merges through the GUI without touching the terminal
@@ -186,11 +191,11 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. Conflict Detection & Operation State | 3/3 | Complete    | 2026-03-20 | - |
-| 38. Merge Editor | v0.8 | 0/? | Not started | - |
+| 38. Merge Editor | v0.8 | 0/4 | Not started | - |
 | 39. Merge Workflow | v0.8 | 0/? | Not started | - |
 | 40. Rebase Workflow | v0.8 | 0/? | Not started | - |
 | 41. Interactive Rebase Editor | v0.8 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-20 — Phase 37 gap closure plan added (37-03)*
+*Last updated: 2026-03-20 — Phase 38 plans created (4 plans)*
