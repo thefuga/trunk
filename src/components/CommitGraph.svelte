@@ -280,14 +280,10 @@
   async function handleMergeBranch(branch: string) {
     try {
       await safeInvoke('merge_branch', { path: repoPath, branch });
-      showToast(`Merged ${branch}`, 'success');
+      // No toast on success -- graph refresh via repo-changed event is sufficient
     } catch (e) {
       const err = e as TrunkError;
-      if (err.code === 'merge_error') {
-        showToast(err.message ?? 'Merge failed', 'error');
-      } else {
-        showToast(err.message ?? 'Merge failed', 'error');
-      }
+      showToast(err.message ?? 'Merge failed', 'error');
     }
   }
 
@@ -453,9 +449,20 @@
     e.preventDefault();
     e.stopPropagation();
 
+    const headCommit = commits.find(c => c.is_head);
+    const headRef = headCommit?.refs.find(r => r.ref_type === 'LocalBranch' && r.is_head);
+    const headBranchName = headRef?.short_name;
+
     if (pill.refType === 'LocalBranch') {
       const menu = await Menu.new({
         items: [
+          ...(!pill.isHead && headBranchName ? [
+            await MenuItem.new({
+              text: `Merge ${pill.label} into ${headBranchName}`,
+              action: () => { handleMergeBranch(pill.label).catch(() => {}); },
+            }),
+            await PredefinedMenuItem.new({ item: 'Separator' }),
+          ] : []),
           await MenuItem.new({
             text: 'Rename…',
             action: () => { handleRenameBranch(pill.label); },
@@ -469,6 +476,18 @@
         ],
       });
       await menu.popup();
+    } else if (pill.refType === 'RemoteBranch') {
+      if (headBranchName) {
+        const menu = await Menu.new({
+          items: [
+            await MenuItem.new({
+              text: `Merge ${pill.label} into ${headBranchName}`,
+              action: () => { handleMergeBranch(pill.label).catch(() => {}); },
+            }),
+          ],
+        });
+        await menu.popup();
+      }
     } else if (pill.refType === 'Tag') {
       const menu = await Menu.new({
         items: [
@@ -486,9 +505,20 @@
     e.preventDefault();
     e.stopPropagation();
 
+    const headCommit = commits.find(c => c.is_head);
+    const headRef = headCommit?.refs.find(r => r.ref_type === 'LocalBranch' && r.is_head);
+    const headBranchName = headRef?.short_name;
+
     if (ref.ref_type === 'LocalBranch') {
       const menu = await Menu.new({
         items: [
+          ...(!ref.is_head && headBranchName ? [
+            await MenuItem.new({
+              text: `Merge ${ref.short_name} into ${headBranchName}`,
+              action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
+            }),
+            await PredefinedMenuItem.new({ item: 'Separator' }),
+          ] : []),
           await MenuItem.new({
             text: 'Rename…',
             action: () => { handleRenameBranch(ref.short_name); },
@@ -502,6 +532,18 @@
         ],
       });
       await menu.popup();
+    } else if (ref.ref_type === 'RemoteBranch') {
+      if (headBranchName) {
+        const menu = await Menu.new({
+          items: [
+            await MenuItem.new({
+              text: `Merge ${ref.short_name} into ${headBranchName}`,
+              action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
+            }),
+          ],
+        });
+        await menu.popup();
+      }
     } else if (ref.ref_type === 'Tag') {
       const menu = await Menu.new({
         items: [
