@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Completed 38-06-PLAN.md
+stopped_at: Completed quick-260320-wz2
 last_updated: "2026-03-21T02:53:04.074Z"
 progress:
   total_phases: 5
@@ -82,7 +82,8 @@ Plan: 6 of 6
 
 ## Session Continuity
 
-Last session: 2026-03-21T02:31:15.789Z
-Stopped at: Completed 38-06-PLAN.md
+Last activity: 2026-03-21 - Completed quick task 260320-wz2: Simplify splash screen project cards to single-line items, save 10 projects instead of 5
+Last session: 2026-03-21T02:53:04.074Z
+Stopped at: Completed quick-260320-wz2
 Resume file: None
 Next action: Phase 37 complete -- all 3 plans done
