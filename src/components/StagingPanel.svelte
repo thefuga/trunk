@@ -189,12 +189,29 @@
   }
 
   let mergeLoading = $state(false);
+  let mergeSubject = $state('');
+  let mergeBody = $state('');
+
+  // Pre-fill merge message when entering merge state
+  $effect(() => {
+    if (isMerge && operationInfo) {
+      const src = operationInfo.source_branch ?? '???';
+      const tgt = operationInfo.target_branch ?? '???';
+      mergeSubject = `Merge branch '${src}' into ${tgt}`;
+      mergeBody = '';
+    }
+  });
 
   async function commitMerge() {
     mergeLoading = true;
+    const msg = mergeBody.trim()
+      ? `${mergeSubject.trim()}\n\n${mergeBody.trim()}`
+      : mergeSubject.trim();
     try {
-      await safeInvoke('merge_continue', { path: repoPath });
+      await safeInvoke('merge_continue', { path: repoPath, message: msg || null });
       showToast('Merge completed', 'success');
+      mergeSubject = '';
+      mergeBody = '';
     } catch (e) {
       const err = e as TrunkError;
       showToast(err.message ?? 'Merge commit failed', 'error');
@@ -553,13 +570,46 @@
   <div style="flex-shrink: 0; border-top: 1px solid var(--color-border);"></div>
 
   {#if isMerge}
-    <!-- Merge actions — replaces CommitForm during merge -->
+    <!-- Merge commit form + actions -->
     <div style="
       padding: 8px;
       display: flex;
+      flex-direction: column;
       gap: 6px;
       flex-shrink: 0;
     ">
+      <input
+        type="text"
+        bind:value={mergeSubject}
+        placeholder="Merge commit message"
+        style="
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--color-border);
+          background: var(--color-surface);
+          color: var(--color-text);
+          border-radius: 4px;
+          padding: 4px 6px;
+          font-size: 12px;
+        "
+      />
+      <textarea
+        bind:value={mergeBody}
+        rows={3}
+        placeholder="Description (optional)"
+        style="
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--color-border);
+          background: var(--color-surface);
+          color: var(--color-text);
+          border-radius: 4px;
+          padding: 4px 6px;
+          font-size: 12px;
+          resize: vertical;
+        "
+      ></textarea>
+      <div style="display: flex; gap: 6px;">
       <button
         onclick={commitMerge}
         disabled={!allResolved || mergeLoading}
@@ -594,6 +644,7 @@
       >
         Abort Merge
       </button>
+      </div>
     </div>
   {:else}
     <!-- CommitForm — normal mode -->

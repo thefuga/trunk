@@ -121,17 +121,28 @@ pub fn get_operation_state_inner(
 
 pub fn merge_continue_inner(
     path: &str,
+    message: Option<&str>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
     let path_buf = state_map.get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    let output = std::process::Command::new("git")
-        .args(["merge", "--continue"])
-        .current_dir(path_buf)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_EDITOR", "true")
-        .output()
-        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+    let output = if let Some(msg) = message {
+        // Custom message: use git commit directly (works during merge state)
+        std::process::Command::new("git")
+            .args(["commit", "-m", msg])
+            .current_dir(path_buf)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .map_err(|e| TrunkError::new("merge_error", e.to_string()))?
+    } else {
+        std::process::Command::new("git")
+            .args(["merge", "--continue"])
+            .current_dir(path_buf)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_EDITOR", "true")
+            .output()
+            .map_err(|e| TrunkError::new("merge_error", e.to_string()))?
+    };
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("merge_error", stderr.to_string()));
@@ -322,6 +333,7 @@ fn find_branch_color(commits: &[crate::git::types::GraphCommit], branch_name: &s
 #[tauri::command]
 pub async fn merge_continue(
     path: String,
+    message: Option<String>,
     state: State<'_, RepoState>,
     cache: State<'_, CommitCache>,
     app: AppHandle,
@@ -329,7 +341,7 @@ pub async fn merge_continue(
     let state_map = state.0.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        merge_continue_inner(&path_clone, &state_map)
+        merge_continue_inner(&path_clone, message.as_deref(), &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
