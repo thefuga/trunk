@@ -317,7 +317,6 @@
       display: flex;
       height: {LINE_HEIGHT}px;
       background: {bgColor};
-      opacity: {taken ? 1 : 'var(--color-merge-dimmed)'};
       cursor: pointer;
     "
   >
