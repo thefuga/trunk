@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Completed 41-01-PLAN.md
-last_updated: "2026-03-21T23:13:36.355Z"
+stopped_at: Completed 41-03-PLAN.md
+last_updated: "2026-03-21T23:19:02.731Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 14
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
 ## Current Position
 
 Phase: 41 (interactive-rebase-editor) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -47,6 +47,8 @@ Plan: 2 of 4
 | Phase 39 P01 | 3min | 2 tasks | 3 files |
 | Phase 40 P01 | 2min | 2 tasks | 2 files |
 | Phase 41 P01 | 4min | 3 tasks | 10 files |
+| Phase 41 P02 | 2min | 2 tasks | 1 files |
+| Phase 41 P03 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -77,6 +79,10 @@ Plan: 2 of 4
 - [Phase 41]: Revwalk with hide(base) + reverse for oldest-first commit listing
 - [Phase 41]: get_fork_point uses git merge-base CLI instead of git2 merge_base for simpler error handling
 - [Phase 41]: Validation Rule 2 (first non-drop squash) takes precedence over Rule 3 (no predecessor) to avoid duplicate errors
+- [Phase 41]: Used Cancel button label instead of Discard Changes per user decision IREB-05
+- [Phase 41]: Used spawn + poll loop instead of .output() to detect signal files mid-rebase
+- [Phase 41]: Static StdMutex for REBASE_SESSION_DIR to share session path between start and submit commands
+- [Phase 41]: File-based IPC: shell script touches signal file, Rust polls, frontend writes response
 
 ### Pending Todos
 
@@ -101,7 +107,7 @@ Plan: 2 of 4
 ## Session Continuity
 
 Last activity: 2026-03-21
-Last session: 2026-03-21T23:13:36.352Z
-Stopped at: Completed 41-01-PLAN.md
+Last session: 2026-03-21T23:19:02.727Z
+Stopped at: Completed 41-03-PLAN.md
 Resume file: None
 Next action: Phase 40 complete -- all plans done. v0.8 milestone complete.
