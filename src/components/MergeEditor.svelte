@@ -44,43 +44,65 @@
 
   // ---------- Flat row types for virtualization ----------
   interface FlatRow {
-    type: 'context' | 'conflict-header' | 'conflict-line';
+    type: 'context' | 'conflict-header' | 'conflict-line' | 'padding';
     regionIdx: number;
     lineIdx: number;
     text: string;
     key: string;
     lineNum: number;
     conflictNum: number;
+    height: number;
   }
 
-  function flattenPanel(regions: ConflictRegion[], side: 'ours' | 'theirs'): FlatRow[] {
-    const rows: FlatRow[] = [];
-    let lineNum = 1;
+  /** Flatten both panels together so conflict regions are padded to equal height (aligned headers). */
+  function flattenAligned(regions: ConflictRegion[]): { ours: FlatRow[]; theirs: FlatRow[] } {
+    const ours: FlatRow[] = [];
+    const theirs: FlatRow[] = [];
+    let oursLineNum = 1, theirsLineNum = 1;
     let conflictCount = 0;
+
     for (let i = 0; i < regions.length; i++) {
       const region = regions[i];
-      const lines = side === 'ours' ? region.oursLines : region.theirsLines;
-      if (region.type === 'conflict') {
-        conflictCount++;
-        rows.push({ type: 'conflict-header', regionIdx: i, lineIdx: -1, text: '', key: '', lineNum: 0, conflictNum: conflictCount });
-        for (let j = 0; j < lines.length; j++) {
-          rows.push({ type: 'conflict-line', regionIdx: i, lineIdx: j, text: lines[j], key: `${side}-${i}-${j}`, lineNum: lineNum + j, conflictNum: 0 });
+      if (region.type === 'context') {
+        for (let j = 0; j < region.oursLines.length; j++) {
+          ours.push({ type: 'context', regionIdx: i, lineIdx: j, text: region.oursLines[j], key: '', lineNum: oursLineNum + j, conflictNum: 0, height: LINE_HEIGHT });
         }
+        for (let j = 0; j < region.theirsLines.length; j++) {
+          theirs.push({ type: 'context', regionIdx: i, lineIdx: j, text: region.theirsLines[j], key: '', lineNum: theirsLineNum + j, conflictNum: 0, height: LINE_HEIGHT });
+        }
+        oursLineNum += region.oursLines.length;
+        theirsLineNum += region.theirsLines.length;
       } else {
-        for (let j = 0; j < lines.length; j++) {
-          rows.push({ type: 'context', regionIdx: i, lineIdx: j, text: lines[j], key: '', lineNum: lineNum + j, conflictNum: 0 });
+        conflictCount++;
+        // Headers
+        ours.push({ type: 'conflict-header', regionIdx: i, lineIdx: -1, text: '', key: '', lineNum: 0, conflictNum: conflictCount, height: HEADER_HEIGHT });
+        theirs.push({ type: 'conflict-header', regionIdx: i, lineIdx: -1, text: '', key: '', lineNum: 0, conflictNum: conflictCount, height: HEADER_HEIGHT });
+        // Conflict lines
+        for (let j = 0; j < region.oursLines.length; j++) {
+          ours.push({ type: 'conflict-line', regionIdx: i, lineIdx: j, text: region.oursLines[j], key: `ours-${i}-${j}`, lineNum: oursLineNum + j, conflictNum: 0, height: LINE_HEIGHT });
         }
+        for (let j = 0; j < region.theirsLines.length; j++) {
+          theirs.push({ type: 'conflict-line', regionIdx: i, lineIdx: j, text: region.theirsLines[j], key: `theirs-${i}-${j}`, lineNum: theirsLineNum + j, conflictNum: 0, height: LINE_HEIGHT });
+        }
+        // Pad the shorter side so next region starts at the same offset
+        const diff = region.oursLines.length - region.theirsLines.length;
+        if (diff > 0) {
+          theirs.push({ type: 'padding', regionIdx: i, lineIdx: -2, text: '', key: '', lineNum: 0, conflictNum: 0, height: diff * LINE_HEIGHT });
+        } else if (diff < 0) {
+          ours.push({ type: 'padding', regionIdx: i, lineIdx: -2, text: '', key: '', lineNum: 0, conflictNum: 0, height: -diff * LINE_HEIGHT });
+        }
+        oursLineNum += region.oursLines.length;
+        theirsLineNum += region.theirsLines.length;
       }
-      lineNum += lines.length;
     }
-    return rows;
+    return { ours, theirs };
   }
 
   function computeOffsets(rows: FlatRow[]): number[] {
     const offsets = new Array(rows.length + 1);
     offsets[0] = 0;
     for (let i = 0; i < rows.length; i++) {
-      offsets[i + 1] = offsets[i] + (rows[i].type === 'conflict-header' ? HEADER_HEIGHT : LINE_HEIGHT);
+      offsets[i + 1] = offsets[i] + rows[i].height;
     }
     return offsets;
   }
@@ -120,8 +142,9 @@
   let hasConflicts = $derived(conflictIndices.length > 0);
 
   // Virtualization derived state
-  let oursFlat = $derived(flattenPanel(regions, 'ours'));
-  let theirsFlat = $derived(flattenPanel(regions, 'theirs'));
+  let aligned = $derived(flattenAligned(regions));
+  let oursFlat = $derived(aligned.ours);
+  let theirsFlat = $derived(aligned.theirs);
   let oursOffsets = $derived(computeOffsets(oursFlat));
   let theirsOffsets = $derived(computeOffsets(theirsFlat));
   let oursTotalHeight = $derived(oursOffsets[oursFlat.length] ?? 0);
@@ -146,15 +169,15 @@
         panelScrollTop = 0;
         loading = false;
       })
-      .catch((e) => {
-        const err = e as TrunkError;
-        error = err.message ?? 'Failed to load merge sides';
-        loading = false;
+      .catch(() => {
+        // Merge state no longer available (e.g. git reset) — close the editor
+        onclose();
       });
   });
 
   // ---------- Synchronized scroll ----------
   let scrolling = false;
+  let scrollRaf = 0;
 
   function handleScroll(sourceIdx: number) {
     if (scrolling) return;
@@ -162,11 +185,17 @@
     const source = panelRefs[sourceIdx];
     if (!source) { scrolling = false; return; }
     const st = source.scrollTop;
-    panelScrollTop = st;
+    // Sync other panels immediately (no DOM mutation, so no jitter)
     panelRefs.forEach((el, i) => {
       if (el && i !== sourceIdx) el.scrollTop = st;
     });
-    requestAnimationFrame(() => { scrolling = false; });
+    // Defer virtualization state update to next frame so DOM mutations
+    // don't happen mid-scroll (which causes jitter on the source panel)
+    cancelAnimationFrame(scrollRaf);
+    scrollRaf = requestAnimationFrame(() => {
+      panelScrollTop = st;
+      scrolling = false;
+    });
   }
 
   // ---------- Event handlers ----------
@@ -446,8 +475,10 @@
           "
         >
           <div style="height: {oursOffsets[oursVisible[0]]}px;"></div>
-          {#each oursFlat.slice(oursVisible[0], oursVisible[1]) as row (oursVisible[0] + row.regionIdx * 10000 + row.lineIdx + 1)}
-            {#if row.type === 'conflict-header'}
+          {#each oursFlat.slice(oursVisible[0], oursVisible[1]) as row, idx (oursVisible[0] + idx)}
+            {#if row.type === 'padding'}
+              <div style="height: {row.height}px;"></div>
+            {:else if row.type === 'conflict-header'}
               {@render conflictHeader('ours', row)}
             {:else if row.type === 'conflict-line'}
               {@render conflictLine(row, 'var(--color-diff-add-bg)')}
@@ -504,8 +535,10 @@
           "
         >
           <div style="height: {theirsOffsets[theirsVisible[0]]}px;"></div>
-          {#each theirsFlat.slice(theirsVisible[0], theirsVisible[1]) as row (theirsVisible[0] + row.regionIdx * 10000 + row.lineIdx + 1)}
-            {#if row.type === 'conflict-header'}
+          {#each theirsFlat.slice(theirsVisible[0], theirsVisible[1]) as row, idx (theirsVisible[0] + idx)}
+            {#if row.type === 'padding'}
+              <div style="height: {row.height}px;"></div>
+            {:else if row.type === 'conflict-header'}
               {@render conflictHeader('theirs', row)}
             {:else if row.type === 'conflict-line'}
               {@render conflictLine(row, 'var(--color-diff-delete-bg)')}
