@@ -142,14 +142,15 @@ Plans:
   2. User can check/uncheck per-hunk checkboxes on current and incoming panels to add or remove entire hunks from the output, and can click individual lines to toggle them into or out of the output
   3. User can directly type in the output panel to manually adjust the merged result
   4. "Take All Current" and "Take All Incoming" buttons resolve the entire file with one click (available in toolbar and as right-click on conflicted file); Prev/Next conflict arrows navigate between conflict sections within the file
-  5. "Save and Mark Resolved" saves the output to disk, stages the file, and returns to the staging panel
-**Plans**: 5 plans
+  5. "Save and Mark Resolved" saves the output to disk, stages the file, and auto-opens the next conflicted file (or returns to staging panel if none remain)
+**Plans**: 6 plans
 Plans:
 - [x] 38-01-PLAN.md -- Backend: MergeSides type, get_merge_sides and save_merge_result commands
 - [x] 38-02-PLAN.md -- Merge parser: conflict region parsing, selection helpers, output computation
 - [x] 38-03-PLAN.md -- MergeEditor component: three-panel layout, selection, sync scroll, navigation
 - [x] 38-04-PLAN.md -- Integration: App.svelte routing, StagingPanel context menu, resolution flow
-- [ ] 38-05-PLAN.md -- Gap closure: wire output textarea into three-way scroll sync
+- [x] 38-05-PLAN.md -- Gap closure: wire output textarea into three-way scroll sync
+- [ ] 38-06-PLAN.md -- Gap closure: auto-open next conflicted file after resolution (CONF-09)
 
 ### Phase 39: Merge Workflow
 **Goal**: Users can initiate and complete merges through the GUI without touching the terminal
@@ -192,11 +193,11 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. Conflict Detection & Operation State | 3/3 | Complete    | 2026-03-20 | - |
-| 38. Merge Editor | 5/5 | Complete   | 2026-03-21 | - |
+| 38. Merge Editor | 5/6 | In Progress   | - | - |
 | 39. Merge Workflow | v0.8 | 0/? | Not started | - |
 | 40. Rebase Workflow | v0.8 | 0/? | Not started | - |
 | 41. Interactive Rebase Editor | v0.8 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-20 — Phase 38 gap closure plan added (5 plans total)*
+*Last updated: 2026-03-21 — Phase 38 gap closure plan 06 added (auto-open next conflict)*
