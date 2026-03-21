@@ -1,0 +1,274 @@
+/**
+ * Pure TypeScript merge parser: conflict region identification,
+ * selection state management, real-time output computation,
+ * and navigation helpers.
+ *
+ * All functions are pure (no side effects) and fully tested.
+ * The MergeEditor component (Plan 03) imports these functions
+ * to drive its reactive state.
+ */
+
+export interface ConflictRegion {
+  type: 'context' | 'conflict';
+  baseLines: string[];
+  oursLines: string[];
+  theirsLines: string[];
+}
+
+/**
+ * Split text into lines. Empty string yields an empty array
+ * (not `[""]` which would create a phantom line).
+ */
+function splitLines(text: string): string[] {
+  if (text === '') return [];
+  return text.split('\n');
+}
+
+/**
+ * Find the next position where all three arrays have the same value,
+ * starting the search from the given offsets. Returns the offsets
+ * of the sync point, or null if no sync point is found.
+ *
+ * Strategy: scan ahead in base. For each base[bi], check if ours
+ * and theirs contain that value at or after their current offsets.
+ * When a match is found, return the sync offsets.
+ */
+function findSyncPoint(
+  base: string[],
+  ours: string[],
+  theirs: string[],
+  bi: number,
+  oi: number,
+  ti: number,
+): { bi: number; oi: number; ti: number } | null {
+  // Try each base line as a potential sync point
+  for (let b = bi; b < base.length; b++) {
+    const needle = base[b];
+    // Find this value in ours at or after oi
+    const oIdx = ours.indexOf(needle, oi);
+    if (oIdx === -1) continue;
+    // Find this value in theirs at or after ti
+    const tIdx = theirs.indexOf(needle, ti);
+    if (tIdx === -1) continue;
+    // Found a sync point where all three match
+    return { bi: b, oi: oIdx, ti: tIdx };
+  }
+  return null;
+}
+
+/**
+ * Parse three-way text (base, ours, theirs) into an array of
+ * ConflictRegion objects. Each region is either:
+ * - context: lines identical across all three versions
+ * - conflict: lines that differ between ours and theirs (relative to base)
+ *
+ * The parser walks through lines using three pointers and groups
+ * consecutive matching lines as context and differing lines as conflict.
+ */
+export function parseConflictRegions(
+  base: string,
+  ours: string,
+  theirs: string,
+): ConflictRegion[] {
+  const baseLines = splitLines(base);
+  const oursLines = splitLines(ours);
+  const theirsLines = splitLines(theirs);
+
+  // Edge case: empty base (new file on both sides)
+  if (baseLines.length === 0) {
+    // If ours equals theirs, everything is context
+    if (ours === theirs) {
+      if (oursLines.length === 0) return [];
+      return [{ type: 'context', baseLines: [], oursLines, theirsLines }];
+    }
+    // Otherwise, the entire file is one conflict
+    return [{ type: 'conflict', baseLines: [], oursLines, theirsLines }];
+  }
+
+  const regions: ConflictRegion[] = [];
+  let bi = 0;
+  let oi = 0;
+  let ti = 0;
+
+  while (bi < baseLines.length || oi < oursLines.length || ti < theirsLines.length) {
+    // Check if current lines all match
+    if (
+      bi < baseLines.length &&
+      oi < oursLines.length &&
+      ti < theirsLines.length &&
+      baseLines[bi] === oursLines[oi] &&
+      baseLines[bi] === theirsLines[ti]
+    ) {
+      // Accumulate context lines
+      const ctxBase: string[] = [];
+      const ctxOurs: string[] = [];
+      const ctxTheirs: string[] = [];
+      while (
+        bi < baseLines.length &&
+        oi < oursLines.length &&
+        ti < theirsLines.length &&
+        baseLines[bi] === oursLines[oi] &&
+        baseLines[bi] === theirsLines[ti]
+      ) {
+        ctxBase.push(baseLines[bi]);
+        ctxOurs.push(oursLines[oi]);
+        ctxTheirs.push(theirsLines[ti]);
+        bi++;
+        oi++;
+        ti++;
+      }
+      regions.push({ type: 'context', baseLines: ctxBase, oursLines: ctxOurs, theirsLines: ctxTheirs });
+    } else {
+      // Lines diverge -- find the next sync point
+      const sync = findSyncPoint(baseLines, oursLines, theirsLines, bi + 1, oi + 1, ti + 1);
+
+      if (sync) {
+        // Everything between current position and sync point is conflict
+        regions.push({
+          type: 'conflict',
+          baseLines: baseLines.slice(bi, sync.bi),
+          oursLines: oursLines.slice(oi, sync.oi),
+          theirsLines: theirsLines.slice(ti, sync.ti),
+        });
+        bi = sync.bi;
+        oi = sync.oi;
+        ti = sync.ti;
+      } else {
+        // No sync point found -- rest of all three is one conflict
+        regions.push({
+          type: 'conflict',
+          baseLines: baseLines.slice(bi),
+          oursLines: oursLines.slice(oi),
+          theirsLines: theirsLines.slice(ti),
+        });
+        break;
+      }
+    }
+  }
+
+  return regions;
+}
+
+/**
+ * Compute the merged output text from regions and selection state.
+ *
+ * For context regions, all lines are included.
+ * For conflict regions, lines are included if their key is in takenLines.
+ * Ours lines come before theirs lines within each conflict region.
+ */
+export function computeOutput(regions: ConflictRegion[], takenLines: Set<string>): string {
+  const lines: string[] = [];
+
+  for (let i = 0; i < regions.length; i++) {
+    const region = regions[i];
+    if (region.type === 'context') {
+      // For context, include all lines (oursLines === theirsLines === baseLines)
+      lines.push(...region.oursLines);
+    } else {
+      // For conflict, include taken ours lines first, then taken theirs lines
+      region.oursLines.forEach((line, j) => {
+        if (takenLines.has(`ours-${i}-${j}`)) {
+          lines.push(line);
+        }
+      });
+      region.theirsLines.forEach((line, j) => {
+        if (takenLines.has(`theirs-${i}-${j}`)) {
+          lines.push(line);
+        }
+      });
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Select all ours lines from all conflict regions.
+ * Returns a new Set with keys like "ours-{regionIdx}-{lineIdx}".
+ */
+export function takeAllCurrent(regions: ConflictRegion[]): Set<string> {
+  const keys = new Set<string>();
+  for (let i = 0; i < regions.length; i++) {
+    if (regions[i].type === 'conflict') {
+      for (let j = 0; j < regions[i].oursLines.length; j++) {
+        keys.add(`ours-${i}-${j}`);
+      }
+    }
+  }
+  return keys;
+}
+
+/**
+ * Select all theirs lines from all conflict regions.
+ * Returns a new Set with keys like "theirs-{regionIdx}-{lineIdx}".
+ */
+export function takeAllIncoming(regions: ConflictRegion[]): Set<string> {
+  const keys = new Set<string>();
+  for (let i = 0; i < regions.length; i++) {
+    if (regions[i].type === 'conflict') {
+      for (let j = 0; j < regions[i].theirsLines.length; j++) {
+        keys.add(`theirs-${i}-${j}`);
+      }
+    }
+  }
+  return keys;
+}
+
+/**
+ * Toggle all lines from one side of a conflict region.
+ *
+ * If ALL lines from that side in that region are already taken,
+ * remove them all (untoggle). Otherwise add them all (toggle on).
+ * Returns a new Set (immutable update).
+ */
+export function toggleHunk(
+  side: 'ours' | 'theirs',
+  regionIdx: number,
+  regions: ConflictRegion[],
+  takenLines: Set<string>,
+): Set<string> {
+  const region = regions[regionIdx];
+  const lines = side === 'ours' ? region.oursLines : region.theirsLines;
+  const keys = lines.map((_, j) => `${side}-${regionIdx}-${j}`);
+
+  const allTaken = keys.every((k) => takenLines.has(k));
+  const result = new Set(takenLines);
+
+  if (allTaken) {
+    // Remove all
+    for (const k of keys) {
+      result.delete(k);
+    }
+  } else {
+    // Add all
+    for (const k of keys) {
+      result.add(k);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Toggle a single line in the selection state.
+ * If the key is present, remove it. Otherwise add it.
+ * Returns a new Set (immutable update).
+ */
+export function toggleLine(key: string, takenLines: Set<string>): Set<string> {
+  const result = new Set(takenLines);
+  if (result.has(key)) {
+    result.delete(key);
+  } else {
+    result.add(key);
+  }
+  return result;
+}
+
+/**
+ * Return indices of all conflict regions (for Prev/Next navigation).
+ */
+export function getConflictIndices(regions: ConflictRegion[]): number[] {
+  return regions
+    .map((r, i) => (r.type === 'conflict' ? i : -1))
+    .filter((i) => i !== -1);
+}
