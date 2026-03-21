@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Completed 41-03-PLAN.md
-last_updated: "2026-03-21T23:19:02.731Z"
+stopped_at: Completed 41-04-PLAN.md
+last_updated: "2026-03-21T23:26:33.273Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
 
 ## Current Position
 
-Phase: 41 (interactive-rebase-editor) — EXECUTING
-Plan: 3 of 4
+Phase: 41 (interactive-rebase-editor) — COMPLETE
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Plan: 3 of 4
 | Phase 41 P01 | 4min | 3 tasks | 10 files |
 | Phase 41 P02 | 2min | 2 tasks | 1 files |
 | Phase 41 P03 | 2min | 2 tasks | 2 files |
+| Phase 41 P04 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Plan: 3 of 4
 - [Phase 41]: Used spawn + poll loop instead of .output() to detect signal files mid-rebase
 - [Phase 41]: Static StdMutex for REBASE_SESSION_DIR to share session path between start and submit commands
 - [Phase 41]: File-based IPC: shell script touches signal file, Rust polls, frontend writes response
+- [Phase 41]: Pass RebaseTodoItem[] directly to RebaseEditor, letting the component handle internal mapping
+- [Phase 41]: Capture baseOid before closing editor to prevent state reset race condition in handleRebaseStart
 
 ### Pending Todos
 
@@ -107,7 +110,7 @@ Plan: 3 of 4
 ## Session Continuity
 
 Last activity: 2026-03-21
-Last session: 2026-03-21T23:19:02.727Z
-Stopped at: Completed 41-03-PLAN.md
+Last session: 2026-03-21T23:26:33.268Z
+Stopped at: Completed 41-04-PLAN.md
 Resume file: None
 Next action: Phase 40 complete -- all plans done. v0.8 milestone complete.

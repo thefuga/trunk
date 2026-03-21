@@ -114,7 +114,7 @@ Full details: [milestones/v0.7-ROADMAP.md](milestones/v0.7-ROADMAP.md)
 - [x] **Phase 38: Merge Editor** - Three-panel merge editor with per-hunk/per-line selection, editable output, navigation, and resolution workflow (completed 2026-03-21)
 - [x] **Phase 39: Merge Workflow** - Merge initiation via context menu, fast-forward and auto-commit handling (MERGE-02 drag-and-drop dropped) (completed 2026-03-21)
 - [x] **Phase 40: Rebase Workflow** - Rebase initiation via context menu, mid-rebase conflict resolution, abort/skip (REB-02 drag-and-drop dropped) (completed 2026-03-21)
-- [ ] **Phase 41: Interactive Rebase Editor** - Commit list editor with Pick/Squash/Reword/Drop, drag reordering, keyboard shortcuts, execution
+- [x] **Phase 41: Interactive Rebase Editor** - Commit list editor with Pick/Squash/Reword/Drop, drag reordering, keyboard shortcuts, execution (completed 2026-03-21)
 
 ## Phase Details
 
@@ -205,7 +205,7 @@ Plans:
 | 38. Merge Editor | 6/6 | Complete    | 2026-03-21 | - |
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
-| 41. Interactive Rebase Editor | 3/4 | In Progress|  | - |
+| 41. Interactive Rebase Editor | 4/4 | Complete   | 2026-03-21 | - |
 
 ---
 *Roadmap created: 2026-03-13*
