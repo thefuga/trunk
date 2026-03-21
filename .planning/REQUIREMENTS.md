@@ -34,12 +34,12 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 
 ### Rebase Workflow
 
-- [ ] **REB-01**: User can rebase current branch onto another branch via right-click context menu on a branch
-- [ ] **REB-02**: User can initiate rebase by dragging a branch onto another branch in the graph, selecting "Rebase" from the resulting context menu
+- [x] **REB-01**: User can rebase current branch onto another branch via right-click context menu on a branch
+- [x] **REB-02**: User can initiate rebase by dragging a branch onto another branch in the graph, selecting "Rebase" from the resulting context menu
 - [ ] **REB-03**: User can start interactive rebase by right-clicking a commit in the graph and selecting "Interactive Rebase"
-- [ ] **REB-04**: Mid-rebase conflicts pause the rebase and show conflicted files in the staging panel for resolution via the merge editor
-- [ ] **REB-05**: User can abort an in-progress rebase to restore the repository to its pre-rebase state
-- [ ] **REB-06**: User can skip a conflicting commit during rebase and continue with the next commit
+- [x] **REB-04**: Mid-rebase conflicts pause the rebase and show conflicted files in the staging panel for resolution via the merge editor
+- [x] **REB-05**: User can abort an in-progress rebase to restore the repository to its pre-rebase state
+- [x] **REB-06**: User can skip a conflicting commit during rebase and continue with the next commit
 
 ### Interactive Rebase Editor
 
@@ -97,12 +97,12 @@ Deferred differentiators beyond GitKraken parity.
 | MERGE-02 | Phase 39 | Dropped |
 | MERGE-03 | Phase 39 | Complete |
 | MERGE-04 | Phase 39 | Complete |
-| REB-01 | Phase 40 | Pending |
-| REB-02 | Phase 40 | Pending |
+| REB-01 | Phase 40 | Complete |
+| REB-02 | Phase 40 | Complete |
 | REB-03 | Phase 41 | Pending |
-| REB-04 | Phase 40 | Pending |
-| REB-05 | Phase 40 | Pending |
-| REB-06 | Phase 40 | Pending |
+| REB-04 | Phase 40 | Complete |
+| REB-05 | Phase 40 | Complete |
+| REB-06 | Phase 40 | Complete |
 | IREB-01 | Phase 41 | Pending |
 | IREB-02 | Phase 41 | Pending |
 | IREB-03 | Phase 41 | Pending |

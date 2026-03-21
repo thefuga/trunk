@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
-status: unknown
-stopped_at: Phase 40 context gathered
-last_updated: "2026-03-21T16:51:54.970Z"
+status: complete
+stopped_at: Completed 40-01-PLAN.md
+last_updated: "2026-03-21T17:43:58.526Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # Project State
@@ -20,11 +20,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 39 — merge-workflow
+**Current focus:** Phase 40 — rebase-workflow
 
 ## Current Position
 
-Phase: 39 (merge-workflow) — COMPLETE
+Phase: 40 (rebase-workflow) — COMPLETE
 Plan: 1 of 1 (done)
 
 ## Performance Metrics
@@ -45,6 +45,7 @@ Plan: 1 of 1 (done)
 | Phase 38 P05 | 1min | 1 tasks | 1 files |
 | Phase 38 P06 | 1min | 1 tasks | 1 files |
 | Phase 39 P01 | 3min | 2 tasks | 3 files |
+| Phase 40 P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Plan: 1 of 1 (done)
 - [Phase 39]: No success toast on merge -- graph refresh via repo-changed event is sufficient feedback
 - [Phase 39]: Remote branch context menu is single-item (merge only) since checkout is handled via click
 - [Phase 39]: Detached HEAD hides merge items entirely rather than showing disabled items
+- [Phase 40]: No success toast on rebase -- graph refresh via repo-changed event is sufficient (matches merge pattern)
+- [Phase 40]: Rebase items always adjacent to merge items in context menus, no separator between them
 
 ### Pending Todos
 
@@ -94,7 +97,7 @@ Plan: 1 of 1 (done)
 ## Session Continuity
 
 Last activity: 2026-03-21
-Last session: 2026-03-21T16:51:54.966Z
-Stopped at: Phase 40 context gathered
-Resume file: .planning/phases/40-rebase-workflow/40-CONTEXT.md
-Next action: Phase 37 complete -- all 3 plans done
+Last session: 2026-03-21T17:43:57.748Z
+Stopped at: Completed 40-01-PLAN.md
+Resume file: None
+Next action: Phase 40 complete -- all plans done. v0.8 milestone complete.

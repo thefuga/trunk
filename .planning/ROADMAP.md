@@ -113,7 +113,7 @@ Full details: [milestones/v0.7-ROADMAP.md](milestones/v0.7-ROADMAP.md)
 - [x] **Phase 37: Conflict Detection & Operation State** - Conflicted file display in staging panel and merge/rebase operation banners (completed 2026-03-20)
 - [x] **Phase 38: Merge Editor** - Three-panel merge editor with per-hunk/per-line selection, editable output, navigation, and resolution workflow (completed 2026-03-21)
 - [x] **Phase 39: Merge Workflow** - Merge initiation via context menu, fast-forward and auto-commit handling (MERGE-02 drag-and-drop dropped) (completed 2026-03-21)
-- [ ] **Phase 40: Rebase Workflow** - Rebase initiation via context menu, mid-rebase conflict resolution, abort/skip (REB-02 drag-and-drop dropped)
+- [x] **Phase 40: Rebase Workflow** - Rebase initiation via context menu, mid-rebase conflict resolution, abort/skip (REB-02 drag-and-drop dropped) (completed 2026-03-21)
 - [ ] **Phase 41: Interactive Rebase Editor** - Commit list editor with Pick/Squash/Reword/Drop, drag reordering, keyboard shortcuts, execution
 
 ## Phase Details
@@ -199,7 +199,7 @@ Plans:
 | 37. Conflict Detection & Operation State | 3/3 | Complete    | 2026-03-20 | - |
 | 38. Merge Editor | 6/6 | Complete    | 2026-03-21 | - |
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
-| 40. Rebase Workflow | v0.8 | 0/1 | Not started | - |
+| 40. Rebase Workflow | 1/1 | Complete   | 2026-03-21 | - |
 | 41. Interactive Rebase Editor | v0.8 | 0/? | Not started | - |
 
 ---
