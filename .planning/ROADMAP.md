@@ -188,7 +188,12 @@ Plans:
   3. "Start Rebase" validates the plan (e.g., cannot squash the first commit), executes the rebase, and closes the editor; "Cancel" closes with no changes; "Reset" restores all commits to original Pick state and order
   4. Reword action prompts a message editor dialog when the rebase reaches that commit; Squash action combines the commit with its predecessor and shows a message editor with concatenated messages
   5. Mid-rebase conflicts during interactive rebase pause execution and show conflicted files for resolution via the merge editor, then resume on "Continue"
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 41-01-PLAN.md -- Foundation: backend types, get_rebase_todo command, validation logic with tests, CSS tokens, InputDialog extension, LazyStore keys
+- [ ] 41-02-PLAN.md -- RebaseEditor component: column layout, action dropdowns, drag-and-drop, keyboard shortcuts, validation display
+- [ ] 41-03-PLAN.md -- Backend execution: start_interactive_rebase with GIT_SEQUENCE_EDITOR/GIT_EDITOR, submit_rebase_message
+- [ ] 41-04-PLAN.md -- Integration: App.svelte center pane swap, context menus, message dialog, end-to-end flow
 
 ## Progress
 
@@ -200,8 +205,8 @@ Plans:
 | 38. Merge Editor | 6/6 | Complete    | 2026-03-21 | - |
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
-| 41. Interactive Rebase Editor | v0.8 | 0/? | Not started | - |
+| 41. Interactive Rebase Editor | v0.8 | 0/4 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-21 — Phase 40 planned (1 plan, REB-02 dropped)*
+*Last updated: 2026-03-21 — Phase 41 planned (4 plans, 3 waves)*
