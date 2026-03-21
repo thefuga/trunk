@@ -36,7 +36,7 @@ Three-panel merge editor for resolving conflicted files with per-hunk and per-li
 
 ### Resolution flow
 - **Toolbar split between panel headers**: Take All Current in Current panel header, Take All Incoming in Incoming panel header, Prev/Next conflict arrows and Save and Mark Resolved in Output panel header
-- **Save and Mark Resolved** saves output to disk, stages the file, then **returns to the staging panel** (does not auto-open next file)
+- **Save and Mark Resolved** saves output to disk, stages the file, then **auto-opens the next conflicted file** if any remain (falls back to staging panel when no conflicts left) — *overridden from original "return to staging" decision to match CONF-09*
 - **Right-click on conflicted file in staging panel** shows "Take All Current" and "Take All Incoming" as context menu items — quick resolution without opening the editor
 - **Prev/Next conflict navigation stops at boundaries** — Prev disabled at first conflict, Next disabled at last. Does not wrap around
 
