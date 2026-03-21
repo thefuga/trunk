@@ -566,9 +566,9 @@
         style="
           flex: 1;
           height: 28px;
-          background: var(--color-accent);
-          color: white;
-          border: none;
+          background: var(--color-btn-continue-bg);
+          color: var(--color-btn-continue);
+          border: 1px solid var(--color-btn-continue-border);
           border-radius: 4px;
           font-size: 12px;
           cursor: {allResolved && !mergeLoading ? 'pointer' : 'not-allowed'};
