@@ -199,7 +199,7 @@ Plans:
 | 37. Conflict Detection & Operation State | 3/3 | Complete    | 2026-03-20 | - |
 | 38. Merge Editor | 6/6 | Complete    | 2026-03-21 | - |
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
-| 40. Rebase Workflow | 1/1 | Complete   | 2026-03-21 | - |
+| 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 41. Interactive Rebase Editor | v0.8 | 0/? | Not started | - |
 
 ---

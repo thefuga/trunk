@@ -35,7 +35,7 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 ### Rebase Workflow
 
 - [x] **REB-01**: User can rebase current branch onto another branch via right-click context menu on a branch
-- [x] **REB-02**: User can initiate rebase by dragging a branch onto another branch in the graph, selecting "Rebase" from the resulting context menu
+- [ ] **REB-02**: ~~User can initiate rebase by dragging a branch onto another branch in the graph, selecting "Rebase" from the resulting context menu~~ — Dropped per user decision
 - [ ] **REB-03**: User can start interactive rebase by right-clicking a commit in the graph and selecting "Interactive Rebase"
 - [x] **REB-04**: Mid-rebase conflicts pause the rebase and show conflicted files in the staging panel for resolution via the merge editor
 - [x] **REB-05**: User can abort an in-progress rebase to restore the repository to its pre-rebase state
@@ -98,7 +98,7 @@ Deferred differentiators beyond GitKraken parity.
 | MERGE-03 | Phase 39 | Complete |
 | MERGE-04 | Phase 39 | Complete |
 | REB-01 | Phase 40 | Complete |
-| REB-02 | Phase 40 | Complete |
+| REB-02 | Phase 40 | Dropped |
 | REB-03 | Phase 41 | Pending |
 | REB-04 | Phase 40 | Complete |
 | REB-05 | Phase 40 | Complete |

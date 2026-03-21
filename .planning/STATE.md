@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
-status: complete
+status: unknown
 stopped_at: Completed 40-01-PLAN.md
-last_updated: "2026-03-21T17:43:58.526Z"
+last_updated: "2026-03-21T17:48:53.935Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
