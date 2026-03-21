@@ -87,17 +87,15 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
-              class="group flex items-center justify-between rounded-md px-3 py-2 cursor-pointer transition-colors"
-              style="background: var(--color-surface); border: 1px solid var(--color-border);"
+              class="group flex items-center gap-2 rounded px-3 py-1.5 cursor-pointer hover:bg-white/5"
               onclick={() => openPath(repo.path)}
               role="button"
               tabindex="0"
               onkeydown={(e) => e.key === 'Enter' && openPath(repo.path)}
             >
-              <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                <span class="text-sm font-medium truncate" style="color: var(--color-text);">{repo.name}</span>
-                <span class="text-xs truncate" style="color: var(--color-text-muted);">{repo.path}</span>
-              </div>
+              <span class="text-sm truncate min-w-0 flex-1">
+                <span style="color: var(--color-text-muted);">{repo.path.substring(0, repo.path.lastIndexOf('/'))}/</span><span class="font-semibold" style="color: var(--color-text);">{repo.path.split('/').at(-1)}</span>
+              </span>
               <button
                 class="ml-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs"
                 style="color: var(--color-text-muted);"

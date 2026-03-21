@@ -4,7 +4,7 @@ export interface RecentRepo { name: string; path: string; }
 
 const store = new LazyStore('trunk-prefs.json');
 const RECENT_KEY = 'recent_repos';
-const MAX_RECENT = 5;
+const MAX_RECENT = 10;
 
 export async function addRecentRepo(repo: RecentRepo): Promise<void> {
   const current = await store.get<RecentRepo[]>(RECENT_KEY) ?? [];
