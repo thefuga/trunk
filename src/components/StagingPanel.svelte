@@ -1,7 +1,7 @@
 <script lang="ts">
   import { listen } from '@tauri-apps/api/event';
   import { safeInvoke, type TrunkError } from '../lib/invoke.js';
-  import type { WorkingTreeStatus, FileStatusType, OperationInfo } from '../lib/types.js';
+  import type { WorkingTreeStatus, FileStatusType, OperationInfo, MergeSides } from '../lib/types.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import FileRow from './FileRow.svelte';
@@ -130,11 +130,28 @@
     await menu.popup();
   }
 
+  async function resolveConflictedFile(filePath: string, side: 'ours' | 'theirs') {
+    try {
+      const sides = await safeInvoke<MergeSides>('get_merge_sides', { path: repoPath, filePath });
+      const content = side === 'ours' ? sides.ours : sides.theirs;
+      await safeInvoke('save_merge_result', { path: repoPath, filePath, content });
+      await loadStatus();
+      const label = side === 'ours' ? 'current' : 'incoming';
+      showToast(`Resolved ${filePath} (took all ${label})`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Resolution failed', 'error');
+    }
+  }
+
   async function showConflictedContextMenu(e: MouseEvent, filePath: string) {
-    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
     const absPath = repoPath + '/' + filePath;
     const menu = await Menu.new({
       items: [
+        await MenuItem.new({ text: 'Take All Current', action: () => { resolveConflictedFile(filePath, 'ours').catch(() => {}); } }),
+        await MenuItem.new({ text: 'Take All Incoming', action: () => { resolveConflictedFile(filePath, 'theirs').catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
         await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
       ],
