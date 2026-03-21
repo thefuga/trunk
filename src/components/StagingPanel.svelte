@@ -564,7 +564,7 @@
         onclick={commitMerge}
         disabled={!allResolved || mergeLoading}
         style="
-          flex: 1;
+          flex: 3;
           height: 28px;
           background: var(--color-btn-continue-bg);
           color: var(--color-btn-continue);
@@ -581,7 +581,7 @@
         onclick={abortMerge}
         disabled={mergeLoading}
         style="
-          flex: 1;
+          flex: 2;
           height: 28px;
           background: var(--color-btn-abort-bg);
           color: var(--color-btn-abort);
