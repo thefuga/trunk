@@ -82,6 +82,8 @@ pub fn run() {
             commands::merge_editor::save_merge_result,
             commands::interactive_rebase::get_rebase_todo,
             commands::interactive_rebase::get_fork_point,
+            commands::interactive_rebase::start_interactive_rebase,
+            commands::interactive_rebase::submit_rebase_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

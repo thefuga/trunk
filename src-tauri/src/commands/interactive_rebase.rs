@@ -249,6 +249,56 @@ pub async fn get_fork_point(
     .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
 }
 
+#[tauri::command]
+pub async fn start_interactive_rebase(
+    path: String,
+    base_oid: String,
+    todo_items: Vec<RebaseTodoAction>,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let app_clone = app.clone();
+
+    // Create a unique temp directory for this rebase session
+    let session_dir = std::env::temp_dir().join(format!("trunk-rebase-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&session_dir);
+
+    // Store session dir for submit_rebase_message to find
+    *REBASE_SESSION_DIR.lock().unwrap() = Some(session_dir.clone());
+
+    let graph_result = tauri::async_runtime::spawn_blocking(move || {
+        start_interactive_rebase_blocking(
+            &path_clone, &base_oid, &todo_items, &session_dir, &state_map, &app_clone,
+        )
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())?;
+
+    // Clean up session dir
+    let session = REBASE_SESSION_DIR.lock().unwrap().take();
+    if let Some(dir) = session {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn submit_rebase_message(
+    message: String,
+) -> Result<(), String> {
+    let session_dir = REBASE_SESSION_DIR.lock().unwrap().clone()
+        .ok_or_else(|| serde_json::to_string(&TrunkError::new("no_session", "No active rebase session")).unwrap())?;
+    submit_rebase_message_inner(&session_dir, &message)
+        .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
