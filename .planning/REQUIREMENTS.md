@@ -27,10 +27,10 @@ Requirements for v0.8 Conflict & Rebase milestone. GitKraken-parity scope.
 
 ### Merge Workflow
 
-- [ ] **MERGE-01**: User can merge a branch into the current branch via right-click context menu on a branch (sidebar or graph pill)
-- [ ] **MERGE-02**: User can initiate merge by dragging a branch onto another branch in the graph, selecting "Merge" from the resulting context menu
-- [ ] **MERGE-03**: Fast-forward merges advance the branch pointer without creating a merge commit, with toast confirmation
-- [ ] **MERGE-04**: Non-conflicting merges auto-create a merge commit with standard message and refresh the graph
+- [x] **MERGE-01**: User can merge a branch into the current branch via right-click context menu on a branch (sidebar or graph pill)
+- [x] **MERGE-02**: User can initiate merge by dragging a branch onto another branch in the graph, selecting "Merge" from the resulting context menu
+- [x] **MERGE-03**: Fast-forward merges advance the branch pointer without creating a merge commit, with toast confirmation
+- [x] **MERGE-04**: Non-conflicting merges auto-create a merge commit with standard message and refresh the graph
 
 ### Rebase Workflow
 
@@ -93,10 +93,10 @@ Deferred differentiators beyond GitKraken parity.
 | OPS-01 | Phase 37 | Complete |
 | OPS-02 | Phase 37 | Complete |
 | OPS-03 | Phase 37 | Complete |
-| MERGE-01 | Phase 39 | Pending |
-| MERGE-02 | Phase 39 | Pending |
-| MERGE-03 | Phase 39 | Pending |
-| MERGE-04 | Phase 39 | Pending |
+| MERGE-01 | Phase 39 | Complete |
+| MERGE-02 | Phase 39 | Complete |
+| MERGE-03 | Phase 39 | Complete |
+| MERGE-04 | Phase 39 | Complete |
 | REB-01 | Phase 40 | Pending |
 | REB-02 | Phase 40 | Pending |
 | REB-03 | Phase 41 | Pending |

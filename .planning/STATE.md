@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Phase 39 context gathered
-last_updated: "2026-03-21T05:14:18.308Z"
-last_activity: "2026-03-21 - Completed quick task 260320-wz2: Simplify splash screen project cards to single-line items, save 10 projects instead of 5"
+stopped_at: Completed 39-01-PLAN.md
+last_updated: "2026-03-21T14:09:04.389Z"
+last_activity: 2026-03-21
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 38 — merge-editor
+**Current focus:** Phase 39 — merge-workflow
 
 ## Current Position
 
-Phase: 38 (merge-editor) — COMPLETE
-Plan: 6 of 6
+Phase: 39 (merge-workflow) — COMPLETE
+Plan: 1 of 1 (done)
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: 6 of 6
 | Phase 38 P04 | 2min | 2 tasks | 2 files |
 | Phase 38 P05 | 1min | 1 tasks | 1 files |
 | Phase 38 P06 | 1min | 1 tasks | 1 files |
+| Phase 39 P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Plan: 6 of 6
 - [Phase 38]: handleFileResolved calls clearStagingDiff to return center pane to CommitGraph after conflict resolution
 - [Phase 38]: Changed panelRefs type from HTMLDivElement[] to HTMLElement[] to accommodate textarea in scroll sync
 - [Phase 38]: Query get_status after resolution to find remaining conflicts rather than tracking conflict list in local state
+- [Phase 39]: No success toast on merge -- graph refresh via repo-changed event is sufficient feedback
+- [Phase 39]: Remote branch context menu is single-item (merge only) since checkout is handled via click
+- [Phase 39]: Detached HEAD hides merge items entirely rather than showing disabled items
 
 ### Pending Todos
 
@@ -89,8 +93,8 @@ Plan: 6 of 6
 
 ## Session Continuity
 
-Last activity: 2026-03-21 - Completed quick task 260320-wz2: Simplify splash screen project cards to single-line items, save 10 projects instead of 5
-Last session: 2026-03-21T05:14:18.302Z
-Stopped at: Phase 39 context gathered
-Resume file: .planning/phases/39-merge-workflow/39-CONTEXT.md
+Last activity: 2026-03-21
+Last session: 2026-03-21T14:09:04.384Z
+Stopped at: Completed 39-01-PLAN.md
+Resume file: None
 Next action: Phase 37 complete -- all 3 plans done
