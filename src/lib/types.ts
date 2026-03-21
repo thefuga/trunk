@@ -98,6 +98,12 @@ export interface OperationInfo {
   progress: string | null;
 }
 
+export interface MergeSides {
+  base: string;
+  ours: string;
+  theirs: string;
+}
+
 export interface DiffLine {
   origin: DiffOrigin;
   content: string;
