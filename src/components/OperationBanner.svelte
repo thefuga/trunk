@@ -101,8 +101,8 @@
   <span style="font-size: 12px; color: var(--color-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
     {label}
   </span>
-  <div style="display: flex; gap: 4px; flex-shrink: 0;">
-    {#if isMerge || isRebase}
+  {#if isRebase}
+    <div style="display: flex; gap: 4px; flex-shrink: 0;">
       <button
         onclick={handleContinue}
         disabled={loading}
@@ -117,8 +117,6 @@
           white-space: nowrap;
         "
       >Continue</button>
-    {/if}
-    {#if isRebase}
       <button
         onclick={handleSkip}
         disabled={loading}
@@ -133,8 +131,6 @@
           white-space: nowrap;
         "
       >Skip</button>
-    {/if}
-    {#if isMerge || isRebase}
       <button
         onclick={handleAbort}
         disabled={loading}
@@ -149,6 +145,6 @@
           white-space: nowrap;
         "
       >Abort</button>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
