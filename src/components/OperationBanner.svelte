@@ -94,7 +94,7 @@
   </span>
   <div style="font-size: 12px; color: var(--color-text); flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
     {#if isMerge || isRebase}
-      <span>{isMerge ? 'Merging' : 'Rebasing'}</span>
+      <span style="flex-shrink: 0;">{isMerge ? 'Merging' : 'Rebasing'}</span>
       <span style="
         background: {sourceColor};
         border-radius: 9999px;
@@ -103,8 +103,11 @@
         line-height: 16px;
         color: white;
         font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
       ">{sourceBranch}</span>
-      <span>{isMerge ? 'into' : 'onto'}</span>
+      <span style="flex-shrink: 0;">{isMerge ? 'into' : 'onto'}</span>
       <span style="
         background: {targetColor};
         border-radius: 9999px;
@@ -113,6 +116,9 @@
         line-height: 16px;
         color: white;
         font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
       ">{targetBranch}</span>
       {#if isRebase && info.progress}
         <span style="color: var(--color-text-muted);">({info.progress})</span>

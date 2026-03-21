@@ -276,6 +276,9 @@
         color: white;
         font-weight: 700;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
       ">
         {currentBranch}
       </span>
@@ -383,7 +386,7 @@
           <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
             <AlertTriangle size={12} />
           </span>
-          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1; white-space: nowrap;">
             Conflicted Files ({status?.conflicted.length ?? 0})
           </span>
           {#if (status?.conflicted.length ?? 0) > 0}
