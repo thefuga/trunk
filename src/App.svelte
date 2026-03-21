@@ -6,6 +6,7 @@
   import BranchSidebar from './components/BranchSidebar.svelte';
   import StagingPanel from './components/StagingPanel.svelte';
   import DiffPanel from './components/DiffPanel.svelte';
+  import MergeEditor from './components/MergeEditor.svelte';
   import CommitDetail from './components/CommitDetail.svelte';
   import Toast from './components/Toast.svelte';
   import { safeInvoke } from './lib/invoke.js';
@@ -48,6 +49,7 @@
 
   // Center pane: show DiffPanel when a file is selected (from either source)
   let showDiff = $derived(selectedFile !== null || selectedCommitFile !== null);
+  let showMergeEditor = $derived(selectedFile?.kind === 'conflicted');
 
   // The diffs to display: filtered commit file diff, or staging diff
   let currentDiffFiles = $derived(
@@ -117,6 +119,10 @@
     else clearCommitFileDiff();
   }
 
+  function handleFileResolved() {
+    clearStagingDiff();
+  }
+
   async function handleFileSelect(path: string, kind: 'unstaged' | 'staged' | 'conflicted') {
     if (selectedFile?.path === path && selectedFile?.kind === kind) {
       clearStagingDiff();
@@ -124,14 +130,14 @@
     }
     selectedFile = { path, kind };
     if (!repoPath) return;
+    if (kind === 'conflicted') {
+      // MergeEditor loads its own data via get_merge_sides
+      stagingDiffFiles = [];
+      return;
+    }
     try {
-      if (kind === 'conflicted') {
-        // For conflicted files, use diff_conflicted (HEAD tree vs workdir) to show conflict markers
-        stagingDiffFiles = await safeInvoke<FileDiff[]>('diff_conflicted', { path: repoPath, filePath: path });
-      } else {
-        const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
-        stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
-      }
+      const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
+      stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
     } catch {
       stagingDiffFiles = [];
     }
@@ -202,8 +208,9 @@
 
   async function refetchFileDiff(path: string, kind: 'unstaged' | 'staged' | 'conflicted') {
     if (!repoPath) return;
+    if (kind === 'conflicted') return; // MergeEditor handles its own data loading
     try {
-      const command = kind === 'conflicted' ? 'diff_conflicted' : (kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged');
+      const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
       stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
     } catch {
       stagingDiffFiles = [];
@@ -405,12 +412,19 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="pane-divider" style="display: {leftPaneCollapsed ? 'none' : 'block'};" onmousedown={startLeftResize}></div>
       <div class="flex-1 overflow-hidden">
-        {#if showDiff}
+        {#if showMergeEditor && selectedFile}
+          <MergeEditor
+            repoPath={repoPath!}
+            filePath={selectedFile.path}
+            onclose={handleDiffClose}
+            onresolved={handleFileResolved}
+          />
+        {:else if showDiff}
           <DiffPanel
             fileDiffs={currentDiffFiles}
             commitDetail={null}
             selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-            diffKind={selectedCommitFile ? 'commit' : (selectedFile?.kind === 'conflicted' ? 'commit' : selectedFile?.kind ?? 'commit')}
+            diffKind={selectedCommitFile ? 'commit' : (selectedFile?.kind ?? 'commit')}
             repoPath={repoPath!}
             onhunkaction={async (filePath) => {
               if (selectedFile) {
