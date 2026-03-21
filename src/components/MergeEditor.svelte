@@ -595,7 +595,6 @@
         <span style="flex: 1;"></span>
 
         {#if hasConflicts}
-          <!-- Prev conflict -->
           <button
             onclick={handlePrevConflict}
             disabled={!hasPrev}
@@ -611,11 +610,7 @@
               align-items: center;
             "
           ><ChevronUp size={16} /></button>
-
-          <!-- Conflict counter -->
           <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">{focusedConflictIdx + 1}/{conflictIndices.length}</span>
-
-          <!-- Next conflict -->
           <button
             onclick={handleNextConflict}
             disabled={!hasNext}
@@ -632,6 +627,8 @@
             "
           ><ChevronDown size={16} /></button>
         {/if}
+
+        <span style="flex: 1;"></span>
 
         <!-- Save and Mark Resolved -->
         <button
