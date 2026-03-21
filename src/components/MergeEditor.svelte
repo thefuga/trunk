@@ -214,9 +214,33 @@
     manualEdit = false;
   }
 
-  function handleToggleLine(key: string) {
+  let lastClickedKey = $state<string | null>(null);
+
+  function handleToggleLine(key: string, event?: MouseEvent) {
+    if (event?.shiftKey && lastClickedKey) {
+      // Parse keys: "side-regionIdx-lineIdx"
+      const [side, regStr, lineStr] = key.split('-');
+      const [lastSide, lastRegStr, lastLineStr] = lastClickedKey.split('-');
+      if (side === lastSide && regStr === lastRegStr) {
+        const from = Math.min(+lineStr, +lastLineStr);
+        const to = Math.max(+lineStr, +lastLineStr);
+        // Determine action: if target line is not taken, select the range; otherwise deselect
+        const selecting = !takenLines.has(key);
+        const result = new Set(takenLines);
+        for (let j = from; j <= to; j++) {
+          const k = `${side}-${regStr}-${j}`;
+          if (selecting) result.add(k);
+          else result.delete(k);
+        }
+        takenLines = result;
+        manualEdit = false;
+        lastClickedKey = key;
+        return;
+      }
+    }
     takenLines = toggleLine(key, takenLines);
     manualEdit = false;
+    lastClickedKey = key;
   }
 
   function handleOutputEdit(e: Event) {
@@ -311,7 +335,7 @@
 {#snippet conflictLine(row: FlatRow, bgColor: string)}
   {@const taken = takenLines.has(row.key)}
   <div
-    onclick={() => handleToggleLine(row.key)}
+    onclick={(e: MouseEvent) => handleToggleLine(row.key, e)}
     class="merge-line"
     style="
       display: flex;
@@ -349,6 +373,7 @@
       overflow-x: auto;
       flex: 1;
       min-width: 0;
+      color: var(--color-text);
     ">{row.text}</span>
   </div>
 {/snippet}
