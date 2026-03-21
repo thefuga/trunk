@@ -409,10 +409,10 @@
     window.addEventListener('mouseup', onMouseUp);
   }
 
-  async function handleOpenRebaseEditor(baseOid: string) {
+  async function handleOpenRebaseEditor(baseOid: string, inclusive = false) {
     if (!repoPath) return;
     try {
-      const todoItems = await safeInvoke<RebaseTodoItem[]>('get_rebase_todo', { path: repoPath, baseOid });
+      const todoItems = await safeInvoke<RebaseTodoItem[]>('get_rebase_todo', { path: repoPath, baseOid, inclusive });
       if (todoItems.length === 0) return;
       rebaseEditorCommits = todoItems;
       rebaseBaseOid = baseOid;

@@ -31,7 +31,7 @@
     onWipClick?: () => void;
     refreshSignal?: number;
     selectedCommitOid?: string | null;
-    onopenrebaseeditor?: (baseOid: string) => void;
+    onopenrebaseeditor?: (baseOid: string, inclusive?: boolean) => void;
   }
 
   let { repoPath, oncommitselect, wipCount = 0, wipMessage = 'WIP', onWipClick, refreshSignal, selectedCommitOid, onopenrebaseeditor }: Props = $props();
@@ -332,7 +332,7 @@
       interactiveRebaseItems.push(
         await MenuItem.new({
           text: 'Interactive Rebase...',
-          action: () => { onopenrebaseeditor?.(commit.oid); },
+          action: () => { onopenrebaseeditor?.(commit.oid, true); },
         }),
         await PredefinedMenuItem.new({ item: 'Separator' }),
       );

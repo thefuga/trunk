@@ -27,6 +27,7 @@ fn open_repo(path: &str, state_map: &HashMap<String, PathBuf>) -> Result<git2::R
 pub fn get_rebase_todo_inner(
     path: &str,
     base_oid: &str,
+    inclusive: bool,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<Vec<RebaseTodoItem>, TrunkError> {
     let repo = open_repo(path, state_map)?;
@@ -37,7 +38,16 @@ pub fn get_rebase_todo_inner(
     let mut revwalk = repo.revwalk().map_err(TrunkError::from)?;
     revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME).map_err(TrunkError::from)?;
     revwalk.push_head().map_err(TrunkError::from)?;
-    revwalk.hide(base).map_err(TrunkError::from)?;
+
+    if inclusive {
+        let commit = repo.find_commit(base).map_err(TrunkError::from)?;
+        if commit.parent_count() > 0 {
+            revwalk.hide(commit.parent_id(0).map_err(TrunkError::from)?).map_err(TrunkError::from)?;
+        }
+        // Root commit: don't hide anything — all commits included
+    } else {
+        revwalk.hide(base).map_err(TrunkError::from)?;
+    }
 
     let mut items: Vec<RebaseTodoItem> = Vec::new();
     for oid_result in revwalk {
@@ -101,10 +111,11 @@ pub fn start_interactive_rebase_blocking(
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
-    // 1. Write todo file
+    // 1. Write todo file (drop = omit from list, not the 'drop' keyword)
     let todo_path = session_dir.join("trunk-rebase-todo");
     let todo_content: String = todo_items
         .iter()
+        .filter(|item| item.action != "drop")
         .map(|item| format!("{} {} {}", item.action, item.oid, item.summary))
         .collect::<Vec<_>>()
         .join("\n")
@@ -223,11 +234,13 @@ pub fn submit_rebase_message_inner(
 pub async fn get_rebase_todo(
     path: String,
     base_oid: String,
+    inclusive: Option<bool>,
     state: State<'_, RepoState>,
 ) -> Result<Vec<RebaseTodoItem>, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let incl = inclusive.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
-        get_rebase_todo_inner(&path, &base_oid, &state_map)
+        get_rebase_todo_inner(&path, &base_oid, incl, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
@@ -366,11 +379,24 @@ mod tests {
         let path = dir.path().to_str().unwrap();
         let base_oid = oids[0].to_string(); // Initial commit as base
 
-        let items = get_rebase_todo_inner(path, &base_oid, &state_map).unwrap();
+        let items = get_rebase_todo_inner(path, &base_oid, false, &state_map).unwrap();
 
         assert_eq!(items.len(), 2, "Should return 2 commits (excluding base)");
         assert_eq!(items[0].summary, "Second commit", "First item should be oldest (Second commit)");
         assert_eq!(items[1].summary, "Third commit", "Second item should be newest (Third commit)");
+    }
+
+    #[test]
+    fn get_rebase_todo_inclusive_includes_base_commit() {
+        let (dir, state_map, oids) = make_test_repo();
+        let path = dir.path().to_str().unwrap();
+        let base_oid = oids[1].to_string(); // Second commit
+
+        let items = get_rebase_todo_inner(path, &base_oid, true, &state_map).unwrap();
+
+        assert_eq!(items.len(), 2, "Should return 2 commits (including base)");
+        assert_eq!(items[0].summary, "Second commit", "Base commit should be included");
+        assert_eq!(items[1].summary, "Third commit");
     }
 
     #[test]
@@ -379,7 +405,7 @@ mod tests {
         let path = dir.path().to_str().unwrap();
         let base_oid = oids[2].to_string(); // HEAD commit as base
 
-        let items = get_rebase_todo_inner(path, &base_oid, &state_map).unwrap();
+        let items = get_rebase_todo_inner(path, &base_oid, false, &state_map).unwrap();
 
         assert_eq!(items.len(), 0, "Should return empty vec when base equals HEAD");
     }
@@ -390,7 +416,7 @@ mod tests {
         let path = dir.path().to_str().unwrap();
         let base_oid = oids[0].to_string();
 
-        let items = get_rebase_todo_inner(path, &base_oid, &state_map).unwrap();
+        let items = get_rebase_todo_inner(path, &base_oid, false, &state_map).unwrap();
 
         let item = &items[0];
         assert_eq!(item.oid, oids[1].to_string(), "OID should match second commit");

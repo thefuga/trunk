@@ -147,20 +147,32 @@
 
   function handleDragStart(e: DragEvent, idx: number) {
     dragIdx = idx;
-    e.dataTransfer?.setData('text/plain', String(idx));
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+    }
   }
 
   function handleDragOver(e: DragEvent, idx: number) {
     e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) return;
+    if (dragIdx === null) return;
     dropTargetIdx = idx;
+  }
+
+  function handleDrop(e: DragEvent, idx: number) {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) {
+      dragIdx = null;
+      dropTargetIdx = null;
+      return;
+    }
     const updated = [...items];
     const [moved] = updated.splice(dragIdx, 1);
     updated.splice(idx, 0, moved);
     items = updated;
     focusedIndex = idx;
-    dragIdx = idx;
+    dragIdx = null;
+    dropTargetIdx = null;
   }
 
   function handleDragEnd() {
@@ -202,12 +214,26 @@
         break;
       case 'ArrowUp':
         e.preventDefault();
-        focusedIndex = Math.max(0, focusedIndex - 1);
+        if (e.shiftKey && focusedIndex > 0) {
+          const updated = [...items];
+          [updated[focusedIndex - 1], updated[focusedIndex]] = [updated[focusedIndex], updated[focusedIndex - 1]];
+          items = updated;
+          focusedIndex -= 1;
+        } else if (!e.shiftKey) {
+          focusedIndex = Math.max(0, focusedIndex - 1);
+        }
         scrollRowIntoView(focusedIndex);
         break;
       case 'ArrowDown':
         e.preventDefault();
-        focusedIndex = Math.min(items.length - 1, focusedIndex + 1);
+        if (e.shiftKey && focusedIndex < items.length - 1) {
+          const updated = [...items];
+          [updated[focusedIndex], updated[focusedIndex + 1]] = [updated[focusedIndex + 1], updated[focusedIndex]];
+          items = updated;
+          focusedIndex += 1;
+        } else if (!e.shiftKey) {
+          focusedIndex = Math.min(items.length - 1, focusedIndex + 1);
+        }
         scrollRowIntoView(focusedIndex);
         break;
       case 'Escape':
@@ -337,6 +363,7 @@
         draggable="true"
         ondragstart={(e) => handleDragStart(e, idx)}
         ondragover={(e) => handleDragOver(e, idx)}
+        ondrop={(e) => handleDrop(e, idx)}
         ondragend={handleDragEnd}
         onclick={() => (focusedIndex = idx)}
         style="height: {ROW_HEIGHT}px;"
@@ -500,16 +527,17 @@
 
   .col-resize-handle {
     position: absolute;
-    top: 0;
     right: 0;
+    top: 0;
+    bottom: 0;
     width: 4px;
-    height: 100%;
     cursor: col-resize;
+    background: linear-gradient(to right, transparent 1.5px, var(--color-border) 1.5px, var(--color-border) 2.5px, transparent 2.5px);
+    transition: background 0.15s;
   }
 
   .col-resize-handle:hover {
-    background: var(--color-accent);
-    opacity: 0.5;
+    background: linear-gradient(to right, transparent 1px, var(--color-accent) 1px, var(--color-accent) 3px, transparent 3px);
   }
 
   /* --- Commit list --- */

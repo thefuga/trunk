@@ -13,7 +13,7 @@
     onstashselect?: (oid: string) => void;
     onrefnavigate?: (refNameOrOid: string) => void;
     refreshSignal?: number;
-    onopenrebaseeditor?: (baseOid: string) => void;
+    onopenrebaseeditor?: (baseOid: string, inclusive?: boolean) => void;
   }
 
   let { repoPath, onrefreshed, onstashselect, onrefnavigate, refreshSignal, onopenrebaseeditor }: Props = $props();
