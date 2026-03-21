@@ -312,6 +312,18 @@
     }
   }
 
+  async function handleRebaseBranch(ontoBranch: string) {
+    try {
+      await safeInvoke('rebase_branch', { path: repoPath, ontoBranch });
+      // No toast on success -- graph refresh via repo-changed event is sufficient
+      await loadRefs(repoPath);
+      onrefreshed?.();
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Rebase failed', 'error');
+    }
+  }
+
   async function showBranchContextMenu(e: MouseEvent, branchName: string, isHead: boolean) {
     const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
     const headBranchName = refs?.local.find(b => b.is_head)?.name;
@@ -326,6 +338,10 @@
           await MenuItem.new({
             text: `Merge ${branchName} into ${headBranchName}`,
             action: () => { handleMergeBranch(branchName).catch(() => {}); },
+          }),
+          await MenuItem.new({
+            text: `Rebase ${headBranchName} onto ${branchName}`,
+            action: () => { handleRebaseBranch(branchName).catch(() => {}); },
           }),
         ] : []),
         await PredefinedMenuItem.new({ item: 'Separator' }),
@@ -359,12 +375,16 @@
   async function showRemoteContextMenu(e: MouseEvent, fullRefName: string) {
     const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
     const headBranchName = refs?.local.find(b => b.is_head)?.name;
-    if (!headBranchName) return; // Detached HEAD -- no merge item
+    if (!headBranchName) return; // Detached HEAD -- no merge/rebase items
     const menu = await Menu.new({
       items: [
         await MenuItem.new({
           text: `Merge ${fullRefName} into ${headBranchName}`,
           action: () => { handleMergeBranch(fullRefName).catch(() => {}); },
+        }),
+        await MenuItem.new({
+          text: `Rebase ${headBranchName} onto ${fullRefName}`,
+          action: () => { handleRebaseBranch(fullRefName).catch(() => {}); },
         }),
       ],
     });
