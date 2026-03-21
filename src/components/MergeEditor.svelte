@@ -286,7 +286,7 @@
         filePath,
         content: outputText,
       });
-      showToast('Resolved ' + filePath, 'success');
+      // File resolved — staging panel updates automatically
       onresolved();
     } catch (e) {
       const err = e as TrunkError;

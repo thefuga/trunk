@@ -139,7 +139,7 @@
       await safeInvoke('save_merge_result', { path: repoPath, filePath, content });
       await loadStatus();
       const label = side === 'ours' ? 'current' : 'incoming';
-      showToast(`Resolved ${filePath} (took all ${label})`, 'success');
+      // File resolved — staging panel updates automatically via loadStatus
     } catch (e) {
       const err = e as TrunkError;
       showToast(err.message ?? 'Resolution failed', 'error');
