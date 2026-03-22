@@ -8,7 +8,6 @@
   import DiffPanel from './components/DiffPanel.svelte';
   import MergeEditor from './components/MergeEditor.svelte';
   import RebaseEditor from './components/RebaseEditor.svelte';
-  import RebaseMessageEditor from './components/RebaseMessageEditor.svelte';
   import InputDialog from './components/InputDialog.svelte';
   import CommitDetail from './components/CommitDetail.svelte';
   import Toast from './components/Toast.svelte';
@@ -60,19 +59,6 @@
   let rebaseFocusedFileSelected = $state<string | null>(null);
   let rebaseDiffFile = $state<string | null>(null); // when set, center pane shows this file's diff
 
-  // Rebase message editor state (sequential center pane flow)
-  interface SquashGroup {
-    targetOid: string;
-    allOids: string[];
-    shortOids: string[];
-    combinedMessage: string;
-    actionType: 'reword' | 'squash';
-  }
-  let showRebaseMessageEditor = $state(false);
-  let rebaseMessageQueue = $state<SquashGroup[]>([]);
-  let rebaseMessageIdx = $state(0);
-  let pendingRebaseTodoItems = $state<{ oid: string; action: string; summary: string; newMessage: string | null }[]>([]);
-  let pendingRebaseBaseOid = $state('');
 
   const wipCount = $derived(dirtyCounts.staged + dirtyCounts.unstaged + dirtyCounts.conflicted);
 
@@ -477,103 +463,7 @@
   async function handleRebaseStart(todoItems: { oid: string; action: string; summary: string; newMessage: string | null }[]) {
     if (!repoPath) return;
     const baseOid = rebaseBaseOid;
-
-    // Build squash groups: consecutive squash commits attach to the pick/reword above them
-    type Group = { target: typeof todoItems[0]; squashes: typeof todoItems[0][] };
-    const groups: Group[] = [];
-    let currentGroup: Group | null = null;
-
-    for (const item of todoItems) {
-      if (item.action === 'squash' && currentGroup && currentGroup.target.action !== 'drop') {
-        currentGroup.squashes.push(item);
-      } else {
-        currentGroup = { target: item, squashes: [] };
-        groups.push(currentGroup);
-      }
-    }
-
-    // Build message queue for groups needing editing
-    const messageQueue: SquashGroup[] = [];
-    for (const group of groups) {
-      const hasSquashes = group.squashes.length > 0;
-      const needsEdit = group.target.action === 'reword' || hasSquashes;
-      if (!needsEdit || group.target.action === 'drop') continue;
-
-      // Skip standalone rewords already edited inline
-      if (!hasSquashes && group.target.action === 'reword' && group.target.newMessage != null) continue;
-
-      const allItems = [group.target, ...group.squashes];
-      const allOids = allItems.map((i) => i.oid);
-
-      // Fetch full commit messages (summary + body)
-      const details = await Promise.all(
-        allOids.map((oid) => safeInvoke<CommitDetailType>('get_commit_detail', { path: repoPath!, oid }))
-      );
-      const fullMessages = details.map((d) => {
-        let msg = d.summary;
-        if (d.body) msg += '\n\n' + d.body;
-        return msg;
-      });
-
-      messageQueue.push({
-        targetOid: group.target.oid,
-        allOids,
-        shortOids: allItems.map((i) => {
-          const c = rebaseEditorCommits.find((c) => c.oid === i.oid);
-          return c?.short_oid ?? i.oid.slice(0, 7);
-        }),
-        combinedMessage: fullMessages.join('\n\n'),
-        actionType: hasSquashes ? 'squash' : 'reword',
-      });
-    }
-
-    pendingRebaseTodoItems = todoItems;
-    pendingRebaseBaseOid = baseOid;
-
-    if (messageQueue.length > 0) {
-      rebaseMessageQueue = messageQueue;
-      rebaseMessageIdx = 0;
-      showRebaseMessageEditor = true;
-      showRebaseEditor = false;
-      return;
-    }
-
     handleRebaseEditorClose();
-    await executeRebase(baseOid, todoItems);
-  }
-
-  async function handleRebaseMessageConfirm(newMessage: string) {
-    const group = rebaseMessageQueue[rebaseMessageIdx];
-
-    // Write newMessage to all reword/squash items in this group so the backend
-    // msg-queue has a file for every editor invocation git makes.
-    // The last squash step's message is the final combined result.
-    for (const oid of group.allOids) {
-      const item = pendingRebaseTodoItems.find((i) => i.oid === oid);
-      if (!item) continue;
-      if (item.action === 'reword' || item.action === 'squash') {
-        item.newMessage = newMessage;
-      }
-    }
-
-    if (rebaseMessageIdx < rebaseMessageQueue.length - 1) {
-      rebaseMessageIdx += 1;
-    } else {
-      showRebaseMessageEditor = false;
-      handleRebaseEditorClose();
-      await executeRebase(pendingRebaseBaseOid, pendingRebaseTodoItems);
-    }
-  }
-
-  function handleRebaseMessageCancel() {
-    showRebaseMessageEditor = false;
-    rebaseMessageQueue = [];
-    pendingRebaseTodoItems = [];
-    handleRebaseEditorClose();
-  }
-
-  async function executeRebase(baseOid: string, todoItems: { oid: string; action: string; summary: string; newMessage: string | null }[]) {
-    if (!repoPath) return;
     try {
       await safeInvoke('start_interactive_rebase', {
         path: repoPath,
@@ -627,34 +517,21 @@
       <Toolbar repoPath={repoPath!} />
     </div>
     <main class="flex-1 overflow-hidden flex">
-      {#if showRebaseEditor || showRebaseMessageEditor}
+      {#if showRebaseEditor}
         <!-- Full-window takeover for interactive rebase -->
         <div class="flex-1 overflow-hidden">
-          {#if showRebaseMessageEditor && rebaseMessageQueue[rebaseMessageIdx]}
-            {@const group = rebaseMessageQueue[rebaseMessageIdx]}
-            <RebaseMessageEditor
+          <div style="height: 100%; {rebaseDiffFile ? 'display: none;' : 'display: flex; flex-direction: column;'}">
+            <RebaseEditor
               repoPath={repoPath!}
-              allOids={group.allOids}
-              shortOids={group.shortOids}
-              message={group.combinedMessage}
-              actionType={group.actionType}
-              remaining={rebaseMessageQueue.length - rebaseMessageIdx}
-              onconfirm={handleRebaseMessageConfirm}
-              oncancel={handleRebaseMessageCancel}
+              commits={rebaseEditorCommits}
+              branchName={rebaseBranchName}
+              baseName={rebaseBaseName}
+              onclose={handleRebaseEditorClose}
+              onstart={handleRebaseStart}
+              onfocuschange={handleRebaseFocusChange}
             />
-          {:else}
-            <div style="height: 100%; {rebaseDiffFile ? 'display: none;' : 'display: flex; flex-direction: column;'}">
-              <RebaseEditor
-                repoPath={repoPath!}
-                commits={rebaseEditorCommits}
-                branchName={rebaseBranchName}
-                baseName={rebaseBaseName}
-                onclose={handleRebaseEditorClose}
-                onstart={handleRebaseStart}
-                onfocuschange={handleRebaseFocusChange}
-              />
-            </div>
-            {#if rebaseDiffFile}
+          </div>
+          {#if rebaseDiffFile}
               <DiffPanel
                 fileDiffs={rebaseFocusedFileDiffs.filter((f) => f.path === rebaseDiffFile)}
                 commitDetail={null}
@@ -663,7 +540,6 @@
                 repoPath={repoPath!}
                 onclose={() => { rebaseDiffFile = null; }}
               />
-            {/if}
           {/if}
         </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
