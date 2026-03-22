@@ -212,11 +212,13 @@
       case 'P':
         e.preventDefault();
         items[focusedIndex].action = 'pick';
+        if (focusedIndex < items.length - 1) { focusedIndex += 1; scrollRowIntoView(focusedIndex); }
         break;
       case 's':
       case 'S':
         e.preventDefault();
         items[focusedIndex].action = 'squash';
+        if (focusedIndex < items.length - 1) { focusedIndex += 1; scrollRowIntoView(focusedIndex); }
         break;
       case 'r':
       case 'R':
@@ -228,6 +230,7 @@
       case 'D':
         e.preventDefault();
         items[focusedIndex].action = 'drop';
+        if (focusedIndex < items.length - 1) { focusedIndex += 1; scrollRowIntoView(focusedIndex); }
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -411,6 +414,9 @@
   <div class="rebase-list" bind:this={listEl}>
     {#each items as item, idx (item.oid)}
       <div class="rebase-row-wrapper">
+      {#if item.action === 'squash'}
+        <span class="rebase-squash-arrow">↓</span>
+      {/if}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="rebase-row"
@@ -440,13 +446,6 @@
             <option value="drop">Drop</option>
           </select>
         </div>
-
-        <!-- Squash indicator (positioned between this row and the target below) -->
-        {#if item.action === 'squash'}
-          <span class="rebase-squash-arrow">↵</span>
-        {:else}
-          <span class="rebase-squash-arrow-spacer"></span>
-        {/if}
 
         <!-- SHA column -->
         {#if columnVisibility.sha}
@@ -753,17 +752,13 @@
   }
 
   .rebase-squash-arrow {
-    width: 16px;
-    flex-shrink: 0;
-    text-align: center;
-    font-size: 14px;
+    position: absolute;
+    left: 3px;
+    bottom: -4px;
+    font-size: 12px;
     color: var(--color-rebase-squash);
-    line-height: 1;
-  }
-
-  .rebase-squash-arrow-spacer {
-    width: 16px;
-    flex-shrink: 0;
+    z-index: 1;
+    pointer-events: none;
   }
 
   :global(.rebase-row-ghost) {
