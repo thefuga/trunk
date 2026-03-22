@@ -642,25 +642,30 @@
               onconfirm={handleRebaseMessageConfirm}
               oncancel={handleRebaseMessageCancel}
             />
-          {:else if rebaseDiffFile}
-            <DiffPanel
-              fileDiffs={rebaseFocusedFileDiffs.filter((f) => f.path === rebaseDiffFile)}
-              commitDetail={null}
-              selectedPath={rebaseDiffFile}
-              diffKind="commit"
-              repoPath={repoPath!}
-              onclose={() => { rebaseDiffFile = null; }}
-            />
           {:else}
-            <RebaseEditor
-              repoPath={repoPath!}
-              commits={rebaseEditorCommits}
-              branchName={rebaseBranchName}
-              baseName={rebaseBaseName}
-              onclose={handleRebaseEditorClose}
-              onstart={handleRebaseStart}
-              onfocuschange={handleRebaseFocusChange}
-            />
+            <div class="flex-1 overflow-hidden" style="position: relative;">
+              <div style="position: absolute; inset: 0; {rebaseDiffFile ? 'visibility: hidden;' : ''}">
+                <RebaseEditor
+                  repoPath={repoPath!}
+                  commits={rebaseEditorCommits}
+                  branchName={rebaseBranchName}
+                  baseName={rebaseBaseName}
+                  onclose={handleRebaseEditorClose}
+                  onstart={handleRebaseStart}
+                  onfocuschange={handleRebaseFocusChange}
+                />
+              </div>
+              {#if rebaseDiffFile}
+                <DiffPanel
+                  fileDiffs={rebaseFocusedFileDiffs.filter((f) => f.path === rebaseDiffFile)}
+                  commitDetail={null}
+                  selectedPath={rebaseDiffFile}
+                  diffKind="commit"
+                  repoPath={repoPath!}
+                  onclose={() => { rebaseDiffFile = null; }}
+                />
+              {/if}
+            </div>
           {/if}
         </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->

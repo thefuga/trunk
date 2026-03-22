@@ -410,6 +410,7 @@
   {#key items}
   <div class="rebase-list" bind:this={listEl}>
     {#each items as item, idx (item.oid)}
+      <div class="rebase-row-wrapper">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="rebase-row"
@@ -440,8 +441,12 @@
           </select>
         </div>
 
-        <!-- Squash indicator -->
-        <span class="rebase-squash-arrow" class:rebase-squash-arrow-visible={item.action === 'squash'}>↓</span>
+        <!-- Squash indicator (positioned between this row and the target below) -->
+        {#if item.action === 'squash'}
+          <span class="rebase-squash-arrow">↵</span>
+        {:else}
+          <span class="rebase-squash-arrow-spacer"></span>
+        {/if}
 
         <!-- SHA column -->
         {#if columnVisibility.sha}
@@ -486,7 +491,7 @@
         </div>
       {/if}
 
-      <!-- Floating message editor -->
+      <!-- Floating message editor (absolute, doesn't push rows) -->
       {#if editingIdx === idx}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="rebase-msg-editor" onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') handleMessageCancel(); }}>
@@ -509,6 +514,7 @@
           </div>
         </div>
       {/if}
+      </div>
     {/each}
   </div>
   {/key}
@@ -750,13 +756,14 @@
     width: 16px;
     flex-shrink: 0;
     text-align: center;
-    font-size: 12px;
+    font-size: 14px;
     color: var(--color-rebase-squash);
-    visibility: hidden;
+    line-height: 1;
   }
 
-  .rebase-squash-arrow-visible {
-    visibility: visible;
+  .rebase-squash-arrow-spacer {
+    width: 16px;
+    flex-shrink: 0;
   }
 
   :global(.rebase-row-ghost) {
@@ -829,14 +836,20 @@
 
   /* --- Inline message editor --- */
 
-  .rebase-msg-editor {
+  .rebase-row-wrapper {
     position: relative;
+  }
+
+  .rebase-msg-editor {
+    position: absolute;
+    top: 100%;
+    left: 48px;
+    right: 48px;
     z-index: 10;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 16px;
-    margin: 4px 48px 8px;
     display: flex;
     flex-direction: column;
     gap: 10px;
