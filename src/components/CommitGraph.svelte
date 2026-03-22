@@ -488,20 +488,30 @@
     }
   }
 
-  async function handlePillCheckout(e: MouseEvent, pill: OverlayRefPill) {
+  // --- Unified ref handlers (used by both pill and overflow ref) ---
+
+  interface RefInfo { name: string; refType: RefType; isHead: boolean }
+
+  function refFromPill(pill: OverlayRefPill): RefInfo {
+    return { name: pill.label, refType: pill.refType, isHead: pill.isHead };
+  }
+
+  function refFromLabel(ref: RefLabel): RefInfo {
+    return { name: ref.short_name, refType: ref.ref_type, isHead: ref.is_head };
+  }
+
+  async function handleRefCheckout(e: MouseEvent, ref: RefInfo) {
     e.preventDefault();
     e.stopPropagation();
-    if (pill.isHead) return; // already on this branch
-    const branchName = pill.refType === 'RemoteBranch' ? pill.label : pill.label;
+    if (ref.isHead) return;
     try {
-      await safeInvoke<void>('checkout_branch', { path: repoPath, branchName });
+      await safeInvoke<void>('checkout_branch', { path: repoPath, branchName: ref.name });
     } catch (e) {
-      const err = e as TrunkError;
-      showToast(err.message ?? 'Checkout failed', 'error');
+      showToast((e as TrunkError).message ?? 'Checkout failed', 'error');
     }
   }
 
-  async function showPillContextMenu(e: MouseEvent, pill: OverlayRefPill) {
+  async function showRefContextMenu(e: MouseEvent, ref: RefInfo) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -509,159 +519,75 @@
     const headRef = headCommit?.refs.find(r => r.ref_type === 'LocalBranch' && r.is_head);
     const headBranchName = headRef?.short_name;
 
-    if (pill.refType === 'LocalBranch') {
+    if (ref.refType === 'LocalBranch') {
       const menu = await Menu.new({
         items: [
-          ...(!pill.isHead ? [
+          ...(!ref.isHead ? [
             await MenuItem.new({
-              text: `Checkout ${pill.label}`,
-              action: () => { handlePillCheckout(e, pill); },
+              text: `Checkout ${ref.name}`,
+              action: () => { handleRefCheckout(e, ref); },
             }),
             await PredefinedMenuItem.new({ item: 'Separator' }),
           ] : []),
-          ...(!pill.isHead && headBranchName ? [
+          ...(!ref.isHead && headBranchName ? [
             await MenuItem.new({
-              text: `Merge ${pill.label} into ${headBranchName}`,
-              action: () => { handleMergeBranch(pill.label).catch(() => {}); },
+              text: `Merge ${ref.name} into ${headBranchName}`,
+              action: () => { handleMergeBranch(ref.name).catch(() => {}); },
             }),
             await MenuItem.new({
-              text: `Rebase ${headBranchName} onto ${pill.label}`,
-              action: () => { handleRebaseBranch(pill.label).catch(() => {}); },
+              text: `Rebase ${headBranchName} onto ${ref.name}`,
+              action: () => { handleRebaseBranch(ref.name).catch(() => {}); },
             }),
             await MenuItem.new({
-              text: `Interactive Rebase ${pill.label}...`,
-              action: () => { handleInteractiveRebaseBranch(pill.label).catch(() => {}); },
-            }),
-            await PredefinedMenuItem.new({ item: 'Separator' }),
-          ] : []),
-          await MenuItem.new({
-            text: 'Rename…',
-            action: () => { handleRenameBranch(pill.label); },
-          }),
-          await PredefinedMenuItem.new({ item: 'Separator' }),
-          await MenuItem.new({
-            text: 'Delete',
-            enabled: !pill.isHead,
-            action: () => { handleDeleteBranch(pill.label).catch(() => {}); },
-          }),
-        ],
-      });
-      await menu.popup();
-    } else if (pill.refType === 'RemoteBranch') {
-      if (headBranchName) {
-        const menu = await Menu.new({
-          items: [
-            await MenuItem.new({
-              text: `Checkout ${pill.label}`,
-              action: () => { handlePillCheckout(e, pill); },
-            }),
-            await PredefinedMenuItem.new({ item: 'Separator' }),
-            await MenuItem.new({
-              text: `Merge ${pill.label} into ${headBranchName}`,
-              action: () => { handleMergeBranch(pill.label).catch(() => {}); },
-            }),
-            await MenuItem.new({
-              text: `Rebase ${headBranchName} onto ${pill.label}`,
-              action: () => { handleRebaseBranch(pill.label).catch(() => {}); },
-            }),
-            await MenuItem.new({
-              text: `Interactive Rebase ${pill.label}...`,
-              action: () => { handleInteractiveRebaseBranch(pill.label).catch(() => {}); },
-            }),
-          ],
-        });
-        await menu.popup();
-      }
-    } else if (pill.refType === 'Tag') {
-      const menu = await Menu.new({
-        items: [
-          await MenuItem.new({
-            text: 'Delete',
-            action: () => { handleDeleteTag(pill.label).catch(() => {}); },
-          }),
-        ],
-      });
-      await menu.popup();
-    }
-  }
-
-  async function showOverflowRefContextMenu(e: MouseEvent, ref: RefLabel) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const headCommit = commits.find(c => c.is_head);
-    const headRef = headCommit?.refs.find(r => r.ref_type === 'LocalBranch' && r.is_head);
-    const headBranchName = headRef?.short_name;
-
-    if (ref.ref_type === 'LocalBranch') {
-      const menu = await Menu.new({
-        items: [
-          ...(!ref.is_head ? [
-            await MenuItem.new({
-              text: `Checkout ${ref.short_name}`,
-              action: () => { safeInvoke('checkout_branch', { path: repoPath, branchName: ref.short_name }).catch((e) => { showToast((e as TrunkError).code === 'dirty_workdir' ? 'Cannot checkout — uncommitted changes' : (e as TrunkError).message ?? 'Checkout failed', 'error'); }); },
-            }),
-            await PredefinedMenuItem.new({ item: 'Separator' }),
-          ] : []),
-          ...(!ref.is_head && headBranchName ? [
-            await MenuItem.new({
-              text: `Merge ${ref.short_name} into ${headBranchName}`,
-              action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
-            }),
-            await MenuItem.new({
-              text: `Rebase ${headBranchName} onto ${ref.short_name}`,
-              action: () => { handleRebaseBranch(ref.short_name).catch(() => {}); },
-            }),
-            await MenuItem.new({
-              text: `Interactive Rebase ${ref.short_name}...`,
-              action: () => { handleInteractiveRebaseBranch(ref.short_name).catch(() => {}); },
+              text: `Interactive Rebase ${ref.name}...`,
+              action: () => { handleInteractiveRebaseBranch(ref.name).catch(() => {}); },
             }),
             await PredefinedMenuItem.new({ item: 'Separator' }),
           ] : []),
           await MenuItem.new({
             text: 'Rename…',
-            action: () => { handleRenameBranch(ref.short_name); },
+            action: () => { handleRenameBranch(ref.name); },
           }),
           await PredefinedMenuItem.new({ item: 'Separator' }),
           await MenuItem.new({
             text: 'Delete',
-            enabled: !ref.is_head,
-            action: () => { handleDeleteBranch(ref.short_name).catch(() => {}); },
+            enabled: !ref.isHead,
+            action: () => { handleDeleteBranch(ref.name).catch(() => {}); },
           }),
         ],
       });
       await menu.popup();
-    } else if (ref.ref_type === 'RemoteBranch') {
-      if (headBranchName) {
-        const menu = await Menu.new({
-          items: [
-            await MenuItem.new({
-              text: `Checkout ${ref.short_name}`,
-              action: () => { safeInvoke('checkout_branch', { path: repoPath, branchName: ref.short_name }).catch((e) => { showToast((e as TrunkError).code === 'dirty_workdir' ? 'Cannot checkout — uncommitted changes' : (e as TrunkError).message ?? 'Checkout failed', 'error'); }); },
-            }),
+    } else if (ref.refType === 'RemoteBranch') {
+      const menu = await Menu.new({
+        items: [
+          await MenuItem.new({
+            text: `Checkout ${ref.name}`,
+            action: () => { handleRefCheckout(e, ref); },
+          }),
+          ...(headBranchName ? [
             await PredefinedMenuItem.new({ item: 'Separator' }),
             await MenuItem.new({
-              text: `Merge ${ref.short_name} into ${headBranchName}`,
-              action: () => { handleMergeBranch(ref.short_name).catch(() => {}); },
+              text: `Merge ${ref.name} into ${headBranchName}`,
+              action: () => { handleMergeBranch(ref.name).catch(() => {}); },
             }),
             await MenuItem.new({
-              text: `Rebase ${headBranchName} onto ${ref.short_name}`,
-              action: () => { handleRebaseBranch(ref.short_name).catch(() => {}); },
+              text: `Rebase ${headBranchName} onto ${ref.name}`,
+              action: () => { handleRebaseBranch(ref.name).catch(() => {}); },
             }),
             await MenuItem.new({
-              text: `Interactive Rebase ${ref.short_name}...`,
-              action: () => { handleInteractiveRebaseBranch(ref.short_name).catch(() => {}); },
+              text: `Interactive Rebase ${ref.name}...`,
+              action: () => { handleInteractiveRebaseBranch(ref.name).catch(() => {}); },
             }),
-          ],
-        });
-        await menu.popup();
-      }
-    } else if (ref.ref_type === 'Tag') {
+          ] : []),
+        ],
+      });
+      await menu.popup();
+    } else if (ref.refType === 'Tag') {
       const menu = await Menu.new({
         items: [
           await MenuItem.new({
             text: 'Delete',
-            action: () => { handleDeleteTag(ref.short_name).catch(() => {}); },
+            action: () => { handleDeleteTag(ref.name).catch(() => {}); },
           }),
         ],
       });
@@ -1140,14 +1066,14 @@
                   style:cursor={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'}
                   onmouseenter={() => pillMouseEnter(pill)}
                   onmouseleave={pillMouseLeave}
-                  oncontextmenu={(e) => showPillContextMenu(e, pill)}
-                  ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}
+                  oncontextmenu={(e) => showRefContextMenu(e, refFromPill(pill))}
+                  ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, refFromPill(pill)) : undefined}
                 />
 
                 <!-- Icon rendered directly in SVG at a fixed position (no CSS layout) -->
                 {#if PILL_ICONS[pill.refType]}
                   {@const PillIcon = PILL_ICONS[pill.refType]}
-                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9" style="pointer-events: auto; cursor: {pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};" oncontextmenu={(e) => showPillContextMenu(e, pill)} ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}>
+                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9" style="pointer-events: auto; cursor: {pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};" oncontextmenu={(e) => showRefContextMenu(e, refFromPill(pill))} ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, refFromPill(pill)) : undefined}>
                     <PillIcon size={ICON_WIDTH} />
                   </g>
                 {/if}
@@ -1172,8 +1098,8 @@
                       overflow: hidden;
                       cursor: {pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};
                     "
-                    oncontextmenu={(e) => showPillContextMenu(e, pill)}
-                    ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}
+                    oncontextmenu={(e) => showRefContextMenu(e, refFromPill(pill))}
+                    ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, refFromPill(pill)) : undefined}
                   >{pill.truncatedLabel}</span>
                 </foreignObject>
 
@@ -1237,11 +1163,12 @@
               onmouseleave={overlayMouseLeave}
             >
               {#each hoveredPill.allRefs as ref}
+                {@const ri = refFromLabel(ref)}
                 <div
-                  style="display: flex; align-items: center; gap: 3px; cursor: {ref.ref_type === 'LocalBranch' || ref.ref_type === 'RemoteBranch' ? 'pointer' : 'context-menu'}; border-radius: 4px;"
+                  style="display: flex; align-items: center; gap: 3px; cursor: {ri.refType === 'LocalBranch' || ri.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'}; border-radius: 4px;"
                   class="text-[11px] leading-5 font-medium text-white whitespace-nowrap hover:bg-white/15 px-1 -mx-1"
-                  oncontextmenu={(e) => showOverflowRefContextMenu(e, ref)}
-                  ondblclick={ref.ref_type === 'LocalBranch' || ref.ref_type === 'RemoteBranch' ? (e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (!ref.is_head) safeInvoke('checkout_branch', { path: repoPath, branchName: ref.short_name }).catch((err) => { showToast((err as TrunkError).message ?? 'Checkout failed', 'error'); }); } : undefined}
+                  oncontextmenu={(e) => showRefContextMenu(e, ri)}
+                  ondblclick={ri.refType === 'LocalBranch' || ri.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, ri) : undefined}
                 >
                   {#if PILL_ICONS[ref.ref_type]}
                     {@const RefIcon = PILL_ICONS[ref.ref_type]}
