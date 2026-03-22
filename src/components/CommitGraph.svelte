@@ -326,6 +326,24 @@
       );
     }
 
+    // Fast-forward (only when HEAD is on a branch and commit is not HEAD and not a stash)
+    const fastForwardItems: (Awaited<ReturnType<typeof MenuItem.new>> | Awaited<ReturnType<typeof PredefinedMenuItem.new>>)[] = [];
+    if (headBranchName && !commit.is_stash && !commit.is_head) {
+      fastForwardItems.push(
+        await MenuItem.new({
+          text: `Fast-forward ${headBranchName} to here`,
+          action: async () => {
+            try {
+              await safeInvoke('fast_forward_to', { path: repoPath, targetOid: commit.oid });
+            } catch (e) {
+              const err = e as TrunkError;
+              showToast(err.message ?? 'Fast-forward failed', 'error');
+            }
+          },
+        }),
+      );
+    }
+
     // Interactive Rebase (only when HEAD is on a branch and commit is not HEAD and not a stash)
     const interactiveRebaseItems: (Awaited<ReturnType<typeof MenuItem.new>> | Awaited<ReturnType<typeof PredefinedMenuItem.new>>)[] = [];
     if (headBranchName && !commit.is_stash && !commit.is_head) {
@@ -341,6 +359,7 @@
     const menu = await Menu.new({
       items: [
         ...mergeRebaseItems,
+        ...fastForwardItems,
         ...interactiveRebaseItems,
         await MenuItem.new({ text: 'Copy SHA', action: () => { writeText(commit.oid).catch(() => {}); } }),
         await MenuItem.new({ text: 'Copy Message', action: () => { writeText(commit.summary).catch(() => {}); } }),

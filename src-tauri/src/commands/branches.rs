@@ -310,6 +310,82 @@ pub async fn checkout_branch(
     Ok(())
 }
 
+pub fn fast_forward_to_inner(
+    path: &str,
+    target_oid: &str,
+    state_map: &HashMap<String, PathBuf>,
+    cache_map: &mut HashMap<String, GraphResult>,
+) -> Result<(), TrunkError> {
+    let repo = open_repo_from_state(path, state_map)?;
+
+    let target = git2::Oid::from_str(target_oid)
+        .map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
+
+    // HEAD must be on a branch
+    let head_ref = repo.head()?;
+    if !head_ref.is_branch() {
+        return Err(TrunkError::new("detached_head", "Cannot fast-forward in detached HEAD state"));
+    }
+    let branch_name = head_ref.shorthand().unwrap_or("HEAD").to_owned();
+    let head_oid = head_ref.target()
+        .ok_or_else(|| TrunkError::new("no_head", "HEAD has no target"))?;
+    drop(head_ref);
+
+    // Check if HEAD is an ancestor of target (fast-forward possible)
+    if !repo.graph_descendant_of(target, head_oid)? {
+        return Err(TrunkError::new(
+            "not_fast_forward",
+            format!("Cannot fast-forward {} — target is not ahead of HEAD", branch_name),
+        ));
+    }
+
+    // Move branch pointer and checkout
+    {
+        let target_commit = repo.find_commit(target)?;
+        repo.branch(&branch_name, &target_commit, true)?;
+        let target_object = target_commit.into_object();
+        repo.checkout_tree(&target_object, Some(&mut git2::build::CheckoutBuilder::new().safe()))?;
+        repo.set_head(&format!("refs/heads/{}", branch_name))?;
+    }
+    drop(repo);
+
+    // Rebuild graph cache
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let mut repo2 = git2::Repository::open(path_buf)?;
+    let graph_result = graph::walk_commits(&mut repo2, 0, usize::MAX)?;
+    cache_map.insert(path.to_owned(), graph_result);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn fast_forward_to(
+    path: String,
+    target_oid: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let mut cache_map = cache.0.lock().unwrap().clone();
+
+    let path_clone = path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fast_forward_to_inner(&path_clone, &target_oid, &state_map, &mut cache_map)
+            .map(|_| cache_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    *cache.0.lock().unwrap() = result;
+    let _ = app.emit("repo-changed", path);
+
+    Ok(())
+}
+
 /// Inner implementation of create_branch — separated for testability.
 /// When `from_oid` is Some, branches from that OID; when None, branches from HEAD.
 /// Creates the branch first (always safe), then checks out. If dirty workdir at checkout time,

@@ -27,6 +27,7 @@ pub fn run() {
             commands::branches::list_refs,
             commands::branches::resolve_ref,
             commands::branches::checkout_branch,
+            commands::branches::fast_forward_to,
             commands::branches::create_branch,
             commands::branches::delete_branch,
             commands::branches::rename_branch,
