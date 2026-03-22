@@ -156,11 +156,7 @@
       preventOnFilter: false,
       onEnd: (e) => {
         if (e.oldIndex == null || e.newIndex == null || e.oldIndex === e.newIndex) return;
-        // Undo SortableJS's DOM move — Svelte owns the DOM via {#each}
-        const { item, from } = e;
-        from.removeChild(item);
-        from.insertBefore(item, from.children[e.oldIndex] ?? null);
-        // Now update state — Svelte will re-render correctly
+        // Update state — {#key items} forces full DOM recreation so no conflict
         const updated = [...items];
         const [moved] = updated.splice(e.oldIndex, 1);
         updated.splice(e.newIndex, 0, moved);
@@ -340,7 +336,8 @@
     {/if}
   </div>
 
-  <!-- Commit list -->
+  <!-- Commit list: {#key} forces DOM recreation after reorder so SortableJS and Svelte don't fight -->
+  {#key items}
   <div class="rebase-list" bind:this={listEl}>
     {#each items as item, idx (item.oid)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -414,6 +411,7 @@
       {/if}
     {/each}
   </div>
+  {/key}
 </div>
 
 <style>
