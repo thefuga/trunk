@@ -432,7 +432,7 @@
     rebaseBaseOid = '';
   }
 
-  async function handleRebaseStart(todoItems: { oid: string; action: string; summary: string }[]) {
+  async function handleRebaseStart(todoItems: { oid: string; action: string; summary: string; newMessage: string | null }[]) {
     if (!repoPath) return;
     // IMPORTANT: Capture baseOid BEFORE closing editor, because
     // handleRebaseEditorClose() resets rebaseBaseOid to ''

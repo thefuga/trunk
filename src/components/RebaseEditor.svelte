@@ -20,12 +20,13 @@
     authorName: string;
     authorTimestamp: number;
     action: RebaseAction;
+    newMessage: string | null;
   }
 
   interface Props {
     commits: RebaseTodoItem[];
     onclose: () => void;
-    onstart: (items: { oid: string; action: string; summary: string }[]) => void;
+    onstart: (items: { oid: string; action: string; summary: string; newMessage: string | null }[]) => void;
   }
 
   let { commits, onclose, onstart }: Props = $props();
@@ -38,6 +39,7 @@
       authorName: c.author_name,
       authorTimestamp: c.author_timestamp,
       action: 'pick' as RebaseAction,
+      newMessage: null,
     }));
   }
 
@@ -188,21 +190,25 @@
       case 'P':
         e.preventDefault();
         items[focusedIndex].action = 'pick';
+        items[focusedIndex].newMessage = null;
         break;
       case 's':
       case 'S':
         e.preventDefault();
         items[focusedIndex].action = 'squash';
+        if (!items[focusedIndex].newMessage) items[focusedIndex].newMessage = items[focusedIndex].summary;
         break;
       case 'r':
       case 'R':
         e.preventDefault();
         items[focusedIndex].action = 'reword';
+        if (!items[focusedIndex].newMessage) items[focusedIndex].newMessage = items[focusedIndex].summary;
         break;
       case 'd':
       case 'D':
         e.preventDefault();
         items[focusedIndex].action = 'drop';
+        items[focusedIndex].newMessage = null;
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -252,7 +258,7 @@
 
   function handleStartRebase() {
     if (!canStart) return;
-    onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary })));
+    onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
   }
 
   // Determine last visible resizable column for resize handle logic
@@ -364,6 +370,13 @@
             class="rebase-select"
             bind:value={item.action}
             onclick={(e) => e.stopPropagation()}
+            onchange={() => {
+              if (item.action === 'reword' || item.action === 'squash') {
+                if (!item.newMessage) item.newMessage = item.summary;
+              } else {
+                item.newMessage = null;
+              }
+            }}
           >
             <option value="pick">Pick</option>
             <option value="reword">Reword</option>
@@ -384,7 +397,17 @@
 
         <!-- Message column -->
         <div class="rebase-cell rebase-cell-message flex-1" style="padding: 0 {COLUMN_PADDING_X}px;">
-          <span class:rebase-text-drop={item.action === 'drop'}>{item.summary}</span>
+          {#if item.newMessage != null}
+            <input
+              class="rebase-message-input"
+              type="text"
+              bind:value={item.newMessage}
+              onclick={(e) => e.stopPropagation()}
+              onkeydown={(e) => e.stopPropagation()}
+            />
+          {:else}
+            <span class:rebase-text-drop={item.action === 'drop'}>{item.summary}</span>
+          {/if}
         </div>
 
         <!-- Author column -->
@@ -575,6 +598,18 @@
 
   .rebase-text-drop {
     text-decoration: line-through;
+  }
+
+  .rebase-message-input {
+    width: 100%;
+    background: var(--color-bg);
+    border: 1px solid var(--color-accent);
+    color: var(--color-text);
+    font-size: 13px;
+    font-family: var(--font-sans);
+    padding: 0 4px;
+    border-radius: 3px;
+    outline: none;
   }
 
   /* --- Cells --- */

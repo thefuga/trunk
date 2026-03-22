@@ -11,10 +11,12 @@ use crate::state::{CommitCache, RepoState};
 static REBASE_SESSION_DIR: StdMutex<Option<PathBuf>> = StdMutex::new(None);
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct RebaseTodoAction {
     pub oid: String,
     pub action: String, // "pick", "squash", "reword", "drop"
     pub summary: String,
+    pub new_message: Option<String>,
 }
 
 fn open_repo(path: &str, state_map: &HashMap<String, PathBuf>) -> Result<git2::Repository, TrunkError> {
@@ -138,14 +140,51 @@ pub fn start_interactive_rebase_blocking(
             .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
     }
 
-    // 3. Write GIT_EDITOR helper script
+    // 3. Write pre-edited message files (for reword/squash with user-provided messages)
+    let msg_queue_dir = session_dir.join("msg-queue");
+    let _ = std::fs::create_dir_all(&msg_queue_dir);
+    let mut msg_index = 0u32;
+    for item in todo_items.iter().filter(|i| i.action != "drop") {
+        if let Some(ref new_msg) = item.new_message {
+            let msg_file = msg_queue_dir.join(format!("{:04}", msg_index));
+            std::fs::write(&msg_file, new_msg)
+                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+        }
+        if item.action == "reword" || item.action == "squash" {
+            msg_index += 1;
+        }
+    }
+
+    // 4. Write GIT_EDITOR script — checks for pre-edited message, falls back to signal/wait
     let editor_script_path = session_dir.join("trunk-rebase-editor.sh");
     let signal_path = session_dir.join("trunk-rebase-msg-needed");
     let input_path = session_dir.join("trunk-rebase-msg-input");
     let response_path = session_dir.join("trunk-rebase-msg-response");
+    let counter_path = session_dir.join("trunk-rebase-msg-counter");
+
+    // Initialize counter
+    std::fs::write(&counter_path, "0")
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
 
     let editor_script = format!(
-        "#!/bin/sh\ncp \"$1\" \"{input}\"\ntouch \"{signal}\"\nwhile [ ! -f \"{response}\" ]; do sleep 0.1; done\ncp \"{response}\" \"$1\"\nrm -f \"{signal}\" \"{response}\"\nexit 0\n",
+        r#"#!/bin/sh
+COUNTER=$(cat "{counter}")
+PADDED=$(printf "%04d" "$COUNTER")
+MSG_FILE="{queue}/$PADDED"
+echo $((COUNTER + 1)) > "{counter}"
+if [ -f "$MSG_FILE" ]; then
+  cp "$MSG_FILE" "$1"
+  exit 0
+fi
+cp "$1" "{input}"
+touch "{signal}"
+while [ ! -f "{response}" ]; do sleep 0.1; done
+cp "{response}" "$1"
+rm -f "{signal}" "{response}"
+exit 0
+"#,
+        counter = counter_path.display(),
+        queue = msg_queue_dir.display(),
         input = input_path.display(),
         signal = signal_path.display(),
         response = response_path.display(),
@@ -159,12 +198,12 @@ pub fn start_interactive_rebase_blocking(
             .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
     }
 
-    // 4. Clean up stale signal/response files from previous sessions
+    // 5. Clean up stale signal/response files from previous sessions
     let _ = std::fs::remove_file(&signal_path);
     let _ = std::fs::remove_file(&response_path);
     let _ = std::fs::remove_file(&input_path);
 
-    // 5. Spawn git rebase -i
+    // 6. Spawn git rebase -i
     let mut child = std::process::Command::new("git")
         .args(["rebase", "-i", base_oid])
         .current_dir(path_buf)
@@ -176,7 +215,7 @@ pub fn start_interactive_rebase_blocking(
         .spawn()
         .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
 
-    // 6. Poll loop: watch for signal file (message needed) or process exit
+    // 7. Poll loop: watch for signal file (message needed) or process exit
     loop {
         // Check if git needs a message edit
         if signal_path.exists() {
