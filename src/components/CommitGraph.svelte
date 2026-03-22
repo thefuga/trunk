@@ -1238,9 +1238,10 @@
             >
               {#each hoveredPill.allRefs as ref}
                 <div
-                  style="display: flex; align-items: center; gap: 3px; cursor: context-menu; border-radius: 4px;"
+                  style="display: flex; align-items: center; gap: 3px; cursor: {ref.ref_type === 'LocalBranch' || ref.ref_type === 'RemoteBranch' ? 'pointer' : 'context-menu'}; border-radius: 4px;"
                   class="text-[11px] leading-5 font-medium text-white whitespace-nowrap hover:bg-white/15 px-1 -mx-1"
                   oncontextmenu={(e) => showOverflowRefContextMenu(e, ref)}
+                  ondblclick={ref.ref_type === 'LocalBranch' || ref.ref_type === 'RemoteBranch' ? (e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (!ref.is_head) safeInvoke('checkout_branch', { path: repoPath, branchName: ref.short_name }).catch((err) => { showToast((err as TrunkError).message ?? 'Checkout failed', 'error'); }); } : undefined}
                 >
                   {#if PILL_ICONS[ref.ref_type]}
                     {@const RefIcon = PILL_ICONS[ref.ref_type]}
