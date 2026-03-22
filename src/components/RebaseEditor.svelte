@@ -255,7 +255,11 @@
         break;
       case 'Escape':
         e.preventDefault();
-        onclose();
+        if (editingIdx !== null) {
+          handleMessageCancel();
+        } else {
+          onclose();
+        }
         break;
     }
   }
@@ -482,6 +486,29 @@
         </div>
       {/if}
 
+      <!-- Floating message editor -->
+      {#if editingIdx === idx}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="rebase-msg-editor" onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') handleMessageCancel(); }}>
+          <div class="rebase-msg-editor-title">Reword commit message</div>
+          <input
+            class="rebase-msg-editor-summary"
+            type="text"
+            placeholder="Summary (required)"
+            bind:value={editingSummary}
+          />
+          <textarea
+            class="rebase-msg-editor-body"
+            placeholder="Body (optional)"
+            rows="4"
+            bind:value={editingBody}
+          ></textarea>
+          <div class="rebase-msg-editor-buttons">
+            <button class="rebase-btn rebase-btn-ghost" onclick={handleMessageCancel}>Cancel</button>
+            <button class="rebase-btn rebase-btn-confirm" onclick={handleMessageUpdate}>Update Message</button>
+          </div>
+        </div>
+      {/if}
     {/each}
   </div>
   {/key}
@@ -505,31 +532,6 @@
   </div>
 </div>
 
-{#if editingIdx !== null}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="rebase-msg-overlay" onclick={handleMessageCancel} onkeydown={(e) => { if (e.key === 'Escape') handleMessageCancel(); }}>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="rebase-msg-editor" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-      <div class="rebase-msg-editor-title">Reword commit message</div>
-      <input
-        class="rebase-msg-editor-summary"
-        type="text"
-        placeholder="Summary (required)"
-        bind:value={editingSummary}
-      />
-      <textarea
-        class="rebase-msg-editor-body"
-        placeholder="Body (optional)"
-        rows="4"
-        bind:value={editingBody}
-      ></textarea>
-      <div class="rebase-msg-editor-buttons">
-        <button class="rebase-btn rebase-btn-ghost" onclick={handleMessageCancel}>Cancel</button>
-        <button class="rebase-btn rebase-btn-confirm" onclick={handleMessageUpdate}>Update Message</button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .rebase-editor {
@@ -827,23 +829,14 @@
 
   /* --- Inline message editor --- */
 
-  .rebase-msg-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-
   .rebase-msg-editor {
+    position: relative;
+    z-index: 10;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 16px;
-    width: 520px;
-    max-width: 90vw;
+    margin: 4px 48px 8px;
     display: flex;
     flex-direction: column;
     gap: 10px;
