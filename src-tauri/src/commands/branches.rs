@@ -316,45 +316,25 @@ pub fn fast_forward_to_inner(
     state_map: &HashMap<String, PathBuf>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-
-    let target = git2::Oid::from_str(target_oid)
-        .map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
-
-    // HEAD must be on a branch
-    let head_ref = repo.head()?;
-    if !head_ref.is_branch() {
-        return Err(TrunkError::new("detached_head", "Cannot fast-forward in detached HEAD state"));
-    }
-    let branch_name = head_ref.shorthand().unwrap_or("HEAD").to_owned();
-    let head_oid = head_ref.target()
-        .ok_or_else(|| TrunkError::new("no_head", "HEAD has no target"))?;
-    drop(head_ref);
-
-    // Check if HEAD is an ancestor of target (fast-forward possible)
-    if !repo.graph_descendant_of(target, head_oid)? {
-        return Err(TrunkError::new(
-            "not_fast_forward",
-            format!("Cannot fast-forward {} — target is not ahead of HEAD", branch_name),
-        ));
-    }
-
-    // Move branch pointer and checkout
-    {
-        let target_commit = repo.find_commit(target)?;
-        repo.branch(&branch_name, &target_commit, true)?;
-        let target_object = target_commit.into_object();
-        repo.checkout_tree(&target_object, Some(&mut git2::build::CheckoutBuilder::new().safe()))?;
-        repo.set_head(&format!("refs/heads/{}", branch_name))?;
-    }
-    drop(repo);
-
-    // Rebuild graph cache
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    let mut repo2 = git2::Repository::open(path_buf)?;
-    let graph_result = graph::walk_commits(&mut repo2, 0, usize::MAX)?;
+
+    let output = std::process::Command::new("git")
+        .args(["merge", "--ff-only", target_oid])
+        .current_dir(path_buf)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(TrunkError::new("not_fast_forward", stderr));
+    }
+
+    // Rebuild graph cache
+    let mut repo = git2::Repository::open(path_buf)?;
+    let graph_result = graph::walk_commits(&mut repo, 0, usize::MAX)?;
     cache_map.insert(path.to_owned(), graph_result);
 
     Ok(())
