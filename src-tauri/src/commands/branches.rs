@@ -263,13 +263,6 @@ pub fn checkout_branch_inner(
 ) -> Result<(), TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
 
-    if is_dirty(&repo)? {
-        return Err(TrunkError::new(
-            "dirty_workdir",
-            "Working tree has uncommitted changes",
-        ));
-    }
-
     let branch_ref = format!("refs/heads/{}", branch_name);
     {
         let (object, _reference) = repo.revparse_ext(&branch_ref)?;
@@ -558,11 +551,11 @@ mod tests {
     }
 
     #[test]
-    fn checkout_dirty_returns_error() {
+    fn checkout_with_non_conflicting_changes_succeeds() {
         let dir = make_test_repo();
         let path = dir.path().to_string_lossy().to_string();
 
-        // Create a branch to check out to
+        // Create a branch to check out to (same commit — no conflict)
         {
             let repo = git2::Repository::open(dir.path()).unwrap();
             let head_oid = repo.head().unwrap().target().unwrap();
@@ -583,12 +576,7 @@ mod tests {
 
         let result = checkout_branch_inner(&path, "other", &state_map, &mut cache_map);
 
-        assert!(result.is_err(), "expected Err for dirty workdir");
-        assert_eq!(
-            result.unwrap_err().code,
-            "dirty_workdir",
-            "expected dirty_workdir error code"
-        );
+        assert!(result.is_ok(), "checkout should succeed when changes don't conflict");
     }
 
     #[test]

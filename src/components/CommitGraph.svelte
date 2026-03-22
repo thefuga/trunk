@@ -478,11 +478,7 @@
       await safeInvoke<void>('checkout_branch', { path: repoPath, branchName });
     } catch (e) {
       const err = e as TrunkError;
-      if (err.code === 'dirty_workdir') {
-        showToast('Cannot checkout — uncommitted changes', 'error');
-      } else {
-        showToast(err.message ?? 'Checkout failed', 'error');
-      }
+      showToast(err.message ?? 'Checkout failed', 'error');
     }
   }
 
