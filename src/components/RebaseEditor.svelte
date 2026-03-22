@@ -149,9 +149,11 @@
     if (!listEl) return;
     const sortable = Sortable.create(listEl, {
       animation: 150,
+      forceFallback: true,
       ghostClass: 'rebase-row-ghost',
       chosenClass: 'rebase-row-chosen',
       dragClass: 'rebase-row-drag',
+      fallbackClass: 'rebase-row-fallback',
       filter: 'select, option',
       preventOnFilter: false,
       onEnd: (e) => {
@@ -560,6 +562,12 @@
 
   :global(.rebase-row-drag) {
     opacity: 0;
+  }
+
+  :global(.rebase-row-fallback) {
+    background: var(--color-surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0.9;
   }
 
   .rebase-text-drop {
