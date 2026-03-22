@@ -469,6 +469,23 @@
     }
   }
 
+  async function handlePillCheckout(e: MouseEvent, pill: OverlayRefPill) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (pill.isHead) return; // already on this branch
+    const branchName = pill.refType === 'RemoteBranch' ? pill.label : pill.label;
+    try {
+      await safeInvoke<void>('checkout_branch', { path: repoPath, branchName });
+    } catch (e) {
+      const err = e as TrunkError;
+      if (err.code === 'dirty_workdir') {
+        showToast('Cannot checkout — uncommitted changes', 'error');
+      } else {
+        showToast(err.message ?? 'Checkout failed', 'error');
+      }
+    }
+  }
+
   async function showPillContextMenu(e: MouseEvent, pill: OverlayRefPill) {
     e.preventDefault();
     e.stopPropagation();
@@ -1105,15 +1122,17 @@
                   opacity={pill.isRemoteOnly ? 0.67 : 1}
                   style={pill.isNonHead && !pill.isRemoteOnly ? 'filter: brightness(0.75)' : ''}
                   pointer-events="auto"
+                  style:cursor={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'}
                   onmouseenter={() => pillMouseEnter(pill)}
                   onmouseleave={pillMouseLeave}
                   oncontextmenu={(e) => showPillContextMenu(e, pill)}
+                  ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}
                 />
 
                 <!-- Icon rendered directly in SVG at a fixed position (no CSS layout) -->
                 {#if PILL_ICONS[pill.refType]}
                   {@const PillIcon = PILL_ICONS[pill.refType]}
-                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9" style="pointer-events: auto; cursor: context-menu;" oncontextmenu={(e) => showPillContextMenu(e, pill)}>
+                  <g transform="translate({pill.x + PILL_PADDING_X}, {pill.y - ICON_WIDTH / 2})" opacity="0.9" style="pointer-events: auto; cursor: {pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};" oncontextmenu={(e) => showPillContextMenu(e, pill)} ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}>
                     <PillIcon size={ICON_WIDTH} />
                   </g>
                 {/if}
@@ -1136,9 +1155,10 @@
                       font-weight: {pill.isHead ? 700 : 500};
                       white-space: nowrap;
                       overflow: hidden;
-                      cursor: context-menu;
+                      cursor: {pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};
                     "
                     oncontextmenu={(e) => showPillContextMenu(e, pill)}
+                    ondblclick={pill.refType === 'LocalBranch' || pill.refType === 'RemoteBranch' ? (e: MouseEvent) => handlePillCheckout(e, pill) : undefined}
                   >{pill.truncatedLabel}</span>
                 </foreignObject>
 
