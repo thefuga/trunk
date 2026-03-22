@@ -60,6 +60,7 @@ pub fn get_operation_state_inner(
                 progress: None,
                 source_color_index: None,
                 target_color_index: None,
+                rebase_message: None,
             })
         }
         git2::RepositoryState::Rebase
@@ -84,6 +85,8 @@ pub fn get_operation_state_inner(
                 (Some(m), Some(e)) => Some(format!("{}/{}", m, e)),
                 _ => None,
             };
+            let rebase_message = std::fs::read_to_string(rebase_dir.join("message"))
+                .ok().map(|s| s.trim().to_owned());
             Ok(OperationInfo {
                 op_type: OperationType::Rebase,
                 source_branch: head_name,
@@ -91,27 +94,28 @@ pub fn get_operation_state_inner(
                 progress,
                 source_color_index: None,
                 target_color_index: None,
+                rebase_message,
             })
         }
         git2::RepositoryState::CherryPick | git2::RepositoryState::CherryPickSequence => {
             Ok(OperationInfo {
                 op_type: OperationType::CherryPick,
                 source_branch: None, target_branch: None, progress: None,
-                source_color_index: None, target_color_index: None,
+                source_color_index: None, target_color_index: None, rebase_message: None,
             })
         }
         git2::RepositoryState::Revert | git2::RepositoryState::RevertSequence => {
             Ok(OperationInfo {
                 op_type: OperationType::Revert,
                 source_branch: None, target_branch: None, progress: None,
-                source_color_index: None, target_color_index: None,
+                source_color_index: None, target_color_index: None, rebase_message: None,
             })
         }
         _ => {
             Ok(OperationInfo {
                 op_type: OperationType::None,
                 source_branch: None, target_branch: None, progress: None,
-                source_color_index: None, target_color_index: None,
+                source_color_index: None, target_color_index: None, rebase_message: None,
             })
         }
     }

@@ -98,6 +98,7 @@ export interface OperationInfo {
   progress: string | null;
   source_color_index: number | null;
   target_color_index: number | null;
+  rebase_message: string | null;
 }
 
 export interface MergeSides {

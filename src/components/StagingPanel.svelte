@@ -32,6 +32,8 @@
   let operationInfo = $state<OperationInfo | null>(null);
 
   let isMerge = $derived(operationInfo?.op_type === 'Merge');
+  let isRebase = $derived(operationInfo?.op_type === 'Rebase');
+  let isOperation = $derived(isMerge || isRebase);
   let totalCount = $derived(
     (status?.unstaged.length ?? 0) +
     (status?.staged.length ?? 0) +
@@ -241,6 +243,42 @@
     }
   }
 
+  // ---------- Rebase-mode actions ----------
+  let rebaseLoading = $state(false);
+
+  async function continueRebase() {
+    rebaseLoading = true;
+    try {
+      await safeInvoke('rebase_continue', { path: repoPath });
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Rebase continue failed', 'error');
+    } finally {
+      rebaseLoading = false;
+      await loadStatus();
+    }
+  }
+
+  async function abortRebase() {
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await ask(
+      'Abort rebase? This will return to the pre-rebase state.',
+      { title: 'Abort Rebase', kind: 'warning' }
+    );
+    if (!confirmed) return;
+    rebaseLoading = true;
+    try {
+      await safeInvoke('rebase_abort', { path: repoPath });
+      showToast('Rebase aborted', 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Abort failed', 'error');
+    } finally {
+      rebaseLoading = false;
+      await loadStatus();
+    }
+  }
+
   // Initial load on mount
   $effect(() => {
     if (repoPath) loadStatus();
@@ -302,8 +340,8 @@
     {/if}
   </div>
 
-  <!-- Operation banner (merge/rebase in progress) -->
-  {#if operationInfo && operationInfo.op_type !== 'None'}
+  <!-- Operation banner (merge in progress — rebase uses bottom section instead) -->
+  {#if operationInfo && operationInfo.op_type !== 'None' && operationInfo.op_type !== 'Rebase'}
     <OperationBanner
       info={operationInfo}
       {repoPath}
@@ -569,7 +607,72 @@
   <!-- Permanent divider above bottom area -->
   <div style="flex-shrink: 0; border-top: 1px solid var(--color-border);"></div>
 
-  {#if isMerge}
+  {#if isRebase && operationInfo}
+    <!-- Rebase progress + actions (GitKraken style) -->
+    <div style="
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    ">
+      <div style="
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        color: var(--color-text-muted);
+      ">
+        <div style="margin-bottom: 4px;">
+          Rebasing commit {operationInfo.progress ?? '?'}
+        </div>
+        {#if operationInfo.rebase_message}
+          <div style="color: var(--color-text); white-space: pre-wrap; font-size: 12px;">
+            {operationInfo.rebase_message}
+          </div>
+        {/if}
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button
+          onclick={continueRebase}
+          disabled={rebaseLoading}
+          style="
+            flex: 1;
+            height: 34px;
+            background: var(--color-btn-continue-bg);
+            color: var(--color-btn-continue);
+            border: 1px solid var(--color-btn-continue-border);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: {rebaseLoading ? 'not-allowed' : 'pointer'};
+            opacity: {rebaseLoading ? 0.4 : 1};
+          "
+        >
+          Continue Rebase
+        </button>
+        <button
+          onclick={abortRebase}
+          disabled={rebaseLoading}
+          style="
+            flex: 1;
+            height: 34px;
+            background: var(--color-btn-abort-bg);
+            color: var(--color-btn-abort);
+            border: 1px solid var(--color-btn-abort-border);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: {rebaseLoading ? 'not-allowed' : 'pointer'};
+            opacity: {rebaseLoading ? 0.4 : 1};
+          "
+        >
+          Abort Rebase
+        </button>
+      </div>
+    </div>
+  {:else if isMerge}
     <!-- Merge commit form + actions -->
     <div style="
       padding: 8px;

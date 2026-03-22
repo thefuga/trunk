@@ -218,6 +218,7 @@ pub struct OperationInfo {
     pub progress: Option<String>,
     pub source_color_index: Option<usize>,
     pub target_color_index: Option<usize>,
+    pub rebase_message: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
