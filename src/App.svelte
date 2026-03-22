@@ -58,6 +58,7 @@
   let rebaseFocusedCommitDetail = $state<CommitDetailType | null>(null);
   let rebaseFocusedFileDiffs = $state<FileDiff[]>([]);
   let rebaseFocusedFileSelected = $state<string | null>(null);
+  let rebaseDiffFile = $state<string | null>(null); // when set, center pane shows this file's diff
 
   // Rebase message editor state (sequential center pane flow)
   interface SquashGroup {
@@ -453,11 +454,13 @@
     rebaseFocusedCommitDetail = null;
     rebaseFocusedFileDiffs = [];
     rebaseFocusedFileSelected = null;
+    rebaseDiffFile = null;
   }
 
   async function handleRebaseFocusChange(oid: string) {
     if (!repoPath) return;
     rebaseFocusedFileSelected = null;
+    rebaseDiffFile = null;
     try {
       const [detail, files] = await Promise.all([
         safeInvoke<CommitDetailType>('get_commit_detail', { path: repoPath, oid }),
@@ -636,6 +639,15 @@
               onconfirm={handleRebaseMessageConfirm}
               oncancel={handleRebaseMessageCancel}
             />
+          {:else if rebaseDiffFile}
+            <DiffPanel
+              fileDiffs={rebaseFocusedFileDiffs.filter((f) => f.path === rebaseDiffFile)}
+              commitDetail={null}
+              selectedPath={rebaseDiffFile}
+              diffKind="commit"
+              repoPath={repoPath!}
+              onclose={() => { rebaseDiffFile = null; }}
+            />
           {:else}
             <RebaseEditor
               commits={rebaseEditorCommits}
@@ -655,7 +667,15 @@
               commitDetail={rebaseFocusedCommitDetail}
               fileDiffs={rebaseFocusedFileDiffs}
               selectedFile={rebaseFocusedFileSelected}
-              onfileselect={(path) => { rebaseFocusedFileSelected = rebaseFocusedFileSelected === path ? null : path; }}
+              onfileselect={(path) => {
+                if (rebaseFocusedFileSelected === path) {
+                  rebaseFocusedFileSelected = null;
+                  rebaseDiffFile = null;
+                } else {
+                  rebaseFocusedFileSelected = path;
+                  rebaseDiffFile = path;
+                }
+              }}
               onclose={() => { rebaseFocusedCommitDetail = null; }}
               repoPath={repoPath!}
             />

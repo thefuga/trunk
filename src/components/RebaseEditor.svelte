@@ -379,6 +379,9 @@
           </select>
         </div>
 
+        <!-- Squash indicator -->
+        <span class="rebase-squash-arrow" class:rebase-squash-arrow-visible={item.action === 'squash'}>↓</span>
+
         <!-- SHA column -->
         {#if columnVisibility.sha}
           <div
@@ -653,6 +656,19 @@
 
   .rebase-row-squash.rebase-row-focused {
     border-left: 2px solid var(--color-rebase-squash);
+  }
+
+  .rebase-squash-arrow {
+    width: 16px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-rebase-squash);
+    visibility: hidden;
+  }
+
+  .rebase-squash-arrow-visible {
+    visibility: visible;
   }
 
   :global(.rebase-row-ghost) {
