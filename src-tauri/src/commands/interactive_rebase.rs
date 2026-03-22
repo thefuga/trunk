@@ -175,7 +175,7 @@ exit 0
 
     // 5. Run git rebase -i (blocking — waits for completion)
     let output = std::process::Command::new("git")
-        .args(["rebase", "-i", base_oid])
+        .args(["rebase", "-i", "--empty=keep", base_oid])
         .current_dir(path_buf)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_SEQUENCE_EDITOR", seq_editor_path.to_str().unwrap())
