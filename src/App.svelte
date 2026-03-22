@@ -8,6 +8,7 @@
   import DiffPanel from './components/DiffPanel.svelte';
   import MergeEditor from './components/MergeEditor.svelte';
   import RebaseEditor from './components/RebaseEditor.svelte';
+  import RebaseMessageEditor from './components/RebaseMessageEditor.svelte';
   import InputDialog from './components/InputDialog.svelte';
   import CommitDetail from './components/CommitDetail.svelte';
   import Toast from './components/Toast.svelte';
@@ -57,6 +58,13 @@
   let showMessageDialog = $state(false);
   let messageDialogTitle = $state('');
   let messageDialogMessage = $state('');
+
+  // Rebase message editor state (sequential center pane flow)
+  let showRebaseMessageEditor = $state(false);
+  let rebaseMessageQueue = $state<{ oid: string; shortOid: string; action: string; summary: string; newMessage: string | null }[]>([]);
+  let rebaseMessageIdx = $state(0);
+  let pendingRebaseTodoItems = $state<{ oid: string; action: string; summary: string; newMessage: string | null }[]>([]);
+  let pendingRebaseBaseOid = $state('');
 
   const wipCount = $derived(dirtyCounts.staged + dirtyCounts.unstaged + dirtyCounts.conflicted);
 
@@ -434,11 +442,57 @@
 
   async function handleRebaseStart(todoItems: { oid: string; action: string; summary: string; newMessage: string | null }[]) {
     if (!repoPath) return;
-    // IMPORTANT: Capture baseOid BEFORE closing editor, because
-    // handleRebaseEditorClose() resets rebaseBaseOid to ''
+    // Capture before close resets these
     const baseOid = rebaseBaseOid;
-    // Close editor immediately per user decision
+    const editorCommits = [...rebaseEditorCommits];
+
+    // Find commits that need message editing
+    const needsMessage = todoItems
+      .filter((i) => i.action === 'reword' || i.action === 'squash')
+      .map((i) => {
+        const commit = editorCommits.find((c) => c.oid === i.oid);
+        return { ...i, shortOid: commit?.short_oid ?? i.oid.slice(0, 7) };
+      });
+
+    // Store for later execution
+    pendingRebaseTodoItems = todoItems;
+    pendingRebaseBaseOid = baseOid;
     handleRebaseEditorClose();
+
+    if (needsMessage.length > 0) {
+      rebaseMessageQueue = needsMessage;
+      rebaseMessageIdx = 0;
+      showRebaseMessageEditor = true;
+      return;
+    }
+
+    await executeRebase(baseOid, todoItems);
+  }
+
+  async function handleRebaseMessageConfirm(newMessage: string) {
+    const current = rebaseMessageQueue[rebaseMessageIdx];
+    // Store the edited message back into the pending items
+    const item = pendingRebaseTodoItems.find((i) => i.oid === current.oid);
+    if (item) item.newMessage = newMessage;
+
+    if (rebaseMessageIdx < rebaseMessageQueue.length - 1) {
+      // Show next
+      rebaseMessageIdx += 1;
+    } else {
+      // All messages collected — execute rebase
+      showRebaseMessageEditor = false;
+      await executeRebase(pendingRebaseBaseOid, pendingRebaseTodoItems);
+    }
+  }
+
+  function handleRebaseMessageCancel() {
+    showRebaseMessageEditor = false;
+    rebaseMessageQueue = [];
+    pendingRebaseTodoItems = [];
+  }
+
+  async function executeRebase(baseOid: string, todoItems: { oid: string; action: string; summary: string; newMessage: string | null }[]) {
+    if (!repoPath) return;
     try {
       await safeInvoke('start_interactive_rebase', {
         path: repoPath,
@@ -514,7 +568,19 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="pane-divider" style="display: {leftPaneCollapsed ? 'none' : 'block'};" onmousedown={startLeftResize}></div>
       <div class="flex-1 overflow-hidden">
-        {#if showRebaseEditor}
+        {#if showRebaseMessageEditor && rebaseMessageQueue[rebaseMessageIdx]}
+          {@const current = rebaseMessageQueue[rebaseMessageIdx]}
+          <RebaseMessageEditor
+            repoPath={repoPath!}
+            commitOid={current.oid}
+            commitShortOid={current.shortOid}
+            message={current.newMessage ?? current.summary}
+            actionType={current.action as 'reword' | 'squash'}
+            remaining={rebaseMessageQueue.length - rebaseMessageIdx}
+            onconfirm={handleRebaseMessageConfirm}
+            oncancel={handleRebaseMessageCancel}
+          />
+        {:else if showRebaseEditor}
           <RebaseEditor
             commits={rebaseEditorCommits}
             onclose={handleRebaseEditorClose}

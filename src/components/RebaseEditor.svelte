@@ -29,13 +29,6 @@
     onstart: (items: { oid: string; action: string; summary: string; newMessage: string | null }[]) => void;
   }
 
-  // --- Message dialog state (sequential prompts for reword/squash) ---
-  let messageDialogVisible = $state(false);
-  let messageDialogTitle = $state('');
-  let messageDialogValue = $state('');
-  let messageDialogQueue = $state<number[]>([]);
-  let messageDialogCurrent = $state<number>(-1);
-
   let { commits, onclose, onstart }: Props = $props();
 
   function toRebaseCommits(source: RebaseTodoItem[]): RebaseCommit[] {
@@ -261,48 +254,7 @@
 
   function handleStartRebase() {
     if (!canStart) return;
-    // Find indices that need a message edit (reword/squash)
-    const needsMessage = items
-      .map((item, idx) => ({ idx, item }))
-      .filter(({ item }) => item.action === 'reword' || item.action === 'squash');
-
-    if (needsMessage.length === 0) {
-      onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
-      return;
-    }
-
-    // Start sequential dialog flow
-    messageDialogQueue = needsMessage.map((n) => n.idx);
-    showNextMessageDialog();
-  }
-
-  function showNextMessageDialog() {
-    if (messageDialogQueue.length === 0) {
-      // All messages collected — start the rebase
-      messageDialogVisible = false;
-      onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
-      return;
-    }
-    const idx = messageDialogQueue[0];
-    messageDialogCurrent = idx;
-    const item = items[idx];
-    const actionLabel = item.action === 'squash' ? 'Squash' : 'Reword';
-    const remaining = messageDialogQueue.length;
-    messageDialogTitle = `${actionLabel} — ${item.shortOid} ${remaining > 1 ? `(${remaining} remaining)` : ''}`.trim();
-    messageDialogValue = item.newMessage ?? item.summary;
-    messageDialogVisible = true;
-  }
-
-  function handleMessageConfirm() {
-    items[messageDialogCurrent].newMessage = messageDialogValue;
-    messageDialogQueue = messageDialogQueue.slice(1);
-    showNextMessageDialog();
-  }
-
-  function handleMessageCancel() {
-    // Cancel the whole rebase start — go back to the editor
-    messageDialogVisible = false;
-    messageDialogQueue = [];
+    onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
   }
 
   // Determine last visible resizable column for resize handle logic
@@ -469,24 +421,6 @@
   {/key}
 </div>
 
-{#if messageDialogVisible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="message-dialog-overlay" onkeydown={(e) => { if (e.key === 'Escape') handleMessageCancel(); }}>
-    <div class="message-dialog">
-      <div class="message-dialog-title">{messageDialogTitle}</div>
-      <textarea
-        class="message-dialog-textarea"
-        bind:value={messageDialogValue}
-        rows="6"
-      ></textarea>
-      <div class="message-dialog-buttons">
-        <button class="rebase-btn rebase-btn-ghost" onclick={handleMessageCancel}>Cancel</button>
-        <button class="rebase-btn rebase-btn-primary" onclick={handleMessageConfirm}>Confirm</button>
-      </div>
-    </div>
-  </div>
-{/if}
-
 <style>
   .rebase-editor {
     display: flex;
@@ -645,55 +579,6 @@
     text-decoration: line-through;
   }
 
-  .message-dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-
-  .message-dialog {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: 16px;
-    width: 480px;
-    max-width: 90vw;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .message-dialog-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .message-dialog-textarea {
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    color: var(--color-text);
-    font-size: 13px;
-    font-family: var(--font-mono);
-    padding: 8px;
-    resize: vertical;
-    outline: none;
-  }
-
-  .message-dialog-textarea:focus {
-    border-color: var(--color-accent);
-  }
-
-  .message-dialog-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
 
   /* --- Cells --- */
 
