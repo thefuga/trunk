@@ -156,6 +156,11 @@
       preventOnFilter: false,
       onEnd: (e) => {
         if (e.oldIndex == null || e.newIndex == null || e.oldIndex === e.newIndex) return;
+        // Undo SortableJS's DOM move — Svelte owns the DOM via {#each}
+        const { item, from } = e;
+        from.removeChild(item);
+        from.insertBefore(item, from.children[e.oldIndex] ?? null);
+        // Now update state — Svelte will re-render correctly
         const updated = [...items];
         const [moved] = updated.splice(e.oldIndex, 1);
         updated.splice(e.newIndex, 0, moved);
