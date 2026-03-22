@@ -32,7 +32,8 @@
   let { commits, onclose, onstart }: Props = $props();
 
   function toRebaseCommits(source: RebaseTodoItem[]): RebaseCommit[] {
-    return source.map((c) => ({
+    // Reverse: backend sends oldest-first (for git), but we display newest-first (like the graph)
+    return [...source].reverse().map((c) => ({
       oid: c.oid,
       shortOid: c.short_oid,
       summary: c.summary,
@@ -50,7 +51,13 @@
   let columnWidths = $state<RebaseColumnWidths>({ sha: 80, author: 120, date: 100 });
   let columnVisibility = $state<RebaseColumnVisibility>({ sha: true, author: true, date: true });
 
-  let validationErrors = $derived(validateRebasePlan(items));
+  // Validate in git order (oldest-first = reversed display), remap indices back to display order
+  let validationErrors = $derived.by(() => {
+    const gitOrder = [...items].reverse();
+    const errors = validateRebasePlan(gitOrder);
+    const lastIdx = items.length - 1;
+    return errors.map((e) => ({ ...e, index: lastIdx - e.index }));
+  });
   let hasChanges = $derived(JSON.stringify(items) !== JSON.stringify(originalItems));
   let canStart = $derived(validationErrors.length === 0);
 
@@ -254,7 +261,9 @@
 
   function handleStartRebase() {
     if (!canStart) return;
-    onstart(items.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
+    // Reverse back to oldest-first for git's rebase todo
+    const reversed = [...items].reverse();
+    onstart(reversed.map((i) => ({ oid: i.oid, action: i.action, summary: i.summary, newMessage: i.newMessage })));
   }
 
   // Determine last visible resizable column for resize handle logic
