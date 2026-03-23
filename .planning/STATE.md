@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: Multi-tab & Tree View
-status: Requirements
-stopped_at: Defining requirements
-last_updated: "2026-03-23T16:00:00.000Z"
+status: Ready to plan
+stopped_at: Roadmap created, ready to plan Phase 44
+last_updated: "2026-03-23T17:00:00.000Z"
 last_activity: 2026-03-23
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23 after v0.9 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Defining requirements for v0.9 Multi-tab & Tree View
+**Current focus:** Phase 44 — Backend State Scoping
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 44 of 48 (Backend State Scoping) — first of 5 phases in v0.9
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-23 — Milestone v0.9 started
+Status: Ready to plan
+Last activity: 2026-03-23 — v0.9 roadmap created (5 phases, 21 requirements)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -39,6 +41,12 @@ Last activity: 2026-03-23 — Milestone v0.9 started
 | Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 |
 
 ## Accumulated Context
+
+### Decisions
+
+- Phase 44 scope: Only RunningOp needs multi-repo scoping; RepoState, CommitCache, WatcherState are already HashMap<String, _> keyed by repo path
+- Research recommends destroy/recreate over keep-alive for tab switching (simpler, Rust cache makes remount fast)
+- Per-repo context scoping (remoteState, undoRedoState) needs design spike in Phase 45 planning
 
 ### Pending Todos
 
@@ -64,6 +72,6 @@ Last activity: 2026-03-23 — Milestone v0.9 started
 
 Last activity: 2026-03-23
 Last session: 2026-03-23
-Stopped at: Defining requirements for v0.9
+Stopped at: v0.9 roadmap created with 5 phases (44-48), 21 requirements mapped
 Resume file: None
-Next action: Define requirements and create roadmap
+Next action: /gsd:plan-phase 44

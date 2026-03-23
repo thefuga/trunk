@@ -68,13 +68,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| — | — | — |
+| BACK-01 | Phase 44 | Pending |
+| TAB-01 | Phase 45 | Pending |
+| TAB-02 | Phase 45 | Pending |
+| TAB-03 | Phase 45 | Pending |
+| TAB-04 | Phase 45 | Pending |
+| TAB-05 | Phase 45 | Pending |
+| TAB-06 | Phase 45 | Pending |
+| TAB-07 | Phase 45 | Pending |
+| TREE-07 | Phase 46 | Pending |
+| TREE-01 | Phase 47 | Pending |
+| TREE-02 | Phase 47 | Pending |
+| TREE-03 | Phase 47 | Pending |
+| TREE-04 | Phase 47 | Pending |
+| TREE-05 | Phase 47 | Pending |
+| TREE-06 | Phase 47 | Pending |
+| TAB-08 | Phase 48 | Pending |
+| TAB-09 | Phase 48 | Pending |
+| TAB-10 | Phase 48 | Pending |
+| TREE-08 | Phase 48 | Pending |
+| TREE-09 | Phase 48 | Pending |
+| TREE-10 | Phase 48 | Pending |
 
 **Coverage:**
 - v0.9 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after initial definition*
+*Last updated: 2026-03-23 after roadmap creation (traceability added)*
