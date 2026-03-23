@@ -14,6 +14,7 @@
     currentBranch?: string;
     onfileselect?: (path: string, kind: 'unstaged' | 'staged' | 'conflicted') => void;
     onsubjectchange?: (value: string) => void;
+    onfileresolved?: () => void;
   }
 
   let {
@@ -21,6 +22,7 @@
     currentBranch,
     onfileselect,
     onsubjectchange,
+    onfileresolved,
   }: Props = $props();
 
   let status = $state<WorkingTreeStatus | null>(null);
@@ -158,8 +160,7 @@
       const content = side === 'ours' ? sides.ours : sides.theirs;
       await safeInvoke('save_merge_result', { path: repoPath, filePath, content });
       await loadStatus();
-      const label = side === 'ours' ? 'current' : 'incoming';
-      // File resolved — staging panel updates automatically via loadStatus
+      onfileresolved?.();
     } catch (e) {
       const err = e as TrunkError;
       showToast(err.message ?? 'Resolution failed', 'error');

@@ -613,7 +613,7 @@
             repoPath={repoPath!}
           />
         {:else}
-          <StagingPanel repoPath={repoPath!} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} />
+          <StagingPanel repoPath={repoPath!} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} onfileresolved={handleFileResolved} />
         {/if}
       </div>
       {/if}
