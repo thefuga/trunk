@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: unknown
-stopped_at: Completed 41-04-PLAN.md
-last_updated: "2026-03-21T23:26:33.273Z"
+stopped_at: Completed 38-07-PLAN.md
+last_updated: "2026-03-23T03:50:48.050Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
+  completed_phases: 4
+  total_plans: 17
+  completed_plans: 16
 ---
 
 # Project State
@@ -50,6 +50,7 @@ Plan: 4 of 4
 | Phase 41 P02 | 2min | 2 tasks | 1 files |
 | Phase 41 P03 | 2min | 2 tasks | 2 files |
 | Phase 41 P04 | 4min | 2 tasks | 3 files |
+| Phase 38 P07 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,7 @@ Plan: 4 of 4
 - [Phase 41]: File-based IPC: shell script touches signal file, Rust polls, frontend writes response
 - [Phase 41]: Pass RebaseTodoItem[] directly to RebaseEditor, letting the component handle internal mapping
 - [Phase 41]: Capture baseOid before closing editor to prevent state reset race condition in handleRebaseStart
+- [Phase 38]: Remove manualEdit = false from handlers rather than adding conditional guards -- toggle handlers still update takenLines but outputText derived stays manual
 
 ### Pending Todos
 
@@ -110,7 +112,7 @@ Plan: 4 of 4
 ## Session Continuity
 
 Last activity: 2026-03-21
-Last session: 2026-03-21T23:26:33.268Z
-Stopped at: Completed 41-04-PLAN.md
+Last session: 2026-03-23T03:50:48.045Z
+Stopped at: Completed 38-07-PLAN.md
 Resume file: None
 Next action: Phase 40 complete -- all plans done. v0.8 milestone complete.
