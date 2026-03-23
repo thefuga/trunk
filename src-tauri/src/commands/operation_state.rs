@@ -208,8 +208,11 @@ pub fn rebase_continue_inner(
         .output()
         .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(TrunkError::new("rebase_error", stderr.to_string()));
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        // Next commit hit a conflict — rebase paused at next step, not an error
+        if !stderr.to_lowercase().contains("conflict") && !stderr.to_lowercase().contains("could not apply") {
+            return Err(TrunkError::new("rebase_error", stderr));
+        }
     }
     let mut repo = git2::Repository::open(path_buf)?;
     graph::walk_commits(&mut repo, 0, usize::MAX).map_err(TrunkError::from)
