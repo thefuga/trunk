@@ -273,7 +273,12 @@
       await safeInvoke('rebase_continue', { path: repoPath, message: msg || null });
     } catch (e) {
       const err = e as TrunkError;
-      showToast(err.message ?? 'Rebase continue failed', 'error');
+      const msg = err.message ?? '';
+      if (msg.toLowerCase().includes('conflict') || msg.toLowerCase().includes('resolve')) {
+        showToast('Resolve all conflicts before continuing', 'error');
+      } else {
+        showToast(msg || 'Rebase continue failed', 'error');
+      }
     } finally {
       rebaseLoading = false;
       await loadStatus();
@@ -771,7 +776,7 @@
       <div style="display: flex; gap: 6px;">
         <button
           onclick={continueRebase}
-          disabled={rebaseLoading}
+          disabled={rebaseLoading || !allResolved}
           style="
             flex: 3;
             height: 34px;
@@ -781,8 +786,8 @@
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
-            cursor: {rebaseLoading ? 'not-allowed' : 'pointer'};
-            opacity: {rebaseLoading ? 0.4 : 1};
+            cursor: {allResolved && !rebaseLoading ? 'pointer' : 'not-allowed'};
+            opacity: {allResolved && !rebaseLoading ? 1 : 0.4};
           "
         >
           Continue Rebase
