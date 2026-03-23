@@ -203,17 +203,14 @@
   // ---------- Event handlers ----------
   function handleTakeAllCurrent() {
     takenLines = takeAllCurrent(regions);
-    manualEdit = false;
   }
 
   function handleTakeAllIncoming() {
     takenLines = takeAllIncoming(regions);
-    manualEdit = false;
   }
 
   function handleToggleHunk(side: 'ours' | 'theirs', regionIdx: number) {
     takenLines = toggleHunk(side, regionIdx, regions, takenLines);
-    manualEdit = false;
   }
 
   let lastClickedKey = $state<string | null>(null);
@@ -235,13 +232,11 @@
           else result.delete(k);
         }
         takenLines = result;
-        manualEdit = false;
         lastClickedKey = key;
         return;
       }
     }
     takenLines = toggleLine(key, takenLines);
-    manualEdit = false;
     lastClickedKey = key;
   }
 
