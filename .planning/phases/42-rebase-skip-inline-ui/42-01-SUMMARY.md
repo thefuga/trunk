@@ -63,7 +63,7 @@ Each task was committed atomically:
 
 1. **Task 1: Add Skip Commit button to StagingPanel and silence OperationBanner skip toast** - `b96d156` (feat)
 
-**Plan metadata:** [pending] (docs: complete plan)
+**Plan metadata:** `325da00` (docs: complete plan)
 
 ## Files Created/Modified
 - `src/components/StagingPanel.svelte` - Added skipRebase handler and Skip Commit button in rebase form button row
