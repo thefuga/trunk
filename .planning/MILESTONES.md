@@ -1,5 +1,33 @@
 # Milestones
 
+## v0.8 Conflict & Rebase (Shipped: 2026-03-23)
+
+**Phases completed:** 7 phases, 19 plans, 36 tasks
+
+**Key accomplishments:**
+
+- Tauri IPC layer for merge/rebase operation detection with git2 repo.state() and 5 CLI action commands (continue/abort/skip)
+- Conflict detection UI with collapsible conflicted files section, color-coded merge/rebase operation banners, and Continue/Skip/Abort action buttons
+- diff_conflicted backend command using git2 diff_tree_to_workdir to show conflict markers when clicking conflicted files
+- Two Tauri commands (get_merge_sides, save_merge_result) extracting conflict content from git2 index stages and persisting resolved merge output with staging
+- Pure TypeScript merge parser with three-way conflict region detection, Set-based selection state, real-time output computation, and navigation helpers
+- Three-panel MergeEditor.svelte with synchronized scroll, per-hunk/per-line toggle selection, editable output textarea, and Prev/Next conflict navigation
+- MergeEditor routing in App.svelte for conflicted files and Take All Current/Incoming context menu in StagingPanel for quick resolution
+- Wired output textarea into three-way scroll sync via panelRefs[2] binding and handleScroll(2) handler
+- handleFileResolved queries get_status after resolution to auto-open next conflicted file or return to CommitGraph when none remain
+- Fix manualEdit override in toggle/take handlers and wire StagingPanel context menu resolution to App handleFileResolved
+- Merge context menu items wired to all 6 branch surfaces using Tauri native menus, with silent success and error-only toasts
+- Rebase context menu items on all 6 branch surfaces (pills, overflow refs, sidebar) with toast-free success handling
+- get_rebase_todo/get_fork_point backend commands, validateRebasePlan with 9 test cases, CSS rebase tokens, InputDialog configurable labels, LazyStore rebase column persistence
+- RebaseEditor Svelte component with 5-column layout, native DnD reordering, P/S/R/D keyboard shortcuts, color-coded action dropdowns, inline validation errors, and LazyStore-persisted column widths/visibility
+- Interactive rebase execution engine with GIT_SEQUENCE_EDITOR for custom todo and GIT_EDITOR shell script for file-based IPC message editing
+- RebaseEditor wired into App center pane with context menu entry points in CommitGraph (commit, pill, overflow ref menus) and BranchSidebar, plus reword/squash message dialog via event listener
+- Squash message pre-editing with combined messages, corrected column order (Message before SHA), and stable squash arrow positioning
+- Skip Commit button added to StagingPanel inline rebase form with silent-skip behavior aligned across both StagingPanel and OperationBanner
+- Removed orphaned diff_conflicted command/tests, fixed rebaseBaseName branch resolution via resolve_ref IPC, cleaned dead InputDialog import, narrowed diffKind type
+
+---
+
 ## v0.7 Hunk Staging & Search (Shipped: 2026-03-19)
 
 **Phases completed:** 5 phases, 8 plans, 0 tasks

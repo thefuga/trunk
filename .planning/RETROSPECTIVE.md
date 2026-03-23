@@ -280,6 +280,50 @@
 
 ---
 
+## Milestone: v0.8 — Conflict & Rebase
+
+**Shipped:** 2026-03-23
+**Phases:** 7 | **Plans:** 19 | **Commits:** 61 | **Timeline:** 4 days
+
+### What Was Built
+- Conflict detection with collapsible conflicted files section and color-coded merge/rebase operation banners
+- Three-panel merge editor with synchronized scroll, per-hunk/per-line toggle selection, and editable output textarea
+- Merge initiation via context menu on all 6 branch surfaces (sidebar, graph pill, overflow ref) with silent success
+- Rebase initiation and mid-rebase conflict resolution with pause/continue/skip/abort flow
+- Interactive rebase editor with Pick/Squash/Reword/Drop actions, drag-and-drop reordering, keyboard shortcuts
+- File-based IPC engine: GIT_SEQUENCE_EDITOR for custom todo, GIT_EDITOR shell script for reword/squash message editing
+- Gap closure: Skip button in inline rebase UI, tech debt cleanup (orphaned commands, dead imports, type fixes)
+
+### What Worked
+- **git2 repo.state() for operation detection**: Single API call replaces manual filesystem checks for .git/MERGE_HEAD, .git/rebase-merge/, etc.
+- **Merge editor reuse across operations**: MergeEditor component serves merge, rebase, and interactive rebase conflict resolution — zero duplication
+- **File-based IPC for GIT_EDITOR**: Shell script touches signal file, Rust polls, frontend writes response — avoids stdin piping complexity
+- **Audit-driven gap closure**: v0.8 milestone audit identified REB-06 integration gap and 5 tech debt items — Phases 42 and 43 closed all gaps before milestone completion
+- **Backend-first phase pattern continued**: Phase 37 (backend) → 38 (editor) → 39-40 (workflow) → 41 (interactive) — each phase built on tested foundations
+- **Silent success pattern**: No toast on merge/rebase/skip — graph refresh via repo-changed event is sufficient, consistent across all operations
+
+### What Was Inefficient
+- **Phase 38 required 7 plans**: Initial 4 plans + 3 gap closures (scroll sync, auto-advance, manual edit fix) — merge editor complexity was underestimated
+- **Phase 41 required extensive debugging**: Rebase message IPC needed 5+ debug sessions for signal file detection, state reset races, squash message timing
+- **Milestone audit found gaps after 5 phases "complete"**: REB-06 marked complete in REQUIREMENTS.md but the integration path was broken — verification at phase level missed cross-phase integration issues
+- **Nyquist validation still incomplete**: All 5 audited phases had draft VALIDATION.md (nyquist_compliant: false) — 8th consecutive milestone with this pattern
+
+### Patterns Established
+- **File-based IPC for external editors**: Shell script + signal file + Rust poll loop + frontend response — reusable for any git operation requiring editor interaction
+- **Index::conflicts() iterator**: git2 0.19 pattern for extracting ours/theirs/base content from merge conflicts
+- **Sequential scan for three-way merge parsing**: Simple sync-point search instead of full LCS/Myers diff — adequate for conflict region detection
+- **Inline operation UI in StagingPanel**: Rebase replaces OperationBanner with custom inline UI (form, buttons, commit message) for richer UX
+- **Static StdMutex for cross-command state**: REBASE_SESSION_DIR shared between start_interactive_rebase and submit_rebase_message commands
+
+### Key Lessons
+1. **Milestone audits catch integration gaps that phase verification misses**: Phase 40 passed component-level verification for REB-06, but the StagingPanel inline UI bypassed OperationBanner — milestone-level audit found it
+2. **Merge editor complexity warrants spike/POC**: 7 plans for one component — the three-panel layout, scroll sync, selection state, and output computation each had unexpected edge cases
+3. **File-based IPC is robust but hard to debug**: Signal file timing, poll intervals, state reset races required multiple iterations — document the protocol thoroughly
+4. **Gap closure phases (42, 43) are a clean pattern**: Dedicated phases for audit-identified gaps keep the main phases clean and traceable
+5. **19 plans in 4 days**: Largest plan count since v0.6 (16 plans/2 days) — conflict resolution and interactive rebase are the most complex features shipped so far
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -293,15 +337,17 @@
 | v0.5 | 2 | 7 | 12 | Pure function pipeline — decision gate, TDD, SVG overlay architecture |
 | v0.6 | 2 | 6 | 16 | UI polish milestone — established patterns enabled fastest per-plan pace yet |
 | v0.7 | 2 | 5 | 8 | Feature milestone — TDD backend + clean UI separation, zero gap-closure requirements |
+| v0.8 | 4 | 7 | 19 | Most complex milestone — merge editor, interactive rebase, file-based IPC, audit-driven gap closure |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. **Gap closure plans are a recurring pattern**: All 6 milestones needed additional plans for UAT findings — budget 1-2 per phase
-2. **ROADMAP checkboxes get stale**: All 6 milestones had this issue — should automate or remove
+1. **Gap closure plans are a recurring pattern**: All 8 milestones needed additional plans for UAT findings — budget 1-2 per phase
+2. **ROADMAP checkboxes get stale**: All 8 milestones had this issue — should automate or remove
 3. **Test suite protects against regressions**: Tests caught zero regressions across all milestones — TDD investment pays dividends
-4. **Visual rendering is the riskiest area**: v0.1 needed 3 graph iterations, v0.2 needed 3 gap closures for connectors, v0.3 had a full plan redo (11-02), v0.5 had constant confusion — visual features need more upfront design or spike plans
+4. **Visual rendering is the riskiest area**: v0.1 needed 3 graph iterations, v0.2 needed 3 gap closures for connectors, v0.3 had a full plan redo (11-02), v0.5 had constant confusion, v0.8 merge editor needed 7 plans — visual features need more upfront design or spike plans
 5. **Decision gates prevent wasted work**: v0.4's architecture was superseded in 1 day; v0.5's Phase 20 decision gate validated the approach before committing — gates should be standard for architecture changes
 6. **Pure function pipelines scale**: v0.5's pipeline (data → paths → visibility → rendering) was independently testable and composable — prefer this over stateful approaches
 7. **TODO.md review before milestone close is high-value**: v0.6 found 2 real bugs in pre-archive review — make this a standard step
-8. **Backend-first phases enable clean UI phases**: v0.7 demonstrated clean backend→UI phase separation with zero rework — both hunk staging and search followed this pattern successfully
-9. **SUMMARY one-liner enforcement needed**: v0.7 had all 8 summaries missing one-liners — automated extraction during milestone completion fell back to manual
+8. **Backend-first phases enable clean UI phases**: v0.7 and v0.8 both demonstrated clean backend→UI phase separation — established pattern across all feature milestones
+9. **Milestone audits catch integration gaps**: v0.8 audit found REB-06 cross-phase integration gap that phase-level verification missed — audits should be standard before milestone close
+10. **Nyquist validation consistently skipped**: 8 milestones and all phases have draft-only VALIDATION.md — either enforce it or remove the requirement

@@ -69,30 +69,22 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ Conflicted file detection and display in staging panel — v0.8
 - ✓ Operation state banner (merge/rebase in progress) with Continue/Abort/Skip — v0.8
 - ✓ Read-only diff for conflicted files showing conflict markers — v0.8
+- ✓ Three-panel merge editor (current/incoming/output) with per-hunk/per-line selection, editable output, sync scroll — v0.8
+- ✓ Take All Current / Take All Incoming quick resolution (toolbar + context menu) — v0.8
+- ✓ Conflict navigation (Prev/Next) and "Save and Mark Resolved" auto-advance — v0.8
 - ✓ Merge via branch context menu (sidebar + graph pill + overflow ref) — v0.8
-- ✓ Interactive rebase editor with Pick/Squash/Reword/Drop actions and drag-and-drop reordering — v0.8
+- ✓ Fast-forward and non-conflicting merge auto-handling — v0.8
 - ✓ Rebase initiation via commit and branch context menus — v0.8
+- ✓ Mid-rebase conflict resolution with pause/continue/skip/abort — v0.8
+- ✓ Interactive rebase editor with Pick/Squash/Reword/Drop actions and drag-and-drop reordering — v0.8
 - ✓ Squash message pre-editing with combined messages — v0.8
 - ✓ Reword pauses with message editing dialog — v0.8
+- ✓ Skip conflicting commit during rebase from inline UI — v0.8
 - ✓ Tech debt cleanup: removed orphaned diff_conflicted command, fixed rebaseBaseName lookup, cleaned dead imports — v0.8
 
 ### Active
 
-## Current Milestone: v0.8 Conflict & Rebase
-
-**Goal:** GitKraken-parity conflict resolution and interactive rebase — three-panel merge editor with per-hunk/per-line selection, full interactive rebase editor (pick/squash/reword/drop/fixup/edit), merge/rebase initiation via context menu and drag-and-drop, mid-operation conflict resolution.
-
-**Target features:**
-- Conflicted file detection and display in staging panel
-- Operation state banner (merge/rebase in progress) with Continue/Abort/Skip
-- Three-panel merge editor (current/incoming/output) with per-hunk checkboxes, per-line selection, editable output
-- Take All Current / Take All Incoming quick resolution
-- Conflict navigation and "Save and Mark Resolved" auto-advance
-- Merge via branch context menu and drag-and-drop on graph
-- Interactive rebase editor with Pick/Squash/Reword/Drop/Fixup/Edit actions
-- Drag-and-drop commit reordering in rebase editor
-- Mid-rebase conflict resolution (reuses merge editor)
-- Rebase initiation via context menu and right-click on commit
+(Planning next milestone)
 
 ### Planned
 
@@ -110,7 +102,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.7 with 36 phases complete across 7 milestones. All 7 phases (37-43) complete in v0.8 (Conflict & Rebase). ~8,200 LOC TypeScript/Svelte, ~7,500 LOC Rust.
+- **Current state**: Shipped v0.8 with 43 phases complete across 8 milestones. ~11,400 LOC TypeScript/Svelte, ~9,300 LOC Rust.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -170,5 +162,10 @@ A developer can open any Git repository, browse its full commit history as a vis
 | Pure presentation SearchBar | SearchBar is stateless — parent (CommitGraph) owns all search state and IPC | ✓ Good — clean separation, easy to test and restyle |
 | SVG global dimming over per-element | Apply opacity to entire SVG overlay vs tracking per-element match state | ✓ Good — single style change, rails/edges span multiple rows making per-element impractical |
 
+| File-based IPC for interactive rebase | Shell script touches signal file, Rust polls, frontend writes response — avoids stdin piping and works with GIT_EDITOR | ✓ Good — reliable cross-process communication |
+| git2 Index::conflicts() iterator for merge sides | git2 0.19 only exposes iterator API, not conflict_get() | ✓ Good — clean extraction of ours/theirs/base content |
+| Sequential scan for three-way merge parsing | Simple sync-point search instead of full LCS/Myers diff | ✓ Good — adequate for conflict region detection, minimal complexity |
+| No success toast on merge/rebase/skip | Graph refresh via repo-changed event is sufficient feedback | ✓ Good — consistent silent-success pattern across all operations |
+
 ---
-*Last updated: 2026-03-23 after Phase 42 complete (Rebase Skip in Inline UI)*
+*Last updated: 2026-03-23 after v0.8 milestone*

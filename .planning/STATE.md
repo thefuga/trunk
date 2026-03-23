@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Conflict & Rebase
 status: Complete
-stopped_at: Phase 43 verified and complete
-last_updated: "2026-03-23T15:15:26.650Z"
+stopped_at: v0.8 milestone archived
+last_updated: "2026-03-23T15:55:50.942Z"
 last_activity: 2026-03-23
 progress:
   total_phases: 7
@@ -17,83 +17,25 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-20 after v0.8 milestone started)
+See: .planning/PROJECT.md (updated 2026-03-23 after v0.8 milestone)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 43 — tech-debt-cleanup (COMPLETE)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 43 (tech-debt-cleanup) -- COMPLETE
-Plan: 1 of 1
+Milestone v0.8 complete. Ready for `/gsd:new-milestone`.
 
 ## Performance Metrics
 
-| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 | v0.6 | v0.7 |
-|--------|------|------|------|------|------|------|------|
-| Phases | 6 | 4 | 4 | 3 | 7 | 5 | 5 |
-| Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 |
-| Commits | 155 | 76 | 88 | ~30 | 111 | ~129 | -- |
-| Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 |
-| Phase 37 P01 | 4min | 2 tasks | 4 files |
-| Phase 37 P02 | 4min | 3 tasks | 6 files |
-| Phase 37 P03 | 5min | 2 tasks | 3 files |
-| Phase 38 P02 | 2min | 1 tasks | 2 files |
-| Phase 38 P01 | 5min | 2 tasks | 5 files |
-| Phase 38 P03 | 2min | 2 tasks | 2 files |
-| Phase 38 P04 | 2min | 2 tasks | 2 files |
-| Phase 38 P05 | 1min | 1 tasks | 1 files |
-| Phase 38 P06 | 1min | 1 tasks | 1 files |
-| Phase 39 P01 | 3min | 2 tasks | 3 files |
-| Phase 40 P01 | 2min | 2 tasks | 2 files |
-| Phase 41 P01 | 4min | 3 tasks | 10 files |
-| Phase 41 P02 | 2min | 2 tasks | 1 files |
-| Phase 41 P03 | 2min | 2 tasks | 2 files |
-| Phase 41 P04 | 4min | 2 tasks | 3 files |
-| Phase 38 P07 | 2min | 2 tasks | 3 files |
-| Phase 41 P05 | 3min | 2 tasks | 1 files |
-| Phase 42 P01 | 2min | 1 tasks | 2 files |
-| Phase 43 P01 | 4min | 2 tasks | 3 files |
+| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 | v0.6 | v0.7 | v0.8 |
+|--------|------|------|------|------|------|------|------|------|
+| Phases | 6 | 4 | 4 | 3 | 7 | 5 | 5 | 7 |
+| Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 | 19 |
+| Commits | 155 | 76 | 88 | ~30 | 111 | ~129 | -- | 61 |
+| Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 |
 
 ## Accumulated Context
-
-### Decisions
-
-(-- v0.8 milestone)
-
-- [Phase 37]: Used git2 repo.state() for operation detection instead of manual filesystem checks
-- [Phase 37]: Set GIT_EDITOR=true on merge --continue to prevent interactive editor prompts
-- [Phase 37]: Conflicted files in dedicated section above unstaged/staged with max-height 40% cap
-- [Phase 37]: Read-only diff for conflicted files via diffKind=commit reuse
-- [Phase 37]: Abort requires confirmation dialog; Continue and Skip do not
-- [Phase 37]: Used diff_tree_to_workdir for conflicted files to bypass stage-0-less index entries
-- [Phase 38]: Simple sequential scan with sync-point search for three-way comparison instead of full LCS/Myers diff
-- [Phase 38]: Immutable Set<string> with ours/theirs-regionIdx-lineIdx keys for selection state
-- [Phase 38]: Used git2 Index::conflicts() iterator instead of non-existent conflict_get() -- git2 0.19 only exposes the iterator API for conflict entry lookup
-- [Phase 38]: Output textarea (not contenteditable) for reliable plain-text merge editing
-- [Phase 38]: Scroll sync via guard-flag + requestAnimationFrame to prevent feedback loops
-- [Phase 38]: Removed diff_conflicted from App.svelte since MergeEditor loads its own data via get_merge_sides
-- [Phase 38]: handleFileResolved calls clearStagingDiff to return center pane to CommitGraph after conflict resolution
-- [Phase 38]: Changed panelRefs type from HTMLDivElement[] to HTMLElement[] to accommodate textarea in scroll sync
-- [Phase 38]: Query get_status after resolution to find remaining conflicts rather than tracking conflict list in local state
-- [Phase 39]: No success toast on merge -- graph refresh via repo-changed event is sufficient feedback
-- [Phase 39]: Remote branch context menu is single-item (merge only) since checkout is handled via click
-- [Phase 39]: Detached HEAD hides merge items entirely rather than showing disabled items
-- [Phase 40]: No success toast on rebase -- graph refresh via repo-changed event is sufficient (matches merge pattern)
-- [Phase 40]: Rebase items always adjacent to merge items in context menus, no separator between them
-- [Phase 41]: Revwalk with hide(base) + reverse for oldest-first commit listing
-- [Phase 41]: get_fork_point uses git merge-base CLI instead of git2 merge_base for simpler error handling
-- [Phase 41]: Validation Rule 2 (first non-drop squash) takes precedence over Rule 3 (no predecessor) to avoid duplicate errors
-- [Phase 41]: Used Cancel button label instead of Discard Changes per user decision IREB-05
-- [Phase 41]: Used spawn + poll loop instead of .output() to detect signal files mid-rebase
-- [Phase 41]: Static StdMutex for REBASE_SESSION_DIR to share session path between start and submit commands
-- [Phase 41]: File-based IPC: shell script touches signal file, Rust polls, frontend writes response
-- [Phase 41]: Pass RebaseTodoItem[] directly to RebaseEditor, letting the component handle internal mapping
-- [Phase 41]: Capture baseOid before closing editor to prevent state reset race condition in handleRebaseStart
-- [Phase 38]: Remove manualEdit = false from handlers rather than adding conditional guards -- toggle handlers still update takenLines but outputText derived stays manual
-- [Phase 41]: Squash message pre-editing is entirely frontend — backend already writes msg-queue files when newMessage is provided
-- [Phase 42]: No success toast on skip -- graph refresh provides sufficient feedback (Phase 40 pattern)
-- [Phase 43]: No code changes needed for D-04 (submit_rebase_message) -- already absent from source
 
 ### Pending Todos
 
@@ -118,7 +60,7 @@ Plan: 1 of 1
 ## Session Continuity
 
 Last activity: 2026-03-23
-Last session: 2026-03-23T15:37:32Z
-Stopped at: Completed 43-01-PLAN.md
+Last session: 2026-03-23
+Stopped at: v0.8 milestone archived
 Resume file: None
-Next action: Phase 43 complete -- all plans done. v0.8 milestone tech debt cleanup done.
+Next action: Run `/gsd:new-milestone` to start v0.9
