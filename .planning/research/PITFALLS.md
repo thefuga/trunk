@@ -1,128 +1,382 @@
-# Pitfalls Research: Trunk v0.7
+# Pitfalls Research: Trunk v0.9 Multi-tab & Tree View
 
-**Domain:** Hunk-level staging and commit graph search for a Tauri 2 + Svelte 5 + Rust desktop Git GUI
-**Researched:** 2026-03-17
-**Confidence:** HIGH — based on direct codebase analysis (staging.rs, diff.rs, graph.rs, CommitGraph.svelte, DiffPanel.svelte, VirtualList.svelte, App.svelte, watcher.rs), git2 0.19 API docs, and established patterns from v0.1–v0.6
-
----
-
-## Context: What's Changing in v0.7
-
-v0.6 shipped successfully: Lucide icons, toast system, discard/delete operations, three-way staging selector, unified title bar, graph polish. The codebase is now ~6k+ LOC Rust, ~5k+ LOC Svelte/TS with well-established patterns.
-
-v0.7 adds two features that touch the core staging and graph subsystems:
-1. **Hunk staging:** Stage/unstage individual diff hunks within a file (requires git2 index manipulation at the blob level)
-2. **Commit graph search:** Find commits by hash, message, or branch name with Cmd+F (requires search across paginated/virtual commit list)
+**Domain:** Adding multi-repository tab management and directory tree file views to a single-repo Tauri 2 + Svelte 5 + Rust desktop Git GUI
+**Researched:** 2026-03-23
+**Confidence:** HIGH -- based on direct codebase analysis of all Rust state structs (state.rs, watcher.rs, remote.rs), all frontend state modules (store.ts, remote-state.svelte.ts, undo-redo.svelte.ts, toast.svelte.ts), App.svelte (631 LOC orchestrator), all 24 Svelte components, all 21 Tauri commands, and the established patterns from v0.1-v0.8
 
 ---
 
-## Hunk Staging Pitfalls
+## Context: What Is Changing in v0.9
 
-### P1: git2 Index Blob Manipulation for Partial Staging
+v0.8 shipped conflict resolution and interactive rebase. The codebase is ~9,300 LOC Rust, ~11,400 LOC Svelte/TS with 43 completed phases. Every piece of state -- Rust backend, frontend modules, Tauri events, LazyStore persistence, filesystem watchers -- currently assumes a single active repository.
 
-- **Risk:** The current `stage_file_inner` uses `index.add_path()` which stages the entire workdir file. Hunk staging requires a fundamentally different approach: read the HEAD blob (or empty for new files), apply selected hunk patches to produce a new blob, write that blob to the ODB, then update the index entry with the new blob OID. Getting any step wrong produces a corrupted index — the file appears staged but contains wrong content, leading to incorrect commits. The git2 API for this workflow is: `repo.blob(new_content)` → `IndexEntry { id: new_oid, path, ... }` → `index.add(&entry)` → `index.write()`. The `IndexEntry` struct has many fields (ctime, mtime, dev, ino, mode, uid, gid, file_size, id, path) and most must match the existing entry or git complains.
-- **Prevention:** (1) For staging a hunk from unstaged: diff index-to-workdir, take the index blob as base, apply the selected hunk's lines to produce a new blob, write to ODB, update index entry with new blob OID and correct file_size. (2) For unstaging a hunk from staged: diff HEAD-to-index, take the HEAD blob as base, apply the inverse of the selected hunk, write new blob, update index. (3) Copy all other `IndexEntry` fields from the existing entry. (4) Always call `index.write()` after modification. (5) Unit test by staging one hunk, committing, then verifying the commit tree contains only the expected lines.
-- **Phase:** Hunk staging backend (Rust command implementation)
-
-### P2: Hunk Boundaries Shift After Staging One Hunk
-
-- **Risk:** After staging hunk N of a file, the line numbers for all subsequent hunks in that file are invalidated. The diff between index and workdir has changed — what was hunk 3 at line 50 may now be at line 45 or may have merged with an adjacent hunk. If the frontend continues using the stale hunk data to stage another hunk, it applies the wrong lines. This is the single most common bug in hunk staging implementations.
-- **Prevention:** (1) After every `stage_hunk` or `unstage_hunk` call, the frontend MUST re-fetch the diff for the file before allowing another hunk operation. The existing `refetchFileDiff` pattern in App.svelte (line 198-206) already does this for file-level operations. (2) On the backend, the `stage_hunk_inner` function should be atomic (stage one hunk, write index) — never accept a batch of hunks with pre-computed line numbers. (3) Disable hunk staging buttons with a loading state while the re-diff is in flight (reuse the `loadingFiles` Set pattern from StagingPanel.svelte). (4) Consider returning the updated diff from the staging command itself to avoid a round-trip.
-- **Phase:** Hunk staging frontend (DiffPanel hunk actions)
-
-### P3: Binary Files and "No Newline at EOF" Edge Cases
-
-- **Risk:** (1) Binary files have no hunks — the current `walk_diff_into_file_diffs` skips the binary callback (`None` at diff.rs line 53). Attempting to hunk-stage a binary file would find zero hunks and fail silently or crash. (2) The `\ No newline at end of file` marker in unified diff is not a real diff line — it has origin `>` (GIT_DIFF_LINE_CONTEXT_EOFNL) or `<` or `=`, not `+`/`-`/` `. The current diff parser maps all non-`+`/`-` origins to `Context` (diff.rs line 72), which is correct for display but wrong for hunk application — the "no newline" marker means the preceding line should NOT have a trailing `\n`. If the hunk application code naively joins lines with `\n`, files that originally had no trailing newline will gain one (or vice versa).
-- **Prevention:** (1) Guard hunk staging commands with `is_binary` check — return a clear error "Cannot partially stage binary files" if `delta.old_file().is_binary() || delta.new_file().is_binary()`. (2) When building the patched blob content, track the `GIT_DIFF_LINE_NOEOFNL` origin character and strip the trailing newline from the last line accordingly. (3) Test with files that have and don't have trailing newlines. (4) Test with a file that transitions from "has newline" to "no newline" in a hunk.
-- **Phase:** Hunk staging backend (blob construction logic)
-
-### P4: New (Untracked) File Hunk Staging — No HEAD Blob Exists
-
-- **Risk:** For untracked files (`DiffStatus::Added`/`Untracked`), there's no existing blob in HEAD or the index to use as a base for patching. The entire file content is "new." Staging a single hunk of a new file means creating a blob that contains only the selected hunk's `+` lines, not the entire file. The index entry needs `mode: 0o100644` (or `0o100755` for executable), and there's no existing entry to copy fields from.
-- **Prevention:** (1) For new files, the base is an empty string/blob. Apply the selected hunk's add-lines to produce partial content. (2) Build a fresh `IndexEntry` with: `id` = new blob OID, `mode` = file mode from `delta.new_file().mode()`, `path` = file path as bytes, and zero all stat fields (ctime, mtime, etc.) — git will update them on the next status check. (3) For unstaging a hunk from a partially-staged new file: if the result would be an empty blob, remove the index entry entirely (`index.remove_path()`). (4) Test: new file with 3 hunks, stage only hunk 2, verify index blob contains only hunk 2's lines.
-- **Phase:** Hunk staging backend
-
-### P5: Index Lock Contention Between Hunk Staging and Filesystem Watcher
-
-- **Risk:** The filesystem watcher (watcher.rs) fires `repo-changed` every 300ms. When the user stages a hunk, the backend opens the repo, gets the index, modifies it, and calls `index.write()`. If a `repo-changed` event triggers `get_status` or `get_dirty_counts` at the same time, both operations call `repo.index()` — git2 acquires the index lock (`.git/index.lock`). If two operations race, one gets `ELOCKED` error: "failed to lock file '.git/index.lock'". The existing `stage_file_inner` has this same theoretical risk, but hunk staging is slower (read blob + apply patch + write blob + update index) so the window is wider.
-- **Prevention:** (1) The current architecture opens a fresh `Repository` per command (RepoState stores PathBuf only, per Key Decision). This means each command gets its own index snapshot, but `index.write()` still uses the filesystem lock. (2) Option A: suppress the watcher during staging operations — call `stop_watcher`/`start_watcher` around the command. But this means the StagingPanel pauses the watcher while the command is running, then resumes — losing any external changes during that window. (3) Option B (recommended): catch `ELOCKED` errors and retry once after a short delay. The `TrunkError` already has structured error codes. (4) Option C: serialize all index-mutating commands through a Tokio mutex (separate from `RepoState`). This guarantees no concurrent index writes but adds complexity. (5) At minimum, the frontend should debounce or gate: don't auto-refresh status while a staging operation is in flight. The existing `loadSeq` pattern in StagingPanel.svelte (line 30) already guards against stale status results — extend it to skip `loadStatus` when a staging operation is pending.
-- **Phase:** Hunk staging integration (watcher coordination)
-
-### P6: Staged Diff Context for Hunk Unstaging Is HEAD-to-Index, Not Index-to-Workdir
-
-- **Risk:** Staging and unstaging hunks require different diff bases. Staging uses the index→workdir diff (diff_unstaged_inner). Unstaging uses the HEAD→index diff (diff_staged_inner). If the backend uses the wrong diff direction, the hunk line numbers won't match the actual index content, and the patch application will produce corrupt data. The current DiffPanel already distinguishes these via `selectedFile.kind` ('unstaged' | 'staged'), but the hunk staging command must also receive this context.
-- **Prevention:** (1) Create two separate commands: `stage_hunk` (applies workdir hunk to index) and `unstage_hunk` (reverts index hunk toward HEAD). (2) The frontend passes the file path AND the hunk index (or old_start/old_lines/new_start/new_lines header) to identify which hunk. (3) The backend re-diffs to find the exact hunk rather than trusting frontend-provided line numbers (which may be stale). (4) Test: modify a file, stage half via hunk staging, then unstage one of the staged hunks — verify the final index state matches expectations.
-- **Phase:** Hunk staging backend (separate stage/unstage commands)
+v0.9 adds:
+1. **Multi-tab repos:** Each tab opens a different repository with independent state
+2. **Splash screen as new-tab page:** Opening a new tab shows the project picker / recent repos
+3. **Tree view toggle:** Switch between flat file list and directory tree view in staging panel, commit diffs, and merge editor
 
 ---
 
-## Search Pitfalls
+## Critical Pitfalls
 
-### P7: Cmd+F Conflicts with WebView's Built-in Find
+### Pitfall 1: Global Singleton Frontend State Leaks Between Tabs
 
-- **Risk:** On macOS, Cmd+F triggers the WebView's built-in text search (browser-style find bar). Tauri 2 uses WKWebView on macOS, which has a native find bar that overlays the web content. If the app adds its own Cmd+F handler for commit search, both the native find bar AND the custom search UI appear simultaneously. The native find bar searches the rendered HTML text, which is useless for a virtualized list (most commits aren't in the DOM).
-- **Prevention:** (1) Intercept Cmd+F at the JavaScript level with `e.preventDefault()` in a `keydown` handler — this MUST be registered on `window` and fire before the WebView processes it. The existing keyboard handling in App.svelte (lines 268-293) already uses this pattern for Cmd+=, Cmd+-, etc. (2) On macOS WKWebView, `e.preventDefault()` in `keydown` may NOT suppress the native find bar — it depends on the Tauri version and WebView configuration. Test this early. (3) If `preventDefault` doesn't work, disable the native find behavior by adding `"devtools": false` to the webview config (but this loses dev tools) or by intercepting at the Rust/native level using `on_webview_event`. (4) Alternative: use a different shortcut (Cmd+K for command palette style, or Cmd+G for go-to-commit). This avoids the conflict entirely but breaks user expectations. (5) The existing `tauri.conf.json` has `titleBarStyle: "Overlay"` and `hiddenTitle: true` — check if there's a WebView configuration option to disable built-in find.
-- **Phase:** Search frontend (keyboard shortcut registration) — test this FIRST before building the search UI
+**What goes wrong:**
+Three frontend state modules use ES module-level `$state()` singletons: `remoteState` (remote-state.svelte.ts), `undoRedoState` (undo-redo.svelte.ts), and `showToast` (toast.svelte.ts). These are imported directly by components. When two tabs exist, both share the same `remoteState.isRunning` flag. Tab A starts a `git pull`, `remoteState.isRunning = true`. Tab B's Toolbar sees `isRunning = true` and disables all its remote buttons -- even though Tab B's repo has no running operation. Worse, when Tab A's pull completes and sets `remoteState.progressLine = ''`, Tab B loses any progress line it may have been displaying for its own operation.
 
-### P8: Search Performance with Large Commit Histories (10k+ Commits)
+The undo/redo stack (`undoRedoState.redoStack`) is even more dangerous: undoing a commit in Tab A pushes to the shared redo stack. Clicking Redo in Tab B re-commits Tab A's message to Tab B's repository -- silently creating a garbage commit in the wrong repo.
 
-- **Risk:** The commit graph loads 200 commits per batch. Searching for a commit message substring requires checking ALL commits, not just the loaded ones. Options: (1) search only loaded commits (fast but incomplete — user may not find what they need), (2) search on the backend across the full history (complete but potentially slow — linear scan of 100k+ commit messages), (3) load all commits then search in JS (memory explosion on huge repos). For SHA prefix search, the backend can use `repo.revparse_single(prefix)` which is O(1) via git's fanout table. For message/author search, there's no index — it's always a linear scan.
-- **Prevention:** (1) Implement backend search command `search_commits(path, query, limit)` that walks the revwalk and checks each commit's summary/body/oid/refs against the query. Return first N matches (e.g., 50) to avoid serializing thousands of results. (2) For OID prefix search: use `git2::Repository::revparse_single(query)` first — if it resolves, return that single commit immediately. (3) For message search: walk commits with `revwalk` and check `commit.summary()` and `commit.body()` with case-insensitive substring match. Stop after `limit` matches. (4) Stream results: return matches incrementally (or paginated) so the UI can show results as they arrive. (5) Add a `cancel` mechanism: if the user types a new character while search is running, abort the old search. Use a sequence counter (existing `loadSeq` pattern) or `AbortController`-style cancellation. (6) Benchmark: git2's `revwalk` + `find_commit` on 100k commits takes ~200-500ms. The bottleneck is `find_commit` per OID (disk I/O). Caching commit summaries in memory (from the graph walk) would make re-searches instant.
-- **Phase:** Search backend (Rust command) — benchmark with a 10k+ commit repo early
+**Why it happens:**
+ES module singletons are the standard Svelte 5 pattern for sharing state between sibling components in a single-instance app. The pattern works perfectly when there is exactly one active context. It breaks fundamentally when multiple independent contexts coexist in the same JavaScript runtime. Tauri uses a single webview with a single JS context, so all tabs share the same module scope.
 
-### P9: Search Results Must Navigate the Virtual Scroll Position
+**How to avoid:**
+Replace each singleton with a per-repo state factory. Create a `RepoContext` class or object keyed by repo path that holds `remoteState`, `undoRedoState`, and all other per-repo state. Use Svelte 5's `setContext`/`getContext` to scope state to each tab's component subtree. The tab container creates the context, and child components consume it via `getContext`. This ensures Tab A's `remoteState.isRunning` is independent from Tab B's.
 
-- **Risk:** When the user selects a search result, the commit graph must scroll to that row. The target commit may be: (1) already loaded and visible — scroll directly, (2) loaded but off-screen — scroll via VirtualList, (3) not yet loaded — need to load more batches first. The existing `scrollToOid` method in CommitGraph.svelte (line 569-594) already handles cases 1-3 with a load-until-found loop. But search introduces a new pattern: the user may jump between multiple search results rapidly (next/previous match). Each jump may trigger a load-more cascade, causing UI jank.
-- **Prevention:** (1) Reuse `scrollToOid` for search navigation — it already handles the load-and-scroll pattern. (2) Cache search results as an array of OIDs. Navigation is just indexing into this array and calling `scrollToOid`. (3) Pre-load: when search returns N results, the frontend doesn't need to load all of them immediately. Load on-demand as the user navigates. (4) Debounce navigation: if the user holds Cmd+G (next match) rapidly, debounce the scroll calls to avoid triggering multiple concurrent `loadMore` cascades. (5) Show the match count and current position ("3 of 17 matches") so the user knows there are results even if scrolling takes a moment. (6) Highlight the matched row — add a `searchMatch` flag or `searchHighlightOid` state to CommitRow, distinct from `selected` (the user may search without wanting to select/load commit detail).
-- **Phase:** Search frontend (navigation + virtual list integration)
+Concrete migration path:
+- Create `repo-context.svelte.ts` exporting a `createRepoContext(path: string)` function
+- Move `remoteState`, `undoRedoState`, per-repo selection state into this context
+- Keep truly global state (toast notifications, zoom level, pane widths) as module singletons -- these are legitimately app-wide
 
-### P10: Search Highlight in Virtualized SVG Overlay
+**Warning signs:**
+- Actions in one tab visually affect another tab's toolbar or status
+- Undo in Tab A creates commits in Tab B's repo
+- Remote progress lines appear in the wrong tab
 
-- **Risk:** The commit graph renders rows via VirtualList with an SVG overlay for dots/rails/pills. Highlighting a search-matched row requires either: (1) a CSS highlight on the CommitRow HTML element, (2) an SVG highlight rect in the overlay, or (3) both. The VirtualList only renders ~40 DOM nodes. If a search match is outside the visible range, there's no DOM element to highlight — the highlight must be applied reactively when the row scrolls into view. The existing `selected` prop on CommitRow (CommitGraph.svelte line 997) already handles this pattern for commit selection.
-- **Prevention:** (1) Follow the existing `selected` pattern: pass a `searchMatches: Set<string>` (OIDs) to CommitRow and apply a highlight style when `searchMatches.has(commit.oid)`. (2) Don't try to highlight in the SVG overlay — it's unnecessary visual complexity. The row background highlight is sufficient. (3) For the "current match" (the one the user navigated to), use a stronger highlight (e.g., border or brighter background) distinct from "other matches" (subtle background). (4) The `displayItems` derived store already includes all rendered items. Adding a `searchMatches` check is O(1) per rendered row.
-- **Phase:** Search frontend (result highlighting)
-
----
-
-## Integration Pitfalls
-
-### P11: Stale Diff Data After Staging a Hunk — Watcher vs Manual Refresh Race
-
-- **Risk:** When the user stages a hunk, the index changes but the workdir file does NOT change. The filesystem watcher watches the workdir, not `.git/index`. So the `repo-changed` event does NOT fire after `index.write()`. The frontend's diff display becomes stale — it still shows the old hunks. The user sees the hunk they just staged still listed as unstaged. The existing whole-file staging works around this because `stage_file` is followed by an explicit `loadStatus()` call in StagingPanel.svelte (line 47). For hunk staging, the same pattern is needed but for the DiffPanel.
-- **Prevention:** (1) After `stage_hunk` succeeds, the frontend must: (a) re-fetch the diff for the file (`refetchFileDiff`), (b) reload the staging status (`loadStatus`), and (c) reload dirty counts (`loadDirtyCounts`). (2) The current App.svelte `repo-changed` listener (line 219-236) already calls `handleRefresh()` + `loadDirtyCounts()` + `refetchFileDiff()` — but this only fires on workdir changes, not index changes. (3) Option A: emit a custom `index-changed` event from the Rust backend after any `index.write()`. The frontend listens for both `repo-changed` and `index-changed`. (4) Option B (simpler): have the staging command return a signal, and the frontend refreshes manually after the command returns (like the current `stageFile` → `loadStatus` pattern). (5) The watcher ignoring `.git/` directory changes is correct (watching `.git/` would cause infinite loops from index writes). Don't try to watch `.git/index`.
-- **Phase:** Hunk staging integration (frontend refresh flow)
-
-### P12: Hunk Staging UI Must Coexist with Whole-File Staging
-
-- **Risk:** The existing StagingPanel shows file-level `+`/`-` buttons for stage/unstage. Hunk staging adds per-hunk buttons in the DiffPanel. Both must work simultaneously and correctly. Edge cases: (1) User stages hunk 1 via DiffPanel, then clicks whole-file stage via StagingPanel `+` button — should stage remaining hunks. (2) User stages all hunks individually — file should move from unstaged to staged list (same as whole-file stage). (3) User has partially-staged file (some hunks staged, some not) — file should appear in BOTH unstaged and staged lists in StagingPanel. The current `get_status_inner` already handles this: a file with `INDEX_MODIFIED | WT_MODIFIED` appears in both lists.
-- **Prevention:** (1) Whole-file staging (`stage_file_inner` with `index.add_path()`) must continue to work — it stages the entire workdir version, overwriting any partial staging. This is correct behavior. (2) The partially-staged state (file in both lists) is already supported by `classify_index` + `classify_workdir` in staging.rs — both can return Some for the same file. (3) The DiffPanel needs to know whether it's showing the staged or unstaged diff to show the correct action button ("Stage Hunk" vs "Unstage Hunk"). The `selectedFile.kind` already carries this info. (4) When a file is partially staged, clicking it in the unstaged list shows remaining unstaged hunks; clicking it in the staged list shows the staged hunks. Each view gets different hunk actions. (5) Test the full flow: partial stage via hunks → verify both lists → whole-file unstage → verify all hunks return to unstaged.
-- **Phase:** Hunk staging UI (DiffPanel buttons + StagingPanel interaction)
-
-### P13: DiffPanel Needs Hunk-Level Action Buttons Without Breaking Commit Diff View
-
-- **Risk:** The DiffPanel currently serves three purposes: (1) unstaged file diff, (2) staged file diff, (3) commit diff (read-only). Hunk staging buttons should appear only for cases 1 and 2, never for case 3. The DiffPanel receives `fileDiffs` and `commitDetail` as props. When `commitDetail` is non-null, it's showing a commit diff (no staging actions). When `selectedPath` matches a staging file, it should show hunk actions. But the DiffPanel currently has no `kind` prop to distinguish unstaged from staged — it relies on the parent to pass the correct diffs.
-- **Prevention:** (1) Add a `diffKind: 'unstaged' | 'staged' | 'commit'` prop to DiffPanel. Show "Stage Hunk" button when `diffKind === 'unstaged'`, "Unstage Hunk" button when `diffKind === 'staged'`, no buttons when `diffKind === 'commit'`. (2) Pass an `onstagethunk` callback prop from App.svelte that calls the backend command and triggers refresh. (3) The hunk button should appear in the hunk header row (next to the `@@ ... @@` line) — this is the standard UX from VS Code, GitKraken, etc. (4) Keep the existing DiffPanel simple: it receives data and renders. Hunk action logic lives in the parent (App.svelte) via callbacks.
-- **Phase:** Hunk staging UI (DiffPanel component extension)
-
-### P14: Cmd+F Search Bar Overlapping Title Bar or Graph Header
-
-- **Risk:** The search bar UI needs to appear somewhere when Cmd+F is pressed. Common placement: a floating bar at the top of the commit graph area. But the graph already has a 24px header row (column labels) and the unified title bar above that. A search bar that overlays these elements will be partially hidden behind the macOS traffic lights (the title bar has `titleBarStyle: "Overlay"` with ~78px left padding). If the search bar pushes content down, the virtual list's scroll position and height calculations break.
-- **Prevention:** (1) Render the search bar as an absolutely-positioned element INSIDE the commit graph container, below the column header, overlaying the first few rows of the virtual list. Use `z-index: 10` (above SVG overlay's `z-index: 1`). (2) Don't push the virtual list down — keep it the same size. The search bar floats on top. This avoids VirtualList height recalculation. (3) Position: `top: 24px` (below column header), `right: 0` (right-aligned to avoid traffic light area). Width: ~300px. (4) Include: text input, match count ("3 of 17"), prev/next buttons, close button (Escape). (5) The search bar should have a semi-transparent background so the user can still see graph content behind it.
-- **Phase:** Search UI (CommitGraph search bar component)
+**Phase to address:**
+Phase 1 (backend state scoping) or Phase 2 (frontend tab architecture) -- this must be resolved BEFORE tabs exist, because the damage from cross-tab state leaks is data corruption (wrong commits in wrong repos)
 
 ---
 
-## Summary
+### Pitfall 2: RunningOp is a Global Singleton Mutex -- Only One Remote Op Across All Tabs
 
-**Top 3 things to watch out for:**
+**What goes wrong:**
+`RunningOp(pub Mutex<Option<u32>>)` stores a single PID. When Tab A starts `git push`, RunningOp holds Tab A's subprocess PID. If Tab B tries `git fetch`, `run_git_remote` checks `running.lock().unwrap()` and finds `Some(pid)` -- it returns `op_in_progress` error. The user cannot fetch in one repo while pushing in another. Worse, `cancel_remote_op` kills whatever PID is stored -- which could be Tab A's push when the user clicked Cancel in Tab B.
 
-1. **Hunk boundaries invalidate after each staging operation (P2).** This is the most likely source of data corruption bugs. Every `stage_hunk`/`unstage_hunk` call MUST be followed by a full re-diff of the file before the next hunk operation. Never batch hunk operations using pre-computed line numbers.
+**Why it happens:**
+RunningOp was designed as mutual exclusion for a single repo -- preventing concurrent push+pull on the same repo (which would corrupt the git state). The single-valued design is correct for that purpose. But multi-tab requires per-repo mutual exclusion, not global.
 
-2. **Cmd+F conflicts with WebView's native find bar (P7).** On macOS WKWebView, `preventDefault()` may not suppress the native find bar. Test this before building any search UI — if it doesn't work, the workaround may require native Rust-level event interception or a different shortcut.
+**How to avoid:**
+Change `RunningOp` from `Mutex<Option<u32>>` to `Mutex<HashMap<String, u32>>` keyed by repo path (matching the existing patterns of `RepoState`, `CommitCache`, and `WatcherState`). Update `run_git_remote` to check/set by repo path. Update `cancel_remote_op` to accept a `path` parameter and kill only that repo's subprocess. Mutual exclusion remains per-repo -- you cannot push and pull the same repo simultaneously, but you can push repo A while fetching repo B.
 
-3. **Index changes don't trigger the filesystem watcher (P11).** After hunk staging, the workdir file is unchanged — only `.git/index` is modified. The `repo-changed` event won't fire. The frontend must explicitly refresh diffs, status, and dirty counts after every staging command, or the UI will show stale data.
+**Warning signs:**
+- "Another remote operation is already running" error when operating on different repos
+- Cancel button kills the wrong repo's operation
+
+**Phase to address:**
+Phase 1 (Rust backend state scoping) -- must be done before multi-tab is functional
 
 ---
 
-*Pitfalls research for: Trunk v0.7 — Hunk Staging & Search*
-*Researched: 2026-03-17*
+### Pitfall 3: App.svelte Monolithic State -- 30+ State Variables Assume Single Repo
+
+**What goes wrong:**
+App.svelte holds ~30 `$state()` variables that are all implicitly scoped to "the current repo": `repoPath`, `repoName`, `refreshSignal`, `dirtyCounts`, `headBranch`, `wipSubject`, `selectedFile`, `stagingDiffFiles`, `selectedCommitOid`, `commitDetail`, `commitFileDiffs`, `selectedCommitFile`, `showRebaseEditor`, `rebaseEditorCommits`, etc. The `repo-changed` event listener (line 257) checks `event.payload === repoPath` -- it only processes events for the active repo. When switching tabs, ALL of this state must be swapped atomically. If any variable is not saved/restored correctly, the new tab shows stale data from the previous tab, or worse, state from repo A (commit detail, selected file, rebase editor) bleeds into repo B's view.
+
+**Why it happens:**
+App.svelte grew organically across 8 milestones as the single orchestrator. Each new feature added state variables to the same scope. This is the natural architecture for a single-repo app and it worked well. Multi-tab fundamentally requires either: (a) lifting this state into per-tab instances, or (b) save/restore the full state snapshot on tab switch.
+
+**How to avoid:**
+Extract the repo view into a dedicated `RepoView.svelte` component that encapsulates ALL per-repo state. App.svelte becomes a thin shell that manages the tab bar and renders one `RepoView` per tab. Each `RepoView` instance has its own `repoPath`, `refreshSignal`, `dirtyCounts`, `selectedFile`, etc.
+
+Two architectural options:
+- **Option A (mount/unmount):** Only the active tab's `RepoView` is mounted. Tab switching destroys and recreates the component. Simple but loses scroll position, selection state, and requires re-fetching data.
+- **Option B (keep-alive):** All tabs' `RepoView` instances stay mounted but hidden (`display: none` for inactive tabs). Preserves all state and scroll positions. Uses more memory (one full component tree per tab) but provides instant tab switching. Memory cost is bounded: a tab is ~40 DOM nodes (virtual list) + cached graph data.
+
+Option B is recommended because users expect instant tab switching (like browser tabs or VS Code tabs), and the memory cost is acceptable for a desktop app with 2-10 tabs.
+
+**Warning signs:**
+- Switching tabs shows previous tab's commit detail or diff
+- Rebase editor from one repo appears over another repo's view
+- Selected file highlight persists when switching to a tab that has no selection
+
+**Phase to address:**
+Phase 2 (frontend tab architecture) -- this is the core structural refactor
+
+---
+
+### Pitfall 4: Tauri Event Bus is Global -- All Listeners Receive All Events
+
+**What goes wrong:**
+Tauri's event system (`app.emit("repo-changed", path)`) broadcasts to ALL listeners in the webview. Currently, App.svelte's `listen<string>('repo-changed', ...)` filters by checking `event.payload === repoPath`. With multiple `RepoView` instances, each instance registers its own listener. When repo A's watcher fires `repo-changed` with repo A's path, ALL tab listeners receive the event. Each checks `event.payload === myRepoPath` and only repo A's tab processes it. This is correct -- BUT the filtering relies on string equality of the path payload. If the same repo is opened in two tabs (which should probably be prevented), both process the event, leading to duplicate refreshes.
+
+The `remote-progress` event in Toolbar.svelte (line 23) also filters by `event.payload.path === path`. This works correctly per-tab only if each Toolbar receives its own `repoPath` prop.
+
+**Why it happens:**
+Tauri v2's event system has no built-in scoping -- it is a flat global bus. This is fine for single-window apps but requires discipline in multi-context setups.
+
+**How to avoid:**
+1. Keep the current filtering pattern -- it works correctly as long as each tab knows its own `repoPath` and checks `event.payload === myRepoPath`.
+2. Prevent opening the same repo in two tabs simultaneously. On `open_repo`, check if the path is already in the tab list and switch to that tab instead of opening a duplicate. This prevents duplicate event processing and duplicate watchers.
+3. Ensure cleanup: when a tab closes, its event listeners must be unregistered. Svelte's `$effect` cleanup functions handle this if the component is properly unmounted. But with the "keep-alive" pattern (Option B above), hidden tabs still have active listeners -- this is intentional (they should still process `repo-changed` to stay fresh).
+
+**Warning signs:**
+- Same repo opened in two tabs causes double refreshes
+- Closing a tab leaves orphan event listeners that process events for a closed repo
+- `remote-progress` lines appear in the wrong tab
+
+**Phase to address:**
+Phase 2 (frontend tab architecture) -- event listener lifecycle must be designed with tab mount/unmount
+
+---
+
+### Pitfall 5: LazyStore Persistence is Not Repo-Scoped
+
+**What goes wrong:**
+`store.ts` uses a single `LazyStore('trunk-prefs.json')` with flat keys: `open_repo`, `column_widths`, `column_visibility`, `zoom_level`, `left_pane_width`, `right_pane_collapsed`, etc. With multi-tab:
+
+- `open_repo` stores a single `RecentRepo` -- but now there are multiple open repos. Which one is persisted for restore on next launch?
+- `column_widths` is shared across all tabs. If the user resizes columns in Tab A, Tab B also gets those widths. This is probably fine (users generally want consistent column sizes). But if we later add per-repo column preferences, the flat key structure prevents it.
+- `left_pane_width` and `right_pane_width` are app-wide layout state -- these SHOULD be shared across tabs.
+
+The real danger is the `open_repo` key: on app launch, the restoration logic (App.svelte line 278-289) calls `getOpenRepo()` and opens that single repo. Multi-tab needs to restore ALL open tabs, their order, and which one was active.
+
+**Why it happens:**
+LazyStore was designed for a single-repo app. All keys are global because there was only one context.
+
+**How to avoid:**
+1. Replace `open_repo` with `open_tabs`: an ordered array of `{ path, name, active }` objects. On launch, restore all tabs and activate the last-active one.
+2. Keep truly global keys as-is: `zoom_level`, `left_pane_width`, `right_pane_width`, `left_pane_collapsed`, `right_pane_collapsed`, `column_widths`, `column_visibility`, `recent_repos`. These are app-wide preferences that should be the same across all tabs.
+3. If per-repo state is needed later (e.g., per-repo search filters), use namespaced keys: `repo:${path}:key_name`.
+4. Save tab state on every tab open/close/switch, not just on app close. Prevents data loss if the app crashes.
+
+**Warning signs:**
+- App only restores one tab on relaunch instead of all open tabs
+- Tab order not preserved across restarts
+- Active tab reverts to first tab after relaunch
+
+**Phase to address:**
+Phase 2 or 3 (tab persistence) -- after basic tab switching works, before the feature is "complete"
+
+---
+
+### Pitfall 6: Filesystem Watcher Accumulation -- N Repos = N Recursive Watchers
+
+**What goes wrong:**
+Each `open_repo` call creates a new `notify` debouncer watching the repo directory recursively (`RecursiveMode::Recursive`). With 5 tabs open, 5 watchers run concurrently, each monitoring an entire repo directory tree. Large repos (monorepos, repos with `node_modules` not gitignored) can have 100k+ files. 5 such watchers can hit the OS file descriptor limit (`ulimit -n`, typically 256-10240 on macOS). The `notify` crate on macOS uses `kqueue` which requires one file descriptor per watched file in recursive mode (unlike Linux's `inotify` which uses one fd per directory).
+
+Even without hitting fd limits, 5 concurrent watchers generate more debounced events, increasing CPU usage from the 300ms debouncer callbacks and the subsequent `get_dirty_counts` / `refresh_commit_graph` calls.
+
+**Why it happens:**
+The current watcher design is correct for single-repo use. It watches recursively because git status changes can happen in any subdirectory. The 300ms debounce keeps event rates manageable for one repo.
+
+**How to avoid:**
+1. Use `close_repo` diligently when tabs close -- the existing `stop_watcher` call in `close_repo` (repo.rs line 43) removes the watcher. Verify this cleanup path works when tabs are closed.
+2. Consider watching only `.git/` directory changes plus the top-level directory (non-recursive) for most repos, using `RecursiveMode::NonRecursive`. Most git operations modify `.git/` files (HEAD, index, refs), and most working tree changes happen via editors that save files (triggering a workdir-level event). This dramatically reduces fd usage but misses nested directory changes.
+3. Better approach: keep recursive watching but increase the debounce interval for background tabs. Active tab: 300ms. Background tabs: 2000ms. This reduces the event processing rate for repos the user isn't actively looking at.
+4. Set a max tab limit (e.g., 15-20) with a warning. This is reasonable UX -- even browser tab hoarders rarely work with 20 repos simultaneously.
+5. Monitor: log the watcher count and emit a warning toast if > 10 watchers are active.
+
+**Warning signs:**
+- "Too many open files" errors when opening multiple repos
+- High CPU usage with many tabs open
+- Sluggish UI when switching to a tab with a large repo
+
+**Phase to address:**
+Phase 1 (backend state scoping) -- watcher lifecycle is part of the `open_repo`/`close_repo` contract
+
+---
+
+### Pitfall 7: Tree View Path Splitting Correctness Across Platforms
+
+**What goes wrong:**
+Converting flat file paths (e.g., `src/lib/store.ts`) into a tree structure requires splitting by `/`. Git always uses forward slashes in its internal path representation (even on Windows). But the file paths returned by `git2`'s status/diff APIs use the repository-internal format (forward slashes). If the tree builder naively uses `path.split(os_separator)` instead of `path.split('/')`, it works on macOS/Linux but breaks on Windows where `os_separator` is `\`.
+
+Additionally, paths with spaces, unicode characters, or deeply nested directories (20+ levels) can cause issues with naive tree construction.
+
+**Why it happens:**
+Developers test on their primary OS (macOS in this case) where `/` works. The bug only manifests on Windows, which is a target platform for v0.10 (CI/CD & Releases).
+
+**How to avoid:**
+Always split on `/` for tree construction, never on `path.separator`. Git normalizes paths internally, and `git2` returns forward-slash paths regardless of OS. Validate this assumption by checking `git2::StatusEntry::path()` documentation -- it returns paths relative to the workdir with forward slashes.
+
+For the tree data structure: use a nested map/object, not an array of path segments. Each node: `{ name: string, children: Map<string, TreeNode>, files: FileStatus[] }`. Insert by walking the path segments and creating intermediate directories as needed.
+
+**Warning signs:**
+- Tree shows single deeply-nested chain instead of proper hierarchy
+- Files appear at wrong nesting level
+- Windows build shows flat list instead of tree
+
+**Phase to address:**
+Phase 3 or 4 (tree view implementation) -- when building the path-to-tree transformer
+
+---
+
+### Pitfall 8: Tree View Expand/Collapse State Lost on Refresh
+
+**What goes wrong:**
+When the filesystem watcher fires `repo-changed`, the staging panel reloads `get_status`. The file list changes. If the tree view is open with several directories expanded, the entire tree is rebuilt from the new file list. All expand/collapse state is lost -- every directory collapses back to default (typically collapsed). The user was looking at `src/lib/components/deep/file.ts`, the tree refreshes, and now they have to re-expand 4 directory levels to get back to their file.
+
+This is the most common UX complaint about tree views in git GUIs. GitKraken handles it by preserving expanded paths across refreshes. VS Code's Source Control does the same.
+
+**Why it happens:**
+The obvious implementation rebuilds the tree from scratch on each status refresh. The tree structure is derived from the file list, so when the file list changes, the tree is recomputed. Without explicit state tracking, the expand/collapse state is ephemeral.
+
+**How to avoid:**
+Maintain a `Set<string>` of expanded directory paths, separate from the tree data structure. When the tree is rebuilt from new file data, apply the expanded set to restore the previous state. If a previously-expanded directory no longer exists in the new data (all its files were staged/committed), silently remove it from the expanded set.
+
+Default behavior for new directories: collapsed. Exception: if a directory contains only one subdirectory (common: `src/` > `lib/` > `components/`), auto-expand single-child chains ("compact folders" like VS Code).
+
+Store the expanded set in component state (not LazyStore) -- it should reset when switching repos but persist across refreshes within the same session.
+
+**Warning signs:**
+- User expands directories, stages a file, tree collapses completely
+- Rapid re-expansion clicks cause UI jank from repeated tree rebuilds
+
+**Phase to address:**
+Phase 3 or 4 (tree view implementation) -- must be part of the initial tree view design, not added as a patch
+
+---
+
+### Pitfall 9: Tree View in Multiple Contexts with Different Semantics
+
+**What goes wrong:**
+The tree view must work in three distinct contexts:
+1. **Staging panel:** unstaged files, staged files, conflicted files -- each in its own section with different actions (stage/unstage/discard)
+2. **Commit detail:** files changed in a commit -- read-only list, click opens diff
+3. **Merge editor file list:** conflicted files only
+
+Each context has different file lists and different interaction behaviors. A single generic `TreeView` component that handles all three risks becoming a complex prop-driven monster with many conditional branches. Alternatively, three separate tree implementations lead to code duplication and inconsistent behavior (one gets a bug fix, the others don't).
+
+**Why it happens:**
+The current flat `FileRow` component is simple enough to reuse across contexts. A tree adds structural complexity (indentation, expand/collapse, directory nodes) that interacts differently with each context's actions.
+
+**How to avoid:**
+Build a single `FileTree.svelte` component that handles ONLY the tree structure (expand/collapse, indentation, directory grouping). It accepts a generic `files: { path: string, [key: string]: any }[]` array and an `onfileclick` callback. It does NOT know about staging, committing, or conflict resolution. Each parent context (StagingPanel, CommitDetail, MergeEditor) wraps `FileTree` and provides the appropriate file list and click handler.
+
+The toggle between flat and tree mode should be a simple prop on a wrapper component (`FileListView.svelte`) that renders either `FileRow` items (flat) or `FileTree` (tree), using the same underlying data. The toggle state should be stored in LazyStore as a global preference (`file_list_mode: 'flat' | 'tree'`).
+
+**Warning signs:**
+- Tree view works in staging panel but breaks in commit detail
+- Different expand/collapse behavior between staging and commit views
+- Action buttons (stage/unstage) appear incorrectly in commit detail tree view
+
+**Phase to address:**
+Phase 3 or 4 (tree view implementation) -- design the component boundary before implementing
+
+---
+
+### Pitfall 10: Directory-Level Actions in Tree View Create Ambiguity
+
+**What goes wrong:**
+When files are shown as a tree, users expect to right-click a directory and "Stage all files in this directory" or "Discard all files in this directory." But what does "stage directory" mean when some files in the directory are new and others are modified? What about nested subdirectories? The current `stage_all` command stages everything -- there is no `stage_directory` command. Adding directory-level actions requires either: (a) calling `stage_file` in a loop for each file in the directory, or (b) adding a new backend command that stages a path prefix.
+
+The loop approach is slow for large directories (N IPC round-trips) and has atomicity issues (what if staging fails halfway through -- some files staged, others not?). The backend command approach is cleaner but requires new Rust code.
+
+**Why it happens:**
+Directory-level operations are a natural expectation of tree views. Users see a directory node and want to act on it. But the backend was designed around individual file operations.
+
+**How to avoid:**
+For v0.9, keep directory-level actions simple:
+1. **Stage directory:** Call `stage_file` in sequence for each file in the directory (including subdirectories). Show a loading indicator on the directory node. If any file fails, show an error but continue with the rest.
+2. **Discard directory:** Show a confirmation dialog listing all files that will be discarded. Then call `discard_file` for each. This is destructive, so the explicit list is important.
+3. Do NOT add backend bulk commands in v0.9 -- the IPC overhead for <100 files is negligible (<50ms). Optimize later if profiling shows it is a bottleneck.
+4. Alternatively, defer directory-level actions entirely for v0.9 and only support them in a later milestone. The tree view itself (visual grouping + expand/collapse) provides value even without directory actions.
+
+**Warning signs:**
+- Staging a large directory freezes the UI (sequential IPC without async batching)
+- Partial stage failure leaves directory in inconsistent visual state
+- Discard directory without confirmation causes data loss
+
+**Phase to address:**
+Phase 4 or 5 (tree view polish) -- after basic tree view is working
+
+---
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Keep-alive all tabs (never unmount) | Instant tab switching, preserved scroll | Memory grows linearly with tab count | Acceptable for v0.9 (desktop app, 2-10 tabs) |
+| Global event bus with path filtering | No Tauri API changes, reuses existing events | Every listener checks every event | Acceptable indefinitely (N listeners x M events is small) |
+| Flat LazyStore keys for tab state | Simple to implement | Cannot do per-repo preferences | Acceptable for v0.9; migrate to namespaced keys if per-repo prefs are needed |
+| Sequential `stage_file` for directory staging | No new Rust commands | Slow for 100+ files, non-atomic | Acceptable for v0.9; add bulk command if profiling shows need |
+| Rebuilding tree on every refresh | Simple implementation | Expand state lost without explicit tracking | Never acceptable -- must track expanded paths from day one |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Tab close + watcher cleanup | Forgetting to call `close_repo` when a tab closes, leaving orphan watchers consuming fd's | Always call `close_repo` on tab close; verify watcher map shrinks; add an `$effect` cleanup in `RepoView` that calls `close_repo` |
+| Tab switch + stale event listeners | Old tab's `$effect` cleanup runs async, new tab's listeners register first -- brief window where both process events | Use `$effect` cleanup (Svelte guarantees synchronous cleanup before new effect runs); verify with concurrent tab switches |
+| Tree view + virtual list | Trying to virtualize the tree view when there are <200 files (staging panel rarely has >100 changed files) | Skip virtualization for tree view initially; the staging panel is not the bottleneck. Only CommitDetail with huge commits (1000+ files) needs virtual tree -- defer this |
+| Merge editor + tree view | Merge editor currently takes a single `filePath` prop. Tree view in merge context means navigating between conflicted files via the tree, requiring the merge editor to handle file switching | Keep merge editor as-is for v0.9; tree view in merge context is just a navigation aid that calls the existing `onfileselect` callback |
+| Tab restoration + repo validation | Persisted tab paths may reference repos that have been moved or deleted since last session | On restore, validate each path with `open_repo`. If it fails, show the tab with an error state ("Repository not found at /path/to/repo") and offer to close or relocate |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| N watchers x recursive monitoring | High fd usage, "too many open files" error | Increase debounce for background tabs; cap tab count; consider non-recursive watching | >5 tabs with large repos (100k+ files each) on macOS |
+| N cached GraphResults in memory | RSS grows by ~50-100MB per large repo (10k commits with edges/refs) | Evict graph cache for background tabs after timeout; re-walk on tab activation | >10 tabs with 50k+ commit repos |
+| Tree rebuild on every status refresh | UI jank, lost expand state | Track expanded paths separately; diff old vs new tree and update incrementally | Repos with 500+ changed files (monorepo staging) |
+| All tabs listen for all events | CPU cycles wasted checking event payloads | Negligible for <20 tabs; only optimize if profiled | Theoretical concern, not practical |
+| Commit detail tree for huge commits | 1000+ file changes in one commit, tree has thousands of nodes | Virtualize only the commit detail tree; staging panel stays non-virtualized | Merge commits in monorepos (10k+ files) |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No visual indicator of background tab activity | User does not know Tab B's fetch completed while viewing Tab A | Show a dot/badge on the tab when background activity completes or status changes |
+| Tab strip becomes unreadable with many tabs | Tab names truncate to nothing beyond 5-6 tabs | Set max tab width, add horizontal scroll to tab bar, show full name on hover tooltip |
+| Tree view as default for new users | Tree adds visual complexity, new users may be overwhelmed | Default to flat list (matching current behavior); add toggle button; persist preference |
+| No keyboard navigation in tree | Power users expect arrow keys to navigate tree nodes | Support Up/Down to move between visible nodes, Left to collapse, Right to expand, Enter to select file |
+| Switching tabs resets center pane | User was viewing a diff, switches tabs, comes back -- diff is gone | With keep-alive approach, this is preserved automatically. With mount/unmount, save/restore the viewed file and diff |
+| Opening same repo in two tabs | Duplicate watchers, confusing UX (edits in one tab affect the other silently) | Detect duplicate and switch to existing tab with a toast: "Already open in Tab 2" |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Tab close:** Verify `close_repo` is called (watcher stopped, cache cleared, RepoState entry removed) -- inspect WatcherState map size after close
+- [ ] **Tab restore:** Open 3 repos in tabs, quit app, relaunch -- verify all 3 tabs restore in correct order with correct active tab
+- [ ] **Background tab freshness:** Make a commit in Tab A's repo via terminal while Tab B is active -- switch to Tab A and verify the new commit appears without manual refresh
+- [ ] **Tree view refresh:** Expand 3 directories in tree view, stage a file, verify the expanded directories stay expanded after status refresh
+- [ ] **Tree view toggle persistence:** Switch to tree view, close app, relaunch -- verify tree view mode is restored
+- [ ] **Cross-tab isolation:** Run `git push` in Tab A, switch to Tab B -- verify Tab B's toolbar is not disabled and shows no progress
+- [ ] **Undo isolation:** Create commits in Tab A and Tab B. Undo in Tab A. Verify Tab B's redo stack is empty (not contaminated by Tab A's undo)
+- [ ] **Duplicate repo prevention:** Try to open the same repo path in two tabs -- verify it switches to existing tab
+- [ ] **Tree view in commit detail:** Click a commit with 50+ changed files, toggle to tree view, verify directory grouping is correct and click-to-diff still works
+- [ ] **Empty tree view:** Repo with no changes -- tree view shows empty state, not a broken tree
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| State leaks between tabs (Pitfall 1) | MEDIUM | Refactor singleton modules to per-repo context; requires touching all components that import these modules |
+| RunningOp global mutex (Pitfall 2) | LOW | Change from `Option<u32>` to `HashMap<String, u32>` and add `path` param to `cancel_remote_op`; localized Rust change |
+| App.svelte monolith (Pitfall 3) | HIGH | Extract `RepoView.svelte` from App.svelte; largest single refactor in v0.9; must move ~30 state variables and ~15 handler functions |
+| Event listener leaks (Pitfall 4) | LOW | Add missing cleanup in `$effect` return functions; audit each `listen()` call |
+| LazyStore not tab-aware (Pitfall 5) | LOW | Replace `open_repo` key with `open_tabs` array; add save/restore logic |
+| Watcher accumulation (Pitfall 6) | MEDIUM | Add debounce scaling for background tabs; requires watcher API changes to support dynamic debounce intervals |
+| Tree path splitting (Pitfall 7) | LOW | Fix split character; isolated change in tree builder utility function |
+| Tree expand state lost (Pitfall 8) | MEDIUM if discovered late | Retrofitting expand state tracking into an existing tree component; easier if designed in from the start |
+| Tree in multiple contexts (Pitfall 9) | HIGH if wrong abstraction chosen | May require rewriting tree component with different component boundaries |
+| Directory actions (Pitfall 10) | LOW | Sequential `stage_file` loop; can be optimized later without API changes |
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| P1: Singleton state leaks | Backend state scoping (Phase 1) | Open 2 tabs, run operations in both, verify no cross-contamination |
+| P2: RunningOp global mutex | Backend state scoping (Phase 1) | Fetch in Tab A while pushing in Tab B -- both succeed |
+| P3: App.svelte monolith | Frontend tab architecture (Phase 2) | Switch between 3 tabs rapidly -- each preserves its own state |
+| P4: Global event bus | Frontend tab architecture (Phase 2) | Watcher fires for repo A -- only Tab A refreshes |
+| P5: LazyStore not tab-aware | Tab persistence (Phase 2 or 3) | Quit with 3 tabs, relaunch, all 3 restore correctly |
+| P6: Watcher accumulation | Backend state scoping (Phase 1) | Open 10 tabs, check fd count stays reasonable (`lsof -p <pid> \| wc -l`) |
+| P7: Tree path splitting | Tree view implementation (Phase 3-4) | Test with paths containing `/`, nested dirs, unicode characters |
+| P8: Tree expand state | Tree view implementation (Phase 3-4) | Expand dirs, stage file, verify expanded state preserved |
+| P9: Tree in multiple contexts | Tree view implementation (Phase 3-4) | Toggle tree in staging panel, commit detail, verify both work independently |
+| P10: Directory actions | Tree view polish (Phase 4-5) | Right-click directory > stage all > verify all files staged |
+
+## Sources
+
+- Direct codebase analysis: `state.rs`, `watcher.rs`, `remote.rs`, `store.ts`, `remote-state.svelte.ts`, `undo-redo.svelte.ts`, `App.svelte`, all 21 Tauri commands, all 24 Svelte components
+- [Tauri v2 State Management docs](https://v2.tauri.app/develop/state-management/)
+- [Tauri multi-window best practices discussion](https://github.com/tauri-apps/tauri/discussions/9423)
+- [Svelte 5 shared state patterns](https://joyofcode.xyz/how-to-share-state-in-svelte-5)
+- [notify-rs crate documentation](https://docs.rs/notify)
+- [GitHub Desktop multi-window discussion](https://github.com/desktop/desktop/issues/3606)
+- [GitButler tree view feature request](https://github.com/gitbutlerapp/gitbutler/issues/7036)
+- [GitHub blog: monorepo performance with FSMonitor](https://github.blog/engineering/infrastructure/improve-git-monorepo-performance-with-a-file-system-monitor/)
+
+---
+*Pitfalls research for: Trunk v0.9 -- Multi-tab & Tree View*
+*Researched: 2026-03-23*

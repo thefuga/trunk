@@ -1,694 +1,514 @@
-# Architecture Research: Trunk v0.7 — Hunk Staging & Commit Graph Search
+# Architecture Patterns: Multi-Tab & Tree View Integration
 
-**Domain:** Desktop Git GUI — hunk-level staging and commit graph search integration
-**Researched:** 2026-03-17
-**Confidence:** HIGH (based on full codebase audit of all Rust commands, Svelte components, types, and IPC patterns)
+**Domain:** Desktop Git GUI -- multi-repository tab management and directory tree file views
+**Researched:** 2026-03-23
+**Confidence:** HIGH (based on full codebase audit of state.rs, App.svelte, all commands, watcher, store, and component hierarchy)
 
-## Current Architecture Summary
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Svelte 5 Frontend (Vite SPA)                                       │
-│  ┌───────────┐ ┌──────────┐ ┌──────────────┐ ┌────────────┐        │
-│  │ App.svelte│ │ Toolbar  │ │ CommitGraph  │ │ StagingPanel│        │
-│  │ (state    │ │ (actions)│ │ (graph +     │ │ (files +   │        │
-│  │  owner)   │ │          │ │  SVG overlay)│ │  CommitForm)│        │
-│  └─────┬─────┘ └────┬─────┘ └──────┬───────┘ └─────┬──────┘        │
-│        │             │              │               │               │
-│  ┌─────┴─────────────┴──────────────┴───────────────┴──────────┐    │
-│  │  safeInvoke<T> + listen('repo-changed')   IPC Layer         │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────────────────────────┤
-│  Rust Backend (Tauri 2)                                             │
-│  ┌──────────────────────────┐  ┌─────────────────────────────┐      │
-│  │  commands/ (10 modules)  │  │  Managed State               │      │
-│  │  - repo, history         │  │  - RepoState (path map)      │      │
-│  │  - branches, staging     │  │  - CommitCache (graph)        │      │
-│  │  - commit, commit_actions│  │  - RunningOp (remote PID)     │      │
-│  │  - diff, stash, remote   │  │  - WatcherState (notify)      │      │
-│  └──────────┬───────────────┘  └─────────────────────────────┘      │
-│             │                                                        │
-│  ┌──────────┴───────────────┐                                        │
-│  │  git/ (graph, repo, types)│  ← git2 + git CLI subprocess         │
-│  └──────────────────────────┘                                        │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Feature 1: Hunk-Level Staging
-
-### Problem Analysis
-
-Current staging operates at whole-file granularity:
-- `stage_file_inner` → `index.add_path(file_path)` — stages entire file
-- `unstage_file_inner` → `index.remove_path` or `repo.reset_default` — unstages entire file
-- DiffPanel renders hunks with headers + lines but has no interactive elements per hunk
-
-git2 does NOT provide a `stage_hunk` API. Hunk staging requires manually applying a patch to the index. Two approaches exist:
-
-### Approach A: git2 Index Manipulation (Recommended)
-
-Build a partial patch from the hunk data and apply it to the index using `git2::Repository::apply()` (available since git2 0.17).
-
-```rust
-// Signature for stage_hunk_inner
-pub fn stage_hunk_inner(
-    path: &str,
-    file_path: &str,
-    hunk_index: usize,        // which hunk (0-based) within the file's diff
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError>
-```
-
-**Implementation strategy:**
-
-1. Compute the workdir-to-index diff for the file (same as `diff_unstaged_inner`)
-2. Walk the diff to isolate the target hunk by index
-3. Build a patch buffer containing only that hunk (with the correct unified diff header)
-4. Apply the patch to the index using `repo.apply(&diff_for_hunk, ApplyLocation::Index, None)`
-
-The key insight: `git2::Repository::apply()` can apply a `Diff` object to the index (`ApplyLocation::Index`). We need to construct a `Diff` from the single-hunk patch text. git2 provides `Diff::from_buffer()` for this.
-
-```rust
-use git2::{ApplyLocation, Diff};
-
-pub fn stage_hunk_inner(
-    path: &str,
-    file_path: &str,
-    hunk_index: usize,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    
-    // Get the full workdir→index diff for this file
-    let mut opts = git2::DiffOptions::new();
-    opts.pathspec(file_path);
-    let full_diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
-    
-    // Build a patch containing only the target hunk
-    let patch_buf = extract_hunk_patch(&full_diff, file_path, hunk_index)?;
-    
-    // Parse the patch back into a Diff object
-    let hunk_diff = Diff::from_buffer(&patch_buf)?;
-    
-    // Apply to the index (not workdir)
-    repo.apply(&hunk_diff, ApplyLocation::Index, None)?;
-    
-    Ok(())
-}
-```
-
-**Unstage hunk** follows the inverse pattern:
-
-```rust
-pub fn unstage_hunk_inner(
-    path: &str,
-    file_path: &str,
-    hunk_index: usize,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
-    
-    // Get the HEAD→index diff (what's staged)
-    let head_tree = repo.head()?.peel_to_tree()?;
-    let mut opts = git2::DiffOptions::new();
-    opts.pathspec(file_path);
-    let full_diff = repo.diff_tree_to_index(Some(&head_tree), None, Some(&mut opts))?;
-    
-    // Build a REVERSED patch for the target hunk
-    let patch_buf = extract_hunk_patch_reversed(&full_diff, file_path, hunk_index)?;
-    
-    let hunk_diff = Diff::from_buffer(&patch_buf)?;
-    repo.apply(&hunk_diff, ApplyLocation::Index, None)?;
-    
-    Ok(())
-}
-```
-
-**Helper: `extract_hunk_patch`** — walks the diff callbacks, counts hunks for the target file, and when the target hunk is reached, builds a valid unified diff patch string:
+## Current Architecture Overview
 
 ```
---- a/{file_path}
-+++ b/{file_path}
-@@ -{old_start},{old_lines} +{new_start},{new_lines} @@{header_suffix}
- context line
--removed line
-+added line
+Single-Repo Architecture (v0.8)
+================================
+
+ App.svelte (God Component)
+   |-- repoPath: string | null           <-- single active repo
+   |-- refreshSignal, dirtyCounts, etc.  <-- all repo-scoped state
+   |
+   |-- WelcomeScreen  (when repoPath === null)
+   |-- TabBar          (shows single repo name + close button)
+   |-- Toolbar         (receives repoPath)
+   |-- BranchSidebar   (receives repoPath)
+   |-- CommitGraph     (receives repoPath)
+   |-- StagingPanel    (receives repoPath)
+   |-- DiffPanel       (receives selectedFile data)
+   |-- MergeEditor     (receives repoPath + filePath)
+   |-- RebaseEditor    (receives repoPath + commits)
+   |-- CommitDetail    (receives commitDetail + fileDiffs)
+
+ Rust Backend (state.rs)
+   RepoState:    Mutex<HashMap<String, PathBuf>>   <-- keyed by path, already multi-repo
+   CommitCache:  Mutex<HashMap<String, GraphResult>> <-- keyed by path, already multi-repo
+   WatcherState: Mutex<HashMap<String, Debouncer>>   <-- keyed by path, already multi-repo
+   RunningOp:    Mutex<Option<u32>>                  <-- SINGLE global PID
+
+ Events
+   "repo-changed" -> payload: path string
+   All Tauri commands take `path: String` as first arg
 ```
 
-### Approach B: git CLI Subprocess (Fallback)
+### Critical Observation: Rust Is Already Multi-Repo Ready
 
-Use `git apply --cached` with a patch file. This matches the pattern used for remote operations (git CLI subprocess with `GIT_TERMINAL_PROMPT=0`). The patch must be written to a temp file or piped via stdin.
+Every Rust state structure (RepoState, CommitCache, WatcherState) uses `HashMap<String, _>` keyed by repo path. The `open_repo` command inserts into these maps, `close_repo` removes. All commands accept a `path` argument and look up state by that key. The watcher emits `repo-changed` with the path as payload.
 
-**Trade-off:** Approach A is pure Rust (testable via inner-fn pattern, no subprocess), consistent with all local operations using git2. Approach B is simpler to implement but introduces a new pattern (git CLI for local ops). **Recommend Approach A.**
+**The only Rust change needed is RunningOp** -- it currently stores a single global PID, preventing concurrent remote operations across repos.
 
-### Approach A Risks & Mitigations
+### Where Multi-Repo Is NOT Ready: The Frontend
 
-| Risk | Mitigation |
-|------|-----------|
-| `Diff::from_buffer()` may reject malformed patches | Extensive unit tests with various diff shapes (add-only, delete-only, mixed, binary, no-newline-at-eof) |
-| `repo.apply()` may fail on edge cases (binary files, rename diffs) | Disable hunk buttons for binary files (already detected: `fd.is_binary`). Rename diffs: fall back to whole-file staging |
-| Hunk index may become stale if file changes between diff fetch and stage action | Re-fetch diff immediately before staging, validate hunk exists. Show toast if stale |
-| Unborn HEAD (no commits yet) for unstage_hunk | Use `diff_tree_to_index(None, ...)` when HEAD is unborn, same as existing `diff_staged_inner` pattern |
+App.svelte is a monolithic god component with ~500 lines of script. It holds a single `repoPath` state variable and ALL repo-scoped state (refreshSignal, dirtyCounts, headBranch, selectedFile, commitDetail, rebase state, etc.) as top-level `$state` variables. The WelcomeScreen/repo-view toggle is a simple `{#if repoPath === null}` conditional. There is no concept of "tabs" or "multiple active repo contexts."
 
-### New Rust Commands
+## Recommended Architecture: Multi-Tab
 
-| Command | Inner Function | Module | Purpose |
-|---------|---------------|--------|---------|
-| `stage_hunk` | `stage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | Stage a single hunk from workdir→index diff |
-| `unstage_hunk` | `unstage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | Unstage a single hunk from HEAD→index diff |
-
-### DiffPanel Changes
-
-Current DiffPanel (`src/components/DiffPanel.svelte`) renders hunks as read-only with no interactivity. Changes needed:
-
-1. **New props on DiffPanel:**
-   ```typescript
-   interface Props {
-     fileDiffs: FileDiff[];
-     commitDetail: CommitDetail | null;
-     selectedPath?: string | null;
-     onclose: () => void;
-     // NEW for hunk staging:
-     diffKind?: 'unstaged' | 'staged' | 'commit';
-     onHunkAction?: (filePath: string, hunkIndex: number) => void;
-   }
-   ```
-
-2. **Hunk action button** — rendered in the hunk header row (the `@@ ... @@` line), positioned to the right:
-   - For `diffKind='unstaged'`: green "Stage Hunk" button (or `+` icon)
-   - For `diffKind='staged'`: red "Unstage Hunk" button (or `-` icon)
-   - For `diffKind='commit'`: no button (read-only)
-   - Button hidden for binary files (`fd.is_binary`)
-
-3. **Hunk header markup change:**
-   ```svelte
-   <!-- Current -->
-   <div style="...">{hunk.header}</div>
-
-   <!-- New -->
-   <div style="...; display: flex; align-items: center;">
-     <span style="flex: 1;">{hunk.header}</span>
-     {#if diffKind && diffKind !== 'commit' && !fd.is_binary}
-       <button onclick={() => onHunkAction?.(fd.path, hunkIdx)}
-         style="... background: {diffKind === 'unstaged' ? '#22c55e' : '#f87171'}; ..."
-       >
-         {diffKind === 'unstaged' ? 'Stage Hunk' : 'Unstage Hunk'}
-       </button>
-     {/if}
-   </div>
-   ```
-
-4. **Hunk index tracking:** The `{#each fd.hunks as hunk, hunkIdx}` loop already provides the index via the second parameter of `#each`. Pass `hunkIdx` to the action callback.
-
-### App.svelte Wiring
-
-Current file selection flow in App.svelte:
+### Component Structure
 
 ```
-handleFileSelect(path, kind='unstaged'|'staged')
-  → sets selectedFile = { path, kind }
-  → fetches diff via 'diff_unstaged' or 'diff_staged'
-  → sets stagingDiffFiles
-  → DiffPanel renders with fileDiffs={stagingDiffFiles}
+New Architecture
+=================
+
+ App.svelte (Shell)
+   |-- tabState (shared $state rune module)
+   |   |-- tabs: TabInfo[]
+   |   |-- activeTabId: string
+   |
+   |-- TabBar (multi-tab: shows all tabs, + button, close buttons)
+   |-- {#if activeTab is "new-tab"}
+   |     WelcomeScreen (splash / repo picker)
+   |-- {:else}
+   |     RepoView (new component -- extracts ALL current repo logic from App.svelte)
+   |       |-- repoPath from activeTab
+   |       |-- ALL current App.svelte repo state moves here
+   |       |-- Toolbar, BranchSidebar, CommitGraph, StagingPanel, etc.
+   |-- Toast (global, stays in App.svelte)
 ```
 
-**New wiring for hunk actions:**
+### New Types
 
 ```typescript
-async function handleHunkAction(filePath: string, hunkIndex: number) {
-  if (!repoPath || !selectedFile) return;
-  const command = selectedFile.kind === 'unstaged' ? 'stage_hunk' : 'unstage_hunk';
-  try {
-    await safeInvoke(command, { path: repoPath, filePath, hunkIndex });
-    // Re-fetch the diff to show updated hunk state
-    await refetchFileDiff(selectedFile.path, selectedFile.kind);
-    // Trigger status refresh (file may have moved between staged/unstaged)
-  } catch (e) {
-    const err = e as TrunkError;
-    showToast(err.message ?? 'Hunk staging failed', 'error');
-  }
+// src/lib/types.ts additions
+interface TabInfo {
+  id: string;           // crypto.randomUUID()
+  kind: 'welcome' | 'repo';
+  repoPath?: string;    // set when kind === 'repo'
+  repoName?: string;
 }
 ```
 
-Pass to DiffPanel:
+### New Shared State Module: tab-state.svelte.ts
+
+```typescript
+// src/lib/tab-state.svelte.ts
+// Follows established pattern from remote-state.svelte.ts and undo-redo.svelte.ts
+
+export const tabState = $state({
+  tabs: [] as TabInfo[],
+  activeTabId: '' as string,
+});
+
+export function addTab(tab: TabInfo) { ... }
+export function removeTab(id: string) { ... }
+export function setActiveTab(id: string) { ... }
+export function updateTab(id: string, patch: Partial<TabInfo>) { ... }
+
+// Derived helper
+export function getActiveTab(): TabInfo | undefined {
+  return tabState.tabs.find(t => t.id === tabState.activeTabId);
+}
+```
+
+### Data Flow: Tab Switching
+
+```
+User clicks tab B (was on tab A)
+  |
+  1. tabState.activeTabId = tabB.id
+  |
+  2. App.svelte's {#key activeTabId} block re-renders
+  |   Option A: {#key} destroys tab A's RepoView, mounts tab B's RepoView
+  |   Option B: render all RepoViews, hide inactive with CSS display:none
+  |
+  3. RepoView for tab B mounts with repoPath = tabB.repoPath
+  |   - If first mount: calls open_repo, starts watcher, populates state
+  |   - If re-mount (option A): calls open_repo again (idempotent -- just re-inserts HashMap)
+  |   - If unhide (option B): already mounted, just becomes visible
+  |
+  4. repo-changed events fire for ALL open repos continuously
+  |   - Each RepoView's $effect filters: event.payload === repoPath
+  |   - Already works this way! No change needed.
+```
+
+### Mount Strategy Decision: Destroy/Recreate vs Keep-Alive
+
+**Recommendation: Destroy/Recreate with `{#key}`** because:
+
+1. **Memory**: Each RepoView + CommitGraph + SVG overlay consumes significant memory. Keeping 10+ repo views mounted simultaneously is wasteful.
+2. **Simplicity**: No need to manage hidden component lifecycle, pausing/resuming effects, or handling visibility changes.
+3. **Existing pattern**: The Rust backend already caches graph data in CommitCache (keyed by path). Re-mounting a RepoView that calls `open_repo` is fast because the cache is populated from the existing HashMap entry.
+4. **Perceived speed**: Tab switch latency is dominated by Rust `walk_commits` on first open. Subsequent switches hit the cache and feel instant.
+5. **The tradeoff**: Some per-tab UI state (scroll position, selected commit, expanded sections) is lost on switch. This is acceptable for v0.9 and can be enhanced later with a lightweight state snapshot in tabState.
+
 ```svelte
-<DiffPanel
-  fileDiffs={currentDiffFiles}
-  commitDetail={null}
-  selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-  onclose={handleDiffClose}
-  diffKind={selectedFile?.kind ?? (selectedCommitFile ? 'commit' : undefined)}
-  onHunkAction={handleHunkAction}
+<!-- App.svelte -->
+{#if activeTab?.kind === 'welcome' || !activeTab}
+  <WelcomeScreen onopen={handleTabOpen} />
+{:else}
+  {#key activeTab.id}
+    <RepoView repoPath={activeTab.repoPath!} repoName={activeTab.repoName!} />
+  {/key}
+{/if}
+```
+
+### Rust Changes
+
+#### 1. RunningOp: Per-Repo Remote Operations
+
+```rust
+// Before (v0.8)
+pub struct RunningOp(pub Mutex<Option<u32>>);
+
+// After (v0.9)
+pub struct RunningOp(pub Mutex<HashMap<String, u32>>);
+// Key: repo path, Value: PID
+```
+
+This allows concurrent fetch/push across different repos. The `cancel_remote_op` command already takes `path` -- just change it to look up by path key instead of reading a single Option.
+
+#### 2. open_repo: Make Idempotent
+
+Currently `open_repo` always walks the full commit graph. When switching tabs to an already-open repo, skip the walk if cache already has an entry:
+
+```rust
+// In open_repo, before walk_commits:
+{
+    let cache_lock = cache.0.lock().unwrap();
+    if cache_lock.contains_key(&path) {
+        // Already open -- just ensure watcher is running
+        return Ok(());
+    }
+}
+// ... proceed with walk_commits only if not cached
+```
+
+#### 3. No Other Rust Changes Needed
+
+All commands already take `path` and look up state by key. The watcher already emits per-path events. The Mutex-guarded HashMaps already support concurrent repos.
+
+### Store Persistence Changes
+
+```typescript
+// store.ts changes
+
+// Before: single repo
+const OPEN_REPO_KEY = 'open_repo';
+
+// After: tab list
+const OPEN_TABS_KEY = 'open_tabs';
+const ACTIVE_TAB_KEY = 'active_tab_id';
+
+export async function getOpenTabs(): Promise<TabInfo[]> { ... }
+export async function setOpenTabs(tabs: TabInfo[]): Promise<void> { ... }
+export async function getActiveTabId(): Promise<string | null> { ... }
+export async function setActiveTabId(id: string | null): Promise<void> { ... }
+```
+
+On app launch: restore tabs from store, re-open each repo in Rust (sequential, not parallel, to avoid hammering IO), set active tab.
+
+### Keyboard Shortcuts
+
+| Shortcut | Action | Reference |
+|----------|--------|-----------|
+| Cmd+T | New tab (welcome screen) | GitKraken/Fork pattern |
+| Cmd+W | Close active tab | Standard |
+| Cmd+1..9 | Switch to tab N | GitKraken pattern |
+| Cmd+Shift+[ / ] | Previous/Next tab | Standard macOS |
+
+## Recommended Architecture: Tree View
+
+### Problem
+
+Currently, all file lists (StagingPanel unstaged/staged/conflicted, CommitDetail file diffs) render flat paths like `src/components/CommitGraph.svelte`. Users want to toggle between flat list and directory tree view.
+
+### File List Locations (Components That Need Tree View)
+
+| Component | File Source | Data Type |
+|-----------|------------|-----------|
+| StagingPanel | `get_status` | `FileStatus[]` (unstaged, staged, conflicted) |
+| CommitDetail | `diff_commit` | `FileDiff[]` |
+| MergeEditor | conflicted file list | Single file (no tree needed) |
+
+### Tree Data Model
+
+```typescript
+// src/lib/file-tree.ts (new pure utility, no Svelte runes)
+
+export interface TreeNode {
+  name: string;           // "CommitGraph.svelte" or "components"
+  path: string;           // full relative path: "src/components/CommitGraph.svelte"
+  isDirectory: boolean;
+  children: TreeNode[];   // sorted: directories first, then files, both alphabetical
+  // For leaf nodes only:
+  file?: FileStatus | FileDiff;  // original data for actions/clicks
+}
+
+export function buildTree<T extends { path: string }>(
+  files: T[],
+  getFile: (item: T) => T
+): TreeNode[] {
+  // 1. Split each path by '/'
+  // 2. Build nested map: Map<string, TreeNode>
+  // 3. Sort: dirs first, then alpha within each group
+  // 4. Return root children array
+}
+
+export function flattenTree(nodes: TreeNode[]): TreeNode[] {
+  // For keyboard navigation: DFS traversal respecting expanded state
+}
+```
+
+### Conversion Algorithm
+
+```
+Input:  ["src/lib/types.ts", "src/lib/invoke.ts", "src/App.svelte", "README.md"]
+
+Step 1: Split paths into segments
+  ["src", "lib", "types.ts"]
+  ["src", "lib", "invoke.ts"]
+  ["src", "App.svelte"]
+  ["README.md"]
+
+Step 2: Insert into trie (Map-based)
+  root/
+    src/               (dir)
+      lib/             (dir)
+        types.ts       (file, leaf)
+        invoke.ts      (file, leaf)
+      App.svelte       (file, leaf)
+    README.md          (file, leaf)
+
+Step 3: Sort each level (dirs first, alpha)
+  root/
+    src/
+      lib/
+        invoke.ts
+        types.ts
+      App.svelte
+    README.md
+```
+
+This is a pure frontend transformation. No Rust changes needed -- git2 already returns flat paths.
+
+### Component Structure for Tree View
+
+```
+FileList (new wrapper component)
+  |-- viewMode: 'flat' | 'tree' (persisted in LazyStore)
+  |-- toggle button in header
+  |
+  |-- {#if viewMode === 'flat'}
+  |     {#each files as f}
+  |       <FileRow file={f} ... />   (existing component, unchanged)
+  |
+  |-- {:else}
+  |     {#each treeNodes as node}
+  |       <TreeRow {node} depth={0} ... />   (new component)
+  |         |-- if directory: chevron + folder icon + name + file count badge
+  |         |-- if file: indent + status icon + name + hover action
+  |         |-- onclick directory: toggle expanded
+  |         |-- onclick file: same as current FileRow click
+```
+
+### New Components
+
+**FileList.svelte** -- wraps the flat/tree toggle logic:
+- Accepts `files: FileStatus[] | FileDiff[]`, `viewMode`, callbacks
+- Converts to tree when needed using `buildTree()`
+- Renders either flat FileRow list or recursive TreeRow list
+
+**TreeRow.svelte** -- renders a single tree node:
+- Indentation: `padding-left: {depth * 16}px`
+- Directory: ChevronDown/ChevronRight + Folder icon + name + `(N files)` count
+- File: StatusIcon + name + hover action button
+- Uses existing FileRow action pattern (stage/unstage/discard)
+- Expanded state tracked per-directory in a `Set<string>` of expanded paths
+
+### Where Tree View Integrates
+
+**StagingPanel.svelte** -- Replace the three `{#each}` file lists:
+```svelte
+<!-- Before -->
+{#each status?.unstaged ?? [] as f (f.path)}
+  <FileRow file={f} ... />
+{/each}
+
+<!-- After -->
+<FileList
+  files={status?.unstaged ?? []}
+  viewMode={fileViewMode}
+  actionLabel="+"
+  onaction={(path) => stageFile(path)}
+  onclick={(path) => onfileselect?.(path, 'unstaged')}
 />
 ```
 
-### Data Flow: Stage Hunk
+**CommitDetail.svelte** -- Replace the file list section:
+```svelte
+<!-- Before -->
+{#each fileDiffs as fd (fd.path)}
+  <button onclick={() => onfileselect(fd.path)}>...</button>
+{/each}
 
-```
-User clicks "Stage Hunk" button on hunk header in DiffPanel
-  → onHunkAction(filePath, hunkIndex) callback to App.svelte
-  → safeInvoke('stage_hunk', { path: repoPath, filePath, hunkIndex })
-  → Rust: extract_hunk_patch() → Diff::from_buffer() → repo.apply(Index)
-  → Return Ok(())
-  → Frontend: re-fetch diff for the file (diff may now have fewer hunks)
-  → Filesystem watcher detects index change → 'repo-changed' event
-  → StagingPanel re-fetches status (file may appear in both staged + unstaged)
-  → CommitGraph: no refresh needed (no commit graph change)
-```
-
-### Data Flow: Unstage Hunk
-
-```
-User clicks "Unstage Hunk" on staged file's hunk in DiffPanel
-  → onHunkAction(filePath, hunkIndex) callback to App.svelte
-  → safeInvoke('unstage_hunk', { path: repoPath, filePath, hunkIndex })
-  → Rust: extract reversed hunk patch → repo.apply(Index)
-  → Return Ok(())
-  → Frontend: re-fetch diff, StagingPanel auto-refreshes
+<!-- After -->
+<FileList
+  files={fileDiffs}
+  viewMode={fileViewMode}
+  onaction={(path) => onfileselect(path)}
+/>
 ```
 
----
-
-## Feature 2: Commit Graph Search (Cmd+F)
-
-### Problem Analysis
-
-Current CommitGraph supports:
-- Virtual scrolling with `VirtualList` (renders ~40 DOM nodes for any history size)
-- `displayItems` array in memory (all loaded commits, paginated via `loadMore()`)
-- `CommitCache` in Rust stores full `GraphResult` per repo (all commits, computed by `walk_commits`)
-- `scrollToOid(oid)` already exists — scrolls graph to a specific commit
-
-Search needs to find commits matching a query (SHA prefix, message substring, branch name) and navigate to results.
-
-### Backend vs Client-Side Search
-
-**Option A: Backend search command (Recommended)**
-
-CommitCache already holds the full `GraphResult` with all `GraphCommit` structs. A backend search command can scan this in O(n) with zero serialization overhead for the scan itself, returning only matching OIDs.
-
-```rust
-#[derive(Debug, Serialize, Clone)]
-pub struct SearchResult {
-    pub oid: String,
-    pub match_type: String,  // "sha", "message", "ref"
-}
-
-pub fn search_commits_inner(
-    path: &str,
-    query: &str,
-    cache_map: &HashMap<String, GraphResult>,
-) -> Result<Vec<SearchResult>, TrunkError> {
-    let graph = cache_map.get(path)
-        .ok_or_else(|| TrunkError::new("repo_not_open", "Repository not open"))?;
-    
-    let query_lower = query.to_lowercase();
-    let mut results = Vec::new();
-    
-    for commit in &graph.commits {
-        // Match by SHA prefix
-        if commit.oid.starts_with(&query_lower) || commit.short_oid.starts_with(&query_lower) {
-            results.push(SearchResult {
-                oid: commit.oid.clone(),
-                match_type: "sha".to_string(),
-            });
-            continue;
-        }
-        
-        // Match by message (summary + body)
-        if commit.summary.to_lowercase().contains(&query_lower) {
-            results.push(SearchResult {
-                oid: commit.oid.clone(),
-                match_type: "message".to_string(),
-            });
-            continue;
-        }
-        if let Some(body) = &commit.body {
-            if body.to_lowercase().contains(&query_lower) {
-                results.push(SearchResult {
-                    oid: commit.oid.clone(),
-                    match_type: "message".to_string(),
-                });
-                continue;
-            }
-        }
-        
-        // Match by ref name
-        for ref_label in &commit.refs {
-            if ref_label.short_name.to_lowercase().contains(&query_lower) {
-                results.push(SearchResult {
-                    oid: commit.oid.clone(),
-                    match_type: "ref".to_string(),
-                });
-                break;
-            }
-        }
-    }
-    
-    Ok(results)
-}
-```
-
-**Why backend over client-side:**
-- CommitCache holds ALL commits (even those not yet loaded into the frontend `commits` array due to pagination). Frontend `displayItems` only has loaded batches.
-- Backend scan is O(n) on owned Rust strings — no serialization/deserialization overhead for the scan.
-- Client-side search would require loading ALL commits first (defeating pagination), or would miss unloaded commits.
-- The existing `CommitCache` lock is brief (search is read-only, no mutation needed).
-
-**Option B: Client-side search (NOT recommended)**
-
-Would require: (a) loading all commit batches first via repeated `loadMore()`, or (b) searching only loaded commits (incomplete results). Also, author name search would need all commits deserialized to JS. Backend search is strictly better.
-
-### New Rust Command
-
-| Command | Inner Function | Module | Purpose |
-|---------|---------------|--------|---------|
-| `search_commits` | `search_commits_inner(path, query, cache_map)` | `history.rs` | Search CommitCache for matching commits |
-
-Registration in `lib.rs`: `commands::history::search_commits`
-
-**Note:** The command reads from `CommitCache` (not `RepoState`), so it only needs the `cache: State<'_, CommitCache>` parameter — same pattern as `get_commit_graph`.
-
-### Search UI Component
-
-New component: `src/components/SearchBar.svelte`
-
-```
-┌──────────────────────────────────────────┐
-│  🔍 Search commits...    [2/15] [↑] [↓]  │
-└──────────────────────────────────────────┘
-```
-
-**State:**
-```typescript
-let query = $state('');
-let results = $state<SearchResult[]>([]);
-let currentIndex = $state(0);
-let visible = $state(false);
-```
-
-**Behavior:**
-- `Cmd+F` toggles visibility (keyboard listener in CommitGraph or App.svelte)
-- Debounced search: 200ms after typing stops, invoke `search_commits`
-- Results are OIDs with match type
-- Up/Down arrows or Enter cycle through results
-- Each navigation calls `commitGraphRef.scrollToOid(results[currentIndex].oid)` + selects the commit
-- `Escape` closes search bar
-- Result count badge shows "N/M" (current index / total matches)
-
-**Positioning:** Overlaid at top of CommitGraph area (below the column headers), absolute positioned with z-index above the graph content. Does NOT replace the graph — it floats on top.
-
-### Search Integration with Virtual Scrolling
-
-The key question: how does search navigate to results that aren't loaded yet?
-
-**Answer:** `scrollToOid(oid)` already handles this. Looking at CommitGraph.svelte:569-593:
+### View Mode Persistence
 
 ```typescript
-export async function scrollToOid(oid: string): Promise<void> {
-  let idx = displayItems.findIndex(c => c.oid === oid);
-  // Load more batches until found or all commits exhausted
-  while (idx < 0 && hasMore && !loading) {
-    await loadMore();
-    await tick();
-    idx = displayItems.findIndex(c => c.oid === oid);
-  }
-  if (idx < 0 || !listRef) return;
-  // Smooth scroll to center the row
-  ...
+// store.ts addition
+const FILE_VIEW_MODE_KEY = 'file_view_mode';
+
+export async function getFileViewMode(): Promise<'flat' | 'tree'> {
+  return (await store.get<'flat' | 'tree'>(FILE_VIEW_MODE_KEY)) ?? 'flat';
+}
+export async function setFileViewMode(mode: 'flat' | 'tree'): Promise<void> {
+  await store.set(FILE_VIEW_MODE_KEY, mode);
+  await store.save();
 }
 ```
 
-This already lazy-loads batches until the target OID is found, then scrolls to it. Search navigation simply calls this existing method. No changes needed to `VirtualList.svelte` or the scroll machinery.
+The view mode is global (not per-tab) -- when you toggle tree view, all file lists switch.
 
-### Search Data Flow
+## Integration Points Summary
 
-```
-User presses Cmd+F
-  → SearchBar becomes visible, input focused
-  → User types query (debounced 200ms)
-  → safeInvoke('search_commits', { path: repoPath, query })
-  → Rust: scan CommitCache, return Vec<SearchResult>
-  → Frontend: set results, currentIndex = 0
-  → Auto-navigate to first result: scrollToOid(results[0].oid)
-  → CommitGraph loads batches if needed, scrolls to commit row
-  → Commit row highlighted (selectedCommitOid set via handleCommitSelect)
+### New Files to Create
 
-User presses ↓ (next result) or ↑ (prev result)
-  → currentIndex = (currentIndex + 1) % results.length
-  → scrollToOid(results[currentIndex].oid)
-  → handleCommitSelect(results[currentIndex].oid)
+| File | Type | Purpose |
+|------|------|---------|
+| `src/lib/tab-state.svelte.ts` | Shared state | Tab list, active tab, mutations |
+| `src/lib/file-tree.ts` | Pure utility | `buildTree()`, `flattenTree()` |
+| `src/lib/file-tree.test.ts` | Tests | Tree building edge cases |
+| `src/components/RepoView.svelte` | Component | Extracted repo workspace (from App.svelte) |
+| `src/components/FileList.svelte` | Component | Flat/tree toggle wrapper |
+| `src/components/TreeRow.svelte` | Component | Single tree node renderer |
 
-User presses Escape
-  → SearchBar hidden, results cleared
-  → Optional: clear commit selection or keep current
-```
+### Existing Files to Modify
 
-### Search UI Placement Decision
+| File | Change | Scope |
+|------|--------|-------|
+| `src/App.svelte` | Extract repo logic to RepoView, add tab management shell | **Major refactor** |
+| `src/components/TabBar.svelte` | Multi-tab rendering, + button, close per tab, drag-reorder | **Major rewrite** |
+| `src/components/StagingPanel.svelte` | Replace FileRow loops with FileList | Moderate |
+| `src/components/CommitDetail.svelte` | Replace file list with FileList | Moderate |
+| `src/lib/store.ts` | Add tab persistence, file view mode | Small additions |
+| `src/lib/types.ts` | Add TabInfo type | Small addition |
+| `src-tauri/src/state.rs` | RunningOp -> HashMap | Small |
+| `src-tauri/src/commands/repo.rs` | Make open_repo idempotent (skip if cached) | Small |
+| `src-tauri/src/commands/remote.rs` | Per-repo PID lookup | Small |
 
-Two options:
+### Files NOT Modified
 
-**Option A: Inside CommitGraph (recommended)**
-- SearchBar is a child of CommitGraph.svelte, positioned absolutely below the header row
-- Cmd+F handler lives in CommitGraph
-- Direct access to `scrollToOid` and `handleCommitSelect` via internal state
-- No additional App.svelte wiring needed for scroll
+- All other Rust command files (staging, history, branches, diff, etc.) -- already multi-repo via path key
+- watcher.rs -- already per-repo
+- All SVG/graph rendering code -- unaffected
+- invoke.ts, types for graph/diff/branch -- unaffected
 
-**Option B: In App.svelte above CommitGraph**
-- SearchBar is a sibling of CommitGraph
-- Requires forwarding results to CommitGraph via props
-- More separation of concerns but more prop plumbing
+## Patterns to Follow
 
-**Recommend Option A** — search is tightly coupled to the graph (navigation, highlighting, scrolling). Keeping it inside CommitGraph reduces prop drilling and makes the feature self-contained.
+### Pattern 1: Shared $state Rune Module for Tabs
 
-### Selected Commit Highlighting During Search
+**What:** Use the established `$state` rune module pattern (like `remote-state.svelte.ts`) for tab state.
+**Why:** Consistent with codebase conventions. Avoids prop drilling tab info through every component.
+**When:** Any component needs to read tab list or active tab (TabBar, App.svelte).
 
-Current highlighting: `selectedCommitOid` in App.svelte is passed to CommitGraph, which passes `selected={commit.oid === selectedCommitOid}` to each CommitRow. This already works for search — navigating to a result calls `handleCommitSelect(oid)` which sets `selectedCommitOid`.
+### Pattern 2: Extract-Then-Compose Refactor
 
-**Additional UX for multi-result awareness:** Optionally dim all non-matching rows or add a subtle marker on all matching rows. This is a stretch goal — basic search with navigation is the MVP.
+**What:** Extract the RepoView by literally moving App.svelte's repo-scoped script block into a new component. App.svelte becomes a thin shell.
+**Why:** The current App.svelte has ~40 state variables and ~20 functions all scoped to a single repo. Moving them intact preserves all existing behavior.
+**When:** Phase 1 of implementation -- do this before adding tab logic.
 
----
+### Pattern 3: Pure Function Tree Builder
 
-## New Rust Commands (Combined)
+**What:** `buildTree()` is a pure function with no Svelte dependencies. Input: flat file array. Output: TreeNode array.
+**Why:** Easily unit-testable. Can be used in StagingPanel, CommitDetail, and future components without duplication.
+**When:** Tree view implementation phase.
 
-| Command | Inner Function | Module | State Needed | Purpose |
-|---------|---------------|--------|-------------|---------|
-| `stage_hunk` | `stage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | `RepoState` | Stage a single diff hunk |
-| `unstage_hunk` | `unstage_hunk_inner(path, file_path, hunk_index, state_map)` | `staging.rs` | `RepoState` | Unstage a single diff hunk |
-| `search_commits` | `search_commits_inner(path, query, cache_map)` | `history.rs` | `CommitCache` | Search commit graph |
+### Pattern 4: `{#key}` for Tab Switching
 
-**Registration additions to `lib.rs`:**
-```rust
-commands::staging::stage_hunk,
-commands::staging::unstage_hunk,
-commands::history::search_commits,
-```
-
-## Modified Components
-
-| Component | Changes | Risk |
-|-----------|---------|------|
-| **DiffPanel.svelte** | Add `diffKind` and `onHunkAction` props; render hunk action buttons in header rows | Low-Medium |
-| **App.svelte** | Add `handleHunkAction` function, pass `diffKind`/`onHunkAction` to DiffPanel, add Cmd+F handler (if search is in App) | Low |
-| **CommitGraph.svelte** | Add SearchBar child component, Cmd+F keyboard handler, search state management | Medium |
-
-## New Components
-
-| Component | Purpose |
-|-----------|---------|
-| `src/components/SearchBar.svelte` | Floating search input with result count and navigation buttons |
-
-## New Rust Types
-
-```rust
-// In git/types.rs or inline in history.rs
-#[derive(Debug, Serialize, Clone)]
-pub struct SearchResult {
-    pub oid: String,
-    pub match_type: String,  // "sha", "message", "ref"
-}
-```
-
-```typescript
-// In lib/types.ts
-export interface SearchResult {
-  oid: string;
-  match_type: 'sha' | 'message' | 'ref';
-}
-```
-
-## Integration Points
-
-### Hunk Staging Integration Points
-
-1. **staging.rs ↔ diff.rs**: `stage_hunk_inner` reuses the same diff computation as `diff_unstaged_inner` (calls `repo.diff_index_to_workdir`). Could extract shared helper.
-
-2. **DiffPanel ↔ App.svelte**: New callback prop (`onHunkAction`) follows same pattern as `onclose`. App.svelte orchestrates the IPC call and diff re-fetch.
-
-3. **Filesystem watcher**: After `stage_hunk`, the index changes on disk. The filesystem watcher (watching `.git/index` changes via `notify`) fires `repo-changed`, which triggers StagingPanel to re-fetch status. This is the existing cache-repopulate-before-emit pattern — but for hunk staging, we may NOT need cache rebuild (no commit graph change). The `repo-changed` event is sufficient for StagingPanel refresh.
-
-4. **DiffPanel re-render**: After staging a hunk, the diff is re-fetched. If only 1 hunk existed, the file moves fully to staged → `selectedFile` may need to be cleared or auto-switch to show the staged diff. Edge case to handle in `handleHunkAction`.
-
-### Search Integration Points
-
-1. **CommitCache**: Search reads from `CommitCache` (same Mutex lock as `get_commit_graph`). The lock is held briefly for a read-only scan. No contention concerns — search is read-only.
-
-2. **scrollToOid**: Already exists in CommitGraph (line 569). Search navigation calls this directly. Handles lazy-loading batches automatically.
-
-3. **selectedCommitOid**: Search navigation sets this via `handleCommitSelect(oid)`, which triggers right-pane CommitDetail display. This is the existing behavior — search reuses it.
-
-4. **Cmd+F global keyboard handler**: Currently App.svelte has keyboard handlers for Cmd+J (toggle left pane), Cmd+K (toggle right pane), Cmd+0/+/- (zoom). Adding Cmd+F follows the same pattern. If search lives inside CommitGraph, the handler should be in CommitGraph (listening on `window` or the component's DOM element).
-
-## Suggested Build Order
-
-### Phase 1: Hunk Staging Backend
-**Dependencies:** None
-**Deliverables:**
-1. `extract_hunk_patch` helper function in `staging.rs`
-2. `stage_hunk_inner` function with unit tests
-3. `unstage_hunk_inner` function with unit tests
-4. `stage_hunk` / `unstage_hunk` Tauri commands registered in `lib.rs`
-
-**Why first:** The backend is the riskiest part (git2 `Diff::from_buffer` + `repo.apply` may have edge cases). Get it working and tested before touching UI.
-
-**Test strategy:**
-```rust
-#[test]
-fn stage_hunk_stages_only_target_hunk() {
-    // Create repo with file having 2+ distinct hunks
-    // Stage hunk 0 only
-    // Verify staged diff has 1 hunk, unstaged diff has remaining hunks
-}
-
-#[test]
-fn unstage_hunk_unstages_only_target_hunk() {
-    // Stage entire file, then unstage hunk 0
-    // Verify staged diff has N-1 hunks, unstaged diff has 1 hunk
-}
-
-#[test]
-fn stage_hunk_binary_file_error() {
-    // Binary file → should return appropriate error
-}
-
-#[test]
-fn stage_hunk_stale_index_error() {
-    // Hunk index out of range → should return error, not panic
-}
-```
-
-### Phase 2: Hunk Staging UI
-**Dependencies:** Phase 1
-**Deliverables:**
-1. DiffPanel: add `diffKind` and `onHunkAction` props
-2. DiffPanel: render "Stage Hunk" / "Unstage Hunk" buttons in hunk headers
-3. App.svelte: add `handleHunkAction` function, pass props to DiffPanel
-4. App.svelte: handle edge case where staging last hunk clears the diff view
-
-**Test strategy:** Manual testing with files containing multiple hunks. Verify:
-- Button appears only for unstaged/staged diffs (not commit diffs)
-- Button hidden for binary files
-- Staging a hunk re-renders with fewer hunks
-- Staging last hunk clears the diff or switches view
-
-### Phase 3: Search Backend
-**Dependencies:** None (parallel with Phase 1-2)
-**Deliverables:**
-1. `SearchResult` type in `types.rs` and `types.ts`
-2. `search_commits_inner` function in `history.rs` with unit tests
-3. `search_commits` Tauri command registered in `lib.rs`
-
-**Test strategy:**
-```rust
-#[test]
-fn search_by_sha_prefix() { ... }
-
-#[test]
-fn search_by_message_substring() { ... }
-
-#[test]
-fn search_by_ref_name() { ... }
-
-#[test]
-fn search_case_insensitive() { ... }
-
-#[test]
-fn search_empty_query_returns_empty() { ... }
-```
-
-### Phase 4: Search UI
-**Dependencies:** Phase 3, and CommitGraph's `scrollToOid` (already exists)
-**Deliverables:**
-1. `SearchBar.svelte` component (input, result count, prev/next buttons)
-2. CommitGraph: integrate SearchBar, add Cmd+F keyboard handler
-3. Search navigation: invoke `search_commits`, navigate results with `scrollToOid`
-4. Escape to close, result cycling with arrow keys
-
-**Test strategy:** Manual testing:
-- Cmd+F opens search bar, focuses input
-- Typing triggers search after debounce
-- Results navigable with Enter/arrows
-- Scroll position updates to show matching commit
-- Escape closes search
-- Works with large repos (10k+ commits, search result in unpaginated range)
-
-### Dependency Graph
-
-```
-Phase 1 (Hunk Backend)  ──► Phase 2 (Hunk UI)
-                                 │
-Phase 3 (Search Backend) ──► Phase 4 (Search UI)
-                                 │
-                          (Phases 1-2 and 3-4 are independent tracks)
-```
-
-Phases 1 and 3 can be developed in parallel. Phase 2 depends on Phase 1. Phase 4 depends on Phase 3.
-
-### Build Order Rationale
-
-- **Hunk backend first** — highest technical risk (git2 `apply` API, patch construction). Early validation prevents wasted UI work.
-- **Search backend is low risk** — simple string matching on cached data. Can run in parallel with hunk work.
-- **Hunk UI before search UI** — hunk staging is the higher-value feature (users encounter this more often than graph search). Ship it first.
-- **Search UI last** — builds on existing `scrollToOid` infrastructure. Lowest risk, cleanest integration.
+**What:** Use Svelte's `{#key activeTab.id}` to destroy/recreate RepoView on tab switch.
+**Why:** Simpler than keep-alive. Memory-efficient. Rust cache makes re-mount fast.
+**When:** After RepoView extraction is complete.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: git CLI for Hunk Staging
-**What people do:** Shell out to `git add -p` or `git apply --cached`
-**Why it's wrong for Trunk:** Every local git operation uses git2. Introducing CLI for hunk staging creates an inconsistent pattern and requires temp file management.
-**Do this instead:** Use `git2::Diff::from_buffer()` + `repo.apply(ApplyLocation::Index)`. Keep all local ops in git2.
+### Anti-Pattern 1: Keep All Tabs Mounted with display:none
 
-### Anti-Pattern 2: Client-Side Search with Full Commit Load
-**What people do:** Load all commits into JS arrays, search with `.filter()`
-**Why it's wrong:** Defeats pagination purpose. 50k commits serialized to JS = ~100MB memory spike + multi-second parse time. CommitCache already has the data in Rust.
-**Do this instead:** Backend `search_commits` command reads from `CommitCache`. Only matching OIDs are serialized to frontend.
+**What:** Render all RepoViews and toggle visibility.
+**Why bad:** Each RepoView has effects listening to `repo-changed`, SVG overlays consuming memory, virtual list scroll state. With 10+ tabs, memory and event handler accumulation becomes problematic.
+**Instead:** Use `{#key}` destroy/recreate. Accept the tradeoff of losing scroll position on tab switch.
 
-### Anti-Pattern 3: Search That Replaces the Graph
-**What people do:** Show search results in a filtered list view, hiding the graph
-**Why it's wrong:** Users need graph context (which branch? which parent?) when searching. Search should highlight and navigate within the existing graph view.
-**Do this instead:** Float SearchBar over the graph. Navigate results by scrolling the graph to matching commits.
+### Anti-Pattern 2: Pass repoPath Through Every Component Prop
 
-### Anti-Pattern 4: Hunk Actions Without Diff Re-fetch
-**What people do:** Optimistically remove the staged hunk from the UI without re-fetching the diff
-**Why it's wrong:** After staging a hunk, git may coalesce adjacent hunks or change line numbers. The remaining diff is NOT simply "original minus staged hunk."
-**Do this instead:** Always re-fetch the diff after a hunk action. The IPC round-trip is <5ms.
+**What:** Thread `repoPath` from App -> RepoView -> every child.
+**Why bad:** Already the pattern, but once tabs exist, components may need to know "am I the active tab?" for pausing updates. Prop drilling gets worse.
+**Instead:** `repoPath` stays as a prop on RepoView (which gets it from tab state). Children receive it from RepoView props. Tab state module is only used by App.svelte and TabBar.
 
-### Anti-Pattern 5: Breaking the Inner-Fn Test Pattern
-**What people do:** Put git2 logic directly in `#[tauri::command]` functions
-**Why it's wrong:** Can't unit test without Tauri runtime. Every existing command follows `*_inner()` pattern.
-**Do this instead:** `stage_hunk_inner`, `unstage_hunk_inner`, `search_commits_inner` with `HashMap<String, PathBuf>` params. Test with `make_test_repo()`.
+### Anti-Pattern 3: Building Tree in Rust
+
+**What:** Add a Rust command to return a tree-structured file status.
+**Why bad:** The flat list is the natural output of `git2::Repository::statuses()`. Converting to tree in Rust adds serialization complexity, new types, and gains nothing -- the JS transformation is O(n) and trivial.
+**Instead:** Pure frontend transformation in `file-tree.ts`.
+
+### Anti-Pattern 4: Global Event Bus for Tab Changes
+
+**What:** Use Tauri events to communicate tab changes between components.
+**Why bad:** Tab switching is purely a frontend concern. Adding Rust->frontend events for something that's just UI state adds unnecessary complexity.
+**Instead:** Svelte 5 reactive state via `tab-state.svelte.ts`.
+
+## Suggested Build Order
+
+The build order is driven by dependencies -- each phase can be tested independently.
+
+```
+Phase 1: Extract RepoView (prerequisite for tabs)
+  - Create RepoView.svelte from App.svelte repo code
+  - App.svelte becomes thin shell
+  - Zero behavior change -- pure refactor
+  - Test: app works exactly as before
+
+Phase 2: Tab State + TabBar (multi-tab infrastructure)
+  - Create tab-state.svelte.ts
+  - Rewrite TabBar.svelte for multi-tab
+  - Wire App.svelte to use tab state
+  - Add tab persistence in store.ts
+  - Cmd+T/W/1-9 keyboard shortcuts
+  - New tab shows WelcomeScreen
+  - Test: open multiple repos in tabs, switch between them
+
+Phase 3: RunningOp Per-Repo (unblock concurrent remote ops)
+  - Change RunningOp to HashMap<String, u32>
+  - Update remote commands and cancel_remote_op
+  - Make open_repo idempotent (skip if cached)
+  - Test: fetch in repo A while pushing in repo B
+
+Phase 4: File Tree Utility (pure logic, no UI)
+  - Create file-tree.ts with buildTree()
+  - Create file-tree.test.ts with edge cases
+  - Test: unit tests pass for nested dirs, single files, empty input
+
+Phase 5: Tree View Components (UI integration)
+  - Create FileList.svelte (flat/tree wrapper)
+  - Create TreeRow.svelte (tree node renderer)
+  - Integrate into StagingPanel (unstaged, staged, conflicted)
+  - Integrate into CommitDetail (commit file diffs)
+  - Add view mode toggle + persistence
+  - Test: toggle between flat/tree in both panels
+```
+
+## Scalability Considerations
+
+| Concern | At 3 tabs | At 10 tabs | At 30+ tabs |
+|---------|-----------|------------|-------------|
+| Memory (Rust) | ~50MB (3 cached GraphResults) | ~150MB | Consider LRU eviction for CommitCache |
+| FS watchers | 3 notify watchers | 10 watchers | May need watcher pooling |
+| Tab bar width | Fits easily | Tabs need to shrink/scroll | Horizontal scroll + overflow menu |
+| Open repo startup | Sequential, ~1s total | ~3s sequential | Lazy-load: only open active tab's repo, open others on first switch |
 
 ## Sources
 
-- Full codebase audit of Trunk v0.6: all 10 Rust command modules, 20 Svelte components, 19 lib modules
-- `git2` crate 0.19 API: `Repository::apply()`, `Diff::from_buffer()`, `ApplyLocation::Index` — confirmed available
-- Existing `scrollToOid` implementation: CommitGraph.svelte:569-593 — handles lazy-load and smooth scroll
-- CommitCache structure: `state.rs:16-17` — `HashMap<String, GraphResult>`, populated on open_repo
-- DiffPanel hunk rendering: DiffPanel.svelte:123-148 — `{#each fd.hunks as hunk}` with header and lines
-- Unified diff format spec: patch header must include `--- a/` / `+++ b/` / `@@ @@` for `Diff::from_buffer`
-
----
-*Architecture research for: Trunk v0.7 Hunk Staging & Commit Graph Search*
-*Researched: 2026-03-17*
+- Full codebase audit: state.rs, lib.rs, App.svelte, TabBar.svelte, WelcomeScreen.svelte, store.ts, all command files
+- [Tauri 2 State Management](https://v2.tauri.app/develop/state-management/) -- confirms Mutex<HashMap> pattern for multi-key state
+- [GitKraken Interface Documentation](https://help.gitkraken.com/gitkraken-desktop/interface/) -- tab UX patterns (Cmd+T, Cmd+1-9, drag-reorder)
+- [GitKraken tab performance feedback](https://feedback.gitkraken.com/suggestions/196509/improve-performance-when-switching-tabs) -- validates destroy/recreate concern
+- [Flat paths to tree algorithm](https://gist.github.com/Aracki/477fe5246e8c29b6440e49627e30eb0c) -- trie-based approach reference
