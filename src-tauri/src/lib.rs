@@ -21,6 +21,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::repo::open_repo,
             commands::repo::close_repo,
+            commands::repo::force_close_repo,
             commands::history::get_commit_graph,
             commands::history::refresh_commit_graph,
             commands::history::search_commits,

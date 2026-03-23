@@ -1,5 +1,5 @@
 use tauri::{AppHandle, State};
-use crate::state::{CommitCache, RepoState};
+use crate::state::{CommitCache, RepoState, RunningOp};
 use crate::git::{graph, repository};
 use crate::error::TrunkError;
 use crate::watcher::{self, WatcherState};
@@ -39,6 +39,30 @@ pub async fn close_repo(
     cache: State<'_, CommitCache>,
     watcher_state: State<'_, WatcherState>,
 ) -> Result<(), String> {
+    state.0.lock().unwrap().remove(&path);
+    cache.0.lock().unwrap().remove(&path);
+    watcher::stop_watcher(&path, &watcher_state);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn force_close_repo(
+    path: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    watcher_state: State<'_, WatcherState>,
+    running: State<'_, RunningOp>,
+) -> Result<(), String> {
+    // Cancel running remote op first (D-03)
+    {
+        let mut guard = running.0.lock().unwrap();
+        if let Some(pid) = guard.remove(&path) {
+            unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
+            }
+        }
+    }
+    // Then clean up all other state (same as close_repo)
     state.0.lock().unwrap().remove(&path);
     cache.0.lock().unwrap().remove(&path);
     watcher::stop_watcher(&path, &watcher_state);
