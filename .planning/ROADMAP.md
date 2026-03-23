@@ -207,7 +207,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. StagingPanel inline rebase UI includes a Skip button alongside Continue and Abort
   2. Clicking Skip invokes the `rebase_skip` IPC command and refreshes the UI
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 42-01-PLAN.md -- Add Skip Commit button to StagingPanel inline rebase form, remove OperationBanner skip toast
 
 ### Phase 43: Tech Debt Cleanup
 **Goal**: Clean up orphaned code and dead imports accumulated during v0.8 phases
@@ -223,7 +225,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 37 → 38 → 39 → 40 → 41
+**Execution Order:** 37 → 38 → 39 → 40 → 41 → 42
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -232,9 +234,9 @@ Plans:
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 41. Interactive Rebase Editor | 5/5 | Complete    | 2026-03-23 | - |
-| 42. Rebase Skip in Inline UI | 0/0 | Pending     | - | - |
+| 42. Rebase Skip in Inline UI | 0/1 | Pending     | - | - |
 | 43. Tech Debt Cleanup | 0/0 | Pending     | - | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-23 — Phase 41 gap closure plan 05 added (UAT fixes)*
+*Last updated: 2026-03-23 — Phase 42 plan created (1 plan, REB-06 gap closure)*
