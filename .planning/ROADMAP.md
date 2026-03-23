@@ -142,7 +142,9 @@ Full details: [milestones/v0.8-ROADMAP.md](milestones/v0.8-ROADMAP.md)
   1. User can push in one tab while fetching in another tab simultaneously
   2. Cancelling a remote operation in one tab does not affect operations in other tabs
   3. Closing a tab cleans up its filesystem watcher without affecting other tabs
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 44-01-PLAN.md — Per-repo RunningOp, cancel scoping, force_close_repo command
 
 ### Phase 45: Frontend Tab Architecture
 **Goal**: Users can open multiple repositories as independent tabs within a single window, each with fully isolated state
@@ -209,7 +211,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 27-31 | v0.6 | 16/16 | Complete | 2026-03-16 |
 | 32-36 | v0.7 | 8/8 | Complete | 2026-03-19 |
 | 37-43 | v0.8 | 19/19 | Complete | 2026-03-23 |
-| 44. Backend State Scoping | v0.9 | 0/? | Not started | - |
+| 44. Backend State Scoping | v0.9 | 0/1 | Not started | - |
 | 45. Frontend Tab Architecture | v0.9 | 0/? | Not started | - |
 | 46. Tree View Data Layer | v0.9 | 0/? | Not started | - |
 | 47. Tree View UI Integration | v0.9 | 0/? | Not started | - |
@@ -217,4 +219,4 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-23 — v0.9 Multi-tab & Tree View roadmap created*
+*Last updated: 2026-03-23 — Phase 44 planned (1 plan)*
