@@ -234,7 +234,7 @@ Plans:
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 41. Interactive Rebase Editor | 5/5 | Complete    | 2026-03-23 | - |
-| 42. Rebase Skip in Inline UI | 1/1 | Complete   | 2026-03-23 | - |
+| 42. Rebase Skip in Inline UI | 1/1 | Complete   | Complete    | 2026-03-23 |
 | 43. Tech Debt Cleanup | 0/0 | Pending     | - | - |
 
 ---
