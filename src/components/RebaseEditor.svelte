@@ -421,22 +421,22 @@
     <div class="rebase-col-action" style="width: 90px; padding: 0 {COLUMN_PADDING_X}px;">
       Action
     </div>
+    <div class="rebase-col flex-1 relative" style="padding: 0 {COLUMN_PADDING_X}px;">
+      Message
+      {#if 'message' !== lastVisibleColumn}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="col-resize-handle" onmousedown={(e) => startColumnResize('sha', e, true)}></div>
+      {/if}
+    </div>
     {#if columnVisibility.sha}
       <div class="rebase-col flex-shrink-0 relative" style="width: {columnWidths.sha}px; padding: 0 {COLUMN_PADDING_X}px;">
         SHA
         {#if 'sha' !== lastVisibleColumn}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="col-resize-handle" onmousedown={(e) => startColumnResize('sha', e)}></div>
+          <div class="col-resize-handle" onmousedown={(e) => startColumnResize('author', e, true)}></div>
         {/if}
       </div>
     {/if}
-    <div class="rebase-col flex-1 relative" style="padding: 0 {COLUMN_PADDING_X}px;">
-      Message
-      {#if 'message' !== lastVisibleColumn}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="col-resize-handle" onmousedown={(e) => startColumnResize('author', e, true)}></div>
-      {/if}
-    </div>
     {#if columnVisibility.author}
       <div class="rebase-col flex-shrink-0 relative" style="width: {columnWidths.author}px; padding: 0 {COLUMN_PADDING_X}px;">
         Author
@@ -462,9 +462,6 @@
   <div class="rebase-list" bind:this={listEl}>
     {#each items as item, idx (item.oid)}
       <div class="rebase-row-wrapper">
-      {#if item.action === 'squash'}
-        <span class="rebase-squash-arrow">↓</span>
-      {/if}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="rebase-row"
@@ -476,6 +473,9 @@
         ondblclick={() => { if (item.action !== 'drop') openMessageEditor(idx); }}
         style="height: {ROW_HEIGHT}px;"
       >
+        {#if item.action === 'squash'}
+          <span class="rebase-squash-arrow">↓</span>
+        {/if}
         <!-- Action column -->
         <div class="rebase-cell-action" style="width: 90px; padding: 0 {COLUMN_PADDING_X}px;">
           <span
@@ -495,6 +495,11 @@
           </select>
         </div>
 
+        <!-- Message column -->
+        <div class="rebase-cell rebase-cell-message flex-1" style="padding: 0 {COLUMN_PADDING_X}px;">
+          <span class:rebase-text-drop={item.action === 'drop'}>{item.newMessage ?? item.summary}</span>
+        </div>
+
         <!-- SHA column -->
         {#if columnVisibility.sha}
           <div
@@ -504,11 +509,6 @@
             {item.shortOid}
           </div>
         {/if}
-
-        <!-- Message column -->
-        <div class="rebase-cell rebase-cell-message flex-1" style="padding: 0 {COLUMN_PADDING_X}px;">
-          <span class:rebase-text-drop={item.action === 'drop'}>{item.newMessage ?? item.summary}</span>
-        </div>
 
         <!-- Author column -->
         {#if columnVisibility.author}
@@ -773,6 +773,7 @@
   }
 
   .rebase-row {
+    position: relative;
     display: flex;
     align-items: center;
     font-size: 13px;
@@ -805,7 +806,8 @@
   .rebase-squash-arrow {
     position: absolute;
     left: 3px;
-    bottom: -4px;
+    top: 50%;
+    transform: translateY(-50%);
     font-size: 12px;
     color: var(--color-rebase-squash);
     z-index: 1;
@@ -883,7 +885,7 @@
   /* --- Inline message editor --- */
 
   .rebase-row-wrapper {
-    position: relative;
+    /* no position: relative — arrow is inside .rebase-row instead */
   }
 
   .rebase-msg-editor {
