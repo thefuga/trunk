@@ -34,6 +34,14 @@
   let isMerge = $derived(operationInfo?.op_type === 'Merge');
   let isRebase = $derived(operationInfo?.op_type === 'Rebase');
   let isOperation = $derived(isMerge || isRebase);
+
+  let rebaseProgressNum = $derived(operationInfo?.progress?.split('/')[0] ?? '?');
+  let rebaseProgressTotal = $derived(operationInfo?.progress?.split('/')[1] ?? '?');
+  let rebaseCleanMessage = $derived(
+    operationInfo?.rebase_message?.split('\n').filter((l: string) => !l.startsWith('#')).join('\n').trim() ?? ''
+  );
+  let rebaseMsgSummary = $derived(rebaseCleanMessage.split('\n')[0] ?? '');
+  let rebaseMsgBody = $derived(rebaseCleanMessage.split('\n').slice(1).join('\n').trim());
   let totalCount = $derived(
     (status?.unstaged.length ?? 0) +
     (status?.staged.length ?? 0) +
@@ -674,11 +682,6 @@
       gap: 6px;
       flex-shrink: 0;
     ">
-      {@const progressParts = operationInfo.progress?.split('/') ?? []}
-      {@const cleanMessage = operationInfo.rebase_message?.split('\n').filter(l => !l.startsWith('#')).join('\n').trim() ?? ''}
-      {@const msgLines = cleanMessage.split('\n')}
-      {@const msgSummary = msgLines[0] ?? ''}
-      {@const msgBody = msgLines.slice(1).join('\n').trim()}
       <div style="
         background: var(--color-surface);
         border: 1px solid var(--color-border);
@@ -690,16 +693,16 @@
         max-height: 200px;
       ">
         <div style="margin-bottom: 4px;">
-          Rebasing commit {progressParts[0] ?? '?'} out of {progressParts[1] ?? '?'}
+          Rebasing commit {rebaseProgressNum} out of {rebaseProgressTotal}
         </div>
-        {#if msgSummary}
+        {#if rebaseMsgSummary}
           <div style="color: var(--color-text); font-size: 13px; font-weight: 600; margin-bottom: 4px;">
-            {msgSummary}
+            {rebaseMsgSummary}
           </div>
         {/if}
-        {#if msgBody}
+        {#if rebaseMsgBody}
           <div style="color: var(--color-text); white-space: pre-wrap; font-size: 12px;">
-            {msgBody}
+            {rebaseMsgBody}
           </div>
         {/if}
       </div>
