@@ -126,7 +126,7 @@ Full details: [milestones/v0.8-ROADMAP.md](milestones/v0.8-ROADMAP.md)
 
 **Milestone Goal:** Enable working with multiple repositories via tabs and browsing files as directory trees instead of flat lists.
 
-- [ ] **Phase 44: Backend State Scoping** — Make RunningOp per-repo so tabs can run concurrent remote operations
+- [x] **Phase 44: Backend State Scoping** — Make RunningOp per-repo so tabs can run concurrent remote operations (completed 2026-03-23)
 - [ ] **Phase 45: Frontend Tab Architecture** — Extract RepoView from App.svelte, add tab state management, per-repo context, tab bar, shortcuts, persistence, dirty indicator
 - [ ] **Phase 46: Tree View Data Layer** — Build and test the pure buildTree utility with path compression and sorting
 - [ ] **Phase 47: Tree View UI Integration** — Wire tree view into staging panel, commit diffs, and merge editor with expand/collapse, keyboard navigation, and state preservation
@@ -144,7 +144,7 @@ Full details: [milestones/v0.8-ROADMAP.md](milestones/v0.8-ROADMAP.md)
   3. Closing a tab cleans up its filesystem watcher without affecting other tabs
 **Plans**: 1 plan
 Plans:
-- [ ] 44-01-PLAN.md — Per-repo RunningOp, cancel scoping, force_close_repo command
+- [x] 44-01-PLAN.md — Per-repo RunningOp, cancel scoping, force_close_repo command
 
 ### Phase 45: Frontend Tab Architecture
 **Goal**: Users can open multiple repositories as independent tabs within a single window, each with fully isolated state
@@ -211,7 +211,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 27-31 | v0.6 | 16/16 | Complete | 2026-03-16 |
 | 32-36 | v0.7 | 8/8 | Complete | 2026-03-19 |
 | 37-43 | v0.8 | 19/19 | Complete | 2026-03-23 |
-| 44. Backend State Scoping | v0.9 | 0/1 | Not started | - |
+| 44. Backend State Scoping | v0.9 | 1/1 | Complete | 2026-03-23 |
 | 45. Frontend Tab Architecture | v0.9 | 0/? | Not started | - |
 | 46. Tree View Data Layer | v0.9 | 0/? | Not started | - |
 | 47. Tree View UI Integration | v0.9 | 0/? | Not started | - |
@@ -219,4 +219,4 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-23 — Phase 44 planned (1 plan)*
+*Last updated: 2026-03-23 — Phase 44 complete (1/1 plans)*

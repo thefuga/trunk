@@ -35,7 +35,7 @@ Requirements for milestone v0.9 Multi-tab & Tree View. Each maps to roadmap phas
 
 ### Backend
 
-- [ ] **BACK-01**: Concurrent remote operations across tabs (each tab can fetch/push independently)
+- [x] **BACK-01**: Concurrent remote operations across tabs (each tab can fetch/push independently)
 
 ## Future Requirements
 
@@ -68,7 +68,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BACK-01 | Phase 44 | Pending |
+| BACK-01 | Phase 44 | Complete |
 | TAB-01 | Phase 45 | Pending |
 | TAB-02 | Phase 45 | Pending |
 | TAB-03 | Phase 45 | Pending |
