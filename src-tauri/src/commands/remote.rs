@@ -43,15 +43,15 @@ async fn run_git_remote(
     cwd: &std::path::Path,
     app: &AppHandle,
     repo_path: &str,
-    running: &Mutex<Option<u32>>,
+    running: &Mutex<HashMap<String, u32>>,
 ) -> Result<(), TrunkError> {
-    // Check mutual exclusion
+    // Check mutual exclusion (per-repo)
     {
         let guard = running.lock().unwrap();
-        if guard.is_some() {
+        if guard.contains_key(repo_path) {
             return Err(TrunkError::new(
                 "op_in_progress",
-                "Another remote operation is already running",
+                "A remote operation is already running for this repository",
             ));
         }
     }
@@ -66,10 +66,10 @@ async fn run_git_remote(
         .spawn()
         .map_err(|e| TrunkError::new("remote_error", e.to_string()))?;
 
-    // Store PID for cancel support
+    // Store PID for cancel support (keyed by repo path)
     if let Some(pid) = child.id() {
         let mut guard = running.lock().unwrap();
-        *guard = Some(pid);
+        guard.insert(repo_path.to_owned(), pid);
     }
 
     // Read stderr lines and emit progress events
@@ -105,10 +105,10 @@ async fn run_git_remote(
         .await
         .map_err(|e| TrunkError::new("remote_error", e.to_string()))?;
 
-    // Clear RunningOp regardless of outcome
+    // Clear RunningOp for this repo regardless of outcome
     {
         let mut guard = running.lock().unwrap();
-        *guard = None;
+        guard.remove(repo_path);
     }
 
     if !status.success() {
@@ -249,10 +249,11 @@ pub async fn git_push(
 
 #[tauri::command]
 pub async fn cancel_remote_op(
+    path: String,
     running: State<'_, RunningOp>,
 ) -> Result<(), String> {
     let mut guard = running.0.lock().unwrap();
-    if let Some(pid) = guard.take() {
+    if let Some(pid) = guard.remove(&path) {
         unsafe {
             libc::kill(pid as i32, libc::SIGTERM);
         }
