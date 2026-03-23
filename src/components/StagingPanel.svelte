@@ -340,8 +340,64 @@
     {/if}
   </div>
 
-  <!-- Operation banner (merge in progress — rebase uses bottom section instead) -->
-  {#if operationInfo && operationInfo.op_type !== 'None' && operationInfo.op_type !== 'Rebase'}
+  <!-- Operation banners -->
+  {#if isRebase && operationInfo}
+    <!-- Rebase conflict/progress header -->
+    {#if (status?.conflicted.length ?? 0) > 0}
+      <div style="
+        height: 24px;
+        background: var(--color-badge-warning-bg);
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        flex-shrink: 0;
+      ">
+        <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center;">
+          <AlertTriangle size={12} />
+        </span>
+        <span style="font-size: 12px; font-weight: 600; color: var(--color-badge-warning);">Rebase conflicts detected</span>
+      </div>
+    {/if}
+    <div style="
+      height: 28px;
+      border-bottom: 1px solid var(--color-border);
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--color-text-muted);
+    ">
+      Rebasing
+      {#if operationInfo.source_branch}
+        <span style="
+          background: var(--color-accent);
+          border-radius: 3px;
+          padding: 0 5px;
+          font-size: 10px;
+          line-height: 16px;
+          color: white;
+          font-weight: 600;
+        ">{operationInfo.source_branch}</span>
+      {/if}
+      onto
+      {#if operationInfo.target_branch}
+        <span style="
+          background: var(--color-accent);
+          border-radius: 3px;
+          padding: 0 5px;
+          font-size: 10px;
+          line-height: 16px;
+          color: white;
+          font-weight: 600;
+        ">{operationInfo.target_branch}</span>
+      {/if}
+    </div>
+  {:else if operationInfo && operationInfo.op_type !== 'None'}
     <OperationBanner
       info={operationInfo}
       {repoPath}
@@ -380,19 +436,21 @@
             <AlertTriangle size={12} />
           </span>
           <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
-            Conflicted Files
+            Conflicted Files ({status?.conflicted.length ?? 0})
           </span>
-          <span style="
-            background: var(--color-badge-warning-bg);
-            color: var(--color-badge-warning);
-            font-size: 10px;
-            font-weight: 700;
-            border-radius: 9999px;
-            padding: 0 6px;
-            line-height: 16px;
-          ">
-            {status?.conflicted.length ?? 0}
-          </span>
+          <button
+            onclick={(e) => { e.stopPropagation(); markAllResolved(); }}
+            style="
+              background: var(--color-btn-unstage-bg);
+              color: var(--color-btn-unstage);
+              border: 1px solid var(--color-btn-unstage-border);
+              border-radius: 4px;
+              font-size: 10px;
+              font-weight: 600;
+              padding: 2px 8px;
+              cursor: pointer;
+            "
+          >Mark All Resolved</button>
         </div>
 
         {#if conflicted_expanded}
@@ -560,7 +618,7 @@
           {#if staged_expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
         </span>
         <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
-          {isMerge ? 'Resolved Files' : 'Staged Files'} ({status?.staged.length ?? 0})
+          {isOperation ? 'Resolved Files' : 'Staged Files'} ({status?.staged.length ?? 0})
         </span>
         {#if (status?.staged.length ?? 0) > 0}
           <button
@@ -616,6 +674,11 @@
       gap: 6px;
       flex-shrink: 0;
     ">
+      {@const progressParts = operationInfo.progress?.split('/') ?? []}
+      {@const cleanMessage = operationInfo.rebase_message?.split('\n').filter(l => !l.startsWith('#')).join('\n').trim() ?? ''}
+      {@const msgLines = cleanMessage.split('\n')}
+      {@const msgSummary = msgLines[0] ?? ''}
+      {@const msgBody = msgLines.slice(1).join('\n').trim()}
       <div style="
         background: var(--color-surface);
         border: 1px solid var(--color-border);
@@ -623,13 +686,20 @@
         padding: 8px;
         font-size: 12px;
         color: var(--color-text-muted);
+        overflow-y: auto;
+        max-height: 200px;
       ">
         <div style="margin-bottom: 4px;">
-          Rebasing commit {operationInfo.progress ?? '?'}
+          Rebasing commit {progressParts[0] ?? '?'} out of {progressParts[1] ?? '?'}
         </div>
-        {#if operationInfo.rebase_message}
+        {#if msgSummary}
+          <div style="color: var(--color-text); font-size: 13px; font-weight: 600; margin-bottom: 4px;">
+            {msgSummary}
+          </div>
+        {/if}
+        {#if msgBody}
           <div style="color: var(--color-text); white-space: pre-wrap; font-size: 12px;">
-            {operationInfo.rebase_message}
+            {msgBody}
           </div>
         {/if}
       </div>
