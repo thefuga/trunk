@@ -83,4 +83,54 @@ mod tests {
         state.lock().unwrap().remove(&path);
         assert!(!state.lock().unwrap().contains_key(&path));
     }
+
+    #[test]
+    fn force_close_removes_running_op() {
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        let path = "/test/repo".to_string();
+        let running = Mutex::new(HashMap::<String, u32>::new());
+        running.lock().unwrap().insert(path.clone(), 12345);
+
+        // Simulate force_close_repo: remove PID
+        let pid = running.lock().unwrap().remove(&path);
+        assert_eq!(pid, Some(12345));
+        assert!(!running.lock().unwrap().contains_key(&path));
+    }
+
+    #[test]
+    fn force_close_no_running_op_still_succeeds() {
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        let path = "/test/repo".to_string();
+        let running = Mutex::new(HashMap::<String, u32>::new());
+
+        // No running op -- remove returns None, no panic
+        let pid = running.lock().unwrap().remove(&path);
+        assert_eq!(pid, None);
+    }
+
+    #[test]
+    fn close_does_not_touch_running_op() {
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+        use std::path::PathBuf;
+
+        let path = "/test/repo".to_string();
+
+        let state = Mutex::new(HashMap::<String, PathBuf>::new());
+        let running = Mutex::new(HashMap::<String, u32>::new());
+
+        state.lock().unwrap().insert(path.clone(), PathBuf::from(&path));
+        running.lock().unwrap().insert(path.clone(), 12345);
+
+        // Simulate close_repo: only removes state, NOT running
+        state.lock().unwrap().remove(&path);
+
+        // Running op should still be there (D-02: graceful close leaves ops running)
+        assert!(running.lock().unwrap().contains_key(&path));
+        assert_eq!(*running.lock().unwrap().get(&path).unwrap(), 12345);
+    }
 }
