@@ -13,7 +13,7 @@
     type ConflictRegion,
   } from '../lib/merge-parser.js';
   import { tick } from 'svelte';
-  import { Check, CircleCheck, CircleX, ChevronUp, ChevronDown, X } from '@lucide/svelte';
+  import { Check, CircleCheck, CircleX, ChevronUp, ChevronDown, X, RotateCcw } from '@lucide/svelte';
 
   interface Props {
     repoPath: string;
@@ -163,7 +163,7 @@
     safeInvoke<MergeSides>('get_merge_sides', { path: repoPath, filePath: currentPath })
       .then((result) => {
         regions = parseConflictRegions(result.base, result.ours, result.theirs);
-        takenLines = new Set();
+        takenLines = takeAllCurrent(regions);
         manualEdit = false;
         manualText = '';
         focusedConflictIdx = 0;
@@ -243,6 +243,12 @@
   function handleOutputEdit(e: Event) {
     manualEdit = true;
     manualText = (e.target as HTMLTextAreaElement).value;
+  }
+
+  function handleReset() {
+    takenLines = takeAllCurrent(regions);
+    manualEdit = false;
+    manualText = '';
   }
 
   function handlePrevConflict() {
@@ -591,6 +597,20 @@
           {#if manualEdit}
             <span style="font-size: 10px; color: var(--color-text-muted);">(manual edit)</span>
           {/if}
+          <button
+            onclick={handleReset}
+            aria-label="Reset merge selections"
+            title="Reset to Current (Ours)"
+            style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              color: var(--color-text-muted);
+              padding: 2px;
+              display: flex;
+              align-items: center;
+            "
+          ><RotateCcw size={14} /></button>
         </div>
 
         <!-- Center: conflict navigation -->
