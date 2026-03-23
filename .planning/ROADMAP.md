@@ -115,7 +115,7 @@ Full details: [milestones/v0.7-ROADMAP.md](milestones/v0.7-ROADMAP.md)
 - [x] **Phase 39: Merge Workflow** - Merge initiation via context menu, fast-forward and auto-commit handling (MERGE-02 drag-and-drop dropped) (completed 2026-03-21)
 - [x] **Phase 40: Rebase Workflow** - Rebase initiation via context menu, mid-rebase conflict resolution, abort/skip (REB-02 drag-and-drop dropped) (completed 2026-03-21)
 - [x] **Phase 41: Interactive Rebase Editor** - Commit list editor with Pick/Squash/Reword/Drop, drag reordering, keyboard shortcuts, execution (completed 2026-03-21)
-- [ ] **Phase 42: Rebase Skip in Inline UI** - Add Skip button to StagingPanel inline rebase UI, wire to rebase_skip backend (gap closure: REB-06)
+- [x] **Phase 42: Rebase Skip in Inline UI** - Add Skip button to StagingPanel inline rebase UI, wire to rebase_skip backend (gap closure: REB-06) (completed 2026-03-23)
 - [ ] **Phase 43: Tech Debt Cleanup** - Remove orphaned commands, dead imports, fix cosmetic issues from v0.8 phases
 
 ## Phase Details
@@ -234,7 +234,7 @@ Plans:
 | 39. Merge Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 40. Rebase Workflow | 1/1 | Complete    | 2026-03-21 | - |
 | 41. Interactive Rebase Editor | 5/5 | Complete    | 2026-03-23 | - |
-| 42. Rebase Skip in Inline UI | 0/1 | Pending     | - | - |
+| 42. Rebase Skip in Inline UI | 1/1 | Complete   | 2026-03-23 | - |
 | 43. Tech Debt Cleanup | 0/0 | Pending     | - | - |
 
 ---
