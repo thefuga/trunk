@@ -300,6 +300,28 @@
     }
   }
 
+  // --- Bottom form resize ---
+  let bottomHeight = $state(180);
+
+  function startBottomResize(e: MouseEvent) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = bottomHeight;
+
+    function onMouseMove(ev: MouseEvent) {
+      const delta = startY - ev.clientY;
+      bottomHeight = Math.max(100, Math.min(500, startHeight + delta));
+    }
+
+    function onMouseUp() {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
   // Initial load on mount
   $effect(() => {
     if (repoPath) loadStatus();
@@ -687,8 +709,18 @@
     {/if}
   </div>
 
-  <!-- Permanent divider above bottom area -->
-  <div style="flex-shrink: 0; border-top: 1px solid var(--color-border);"></div>
+  <!-- Draggable divider above bottom area -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    onmousedown={startBottomResize}
+    style="
+      flex-shrink: 0;
+      height: 4px;
+      cursor: row-resize;
+      background: linear-gradient(to bottom, transparent 1px, var(--color-border) 1px, var(--color-border) 2px, transparent 2px);
+      transition: background 0.15s;
+    "
+  ></div>
 
   {#if isRebase && operationInfo}
     <!-- Rebase progress + actions (GitKraken style) -->
@@ -697,7 +729,9 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      height: {bottomHeight}px;
       flex-shrink: 0;
+      overflow: hidden;
     ">
       <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 2px;">
         Rebasing commit {rebaseProgressNum} out of {rebaseProgressTotal}
@@ -719,10 +753,11 @@
       />
       <textarea
         bind:value={rebaseMsgBody}
-        rows={3}
         placeholder="Description (optional)"
         style="
           width: 100%;
+          flex: 1;
+          min-height: 0;
           box-sizing: border-box;
           border: 1px solid var(--color-border);
           background: var(--color-surface);
@@ -730,7 +765,7 @@
           border-radius: 4px;
           padding: 4px 6px;
           font-size: 12px;
-          resize: vertical;
+          resize: none;
         "
       ></textarea>
       <div style="display: flex; gap: 6px;">
@@ -779,7 +814,9 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      height: {bottomHeight}px;
       flex-shrink: 0;
+      overflow: hidden;
     ">
       <input
         type="text"
@@ -798,10 +835,11 @@
       />
       <textarea
         bind:value={mergeBody}
-        rows={3}
         placeholder="Description (optional)"
         style="
           width: 100%;
+          flex: 1;
+          min-height: 0;
           box-sizing: border-box;
           border: 1px solid var(--color-border);
           background: var(--color-surface);
@@ -809,7 +847,7 @@
           border-radius: 4px;
           padding: 4px 6px;
           font-size: 12px;
-          resize: vertical;
+          resize: none;
         "
       ></textarea>
       <div style="display: flex; gap: 6px;">
