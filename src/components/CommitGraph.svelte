@@ -1194,9 +1194,12 @@
                 align-items: center;
                 opacity: 1;
                 transition: opacity 180ms ease;
+                cursor: {hoveredPill.refType === 'LocalBranch' || hoveredPill.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'};
               "
               onmouseenter={overlayMouseEnter}
               onmouseleave={overlayMouseLeave}
+              oncontextmenu={(e) => showRefContextMenu(e, refFromPill(hoveredPill!))}
+              ondblclick={hoveredPill.refType === 'LocalBranch' || hoveredPill.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, refFromPill(hoveredPill!)) : undefined}
             >
               <span style="display: flex; align-items: center; gap: 2px; font-weight: {hoveredPill.isHead ? 700 : 500};" class="text-[11px] font-medium text-white whitespace-nowrap">
                 {#if PILL_ICONS[hoveredPill.refType]}
