@@ -46,7 +46,6 @@
     loading = true;
     try {
       await safeInvoke('rebase_skip', { path: repoPath });
-      showToast('Commit skipped', 'success');
     } catch (e) {
       const err = e as TrunkError;
       showToast(err.message ?? 'Skip failed', 'error');

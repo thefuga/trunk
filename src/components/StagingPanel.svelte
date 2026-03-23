@@ -306,6 +306,19 @@
     }
   }
 
+  async function skipRebase() {
+    rebaseLoading = true;
+    try {
+      await safeInvoke('rebase_skip', { path: repoPath });
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Skip failed', 'error');
+    } finally {
+      rebaseLoading = false;
+      await loadStatus();
+    }
+  }
+
   // --- Bottom form resize ---
   let bottomHeight = $state(180);
 
@@ -792,6 +805,24 @@
           "
         >
           Continue Rebase
+        </button>
+        <button
+          onclick={skipRebase}
+          disabled={rebaseLoading}
+          style="
+            flex: 1;
+            height: 34px;
+            background: var(--color-btn-skip-bg);
+            color: var(--color-btn-skip);
+            border: 1px solid var(--color-btn-skip-border);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: {rebaseLoading ? 'not-allowed' : 'pointer'};
+            opacity: {rebaseLoading ? 0.4 : 1};
+          "
+        >
+          Skip Commit
         </button>
         <button
           onclick={abortRebase}
