@@ -271,6 +271,13 @@
     node.focus();
   }
 
+  function selectAll(node: HTMLInputElement) {
+    requestAnimationFrame(() => {
+      node.focus();
+      node.select();
+    });
+  }
+
   // --- Inline message editor ---
 
   async function openMessageEditor(idx: number) {
@@ -498,18 +505,21 @@
           <input
             class="rebase-msg-editor-summary"
             type="text"
+            tabindex="1"
             placeholder="Summary (required)"
             bind:value={editingSummary}
+            use:selectAll
           />
           <textarea
             class="rebase-msg-editor-body"
             placeholder="Body (optional)"
+            tabindex="2"
             rows="4"
             bind:value={editingBody}
           ></textarea>
           <div class="rebase-msg-editor-buttons">
-            <button class="rebase-btn rebase-btn-ghost" onclick={handleMessageCancel}>Cancel</button>
-            <button class="rebase-btn rebase-btn-confirm" onclick={handleMessageUpdate}>Update Message</button>
+            <button class="rebase-btn rebase-btn-confirm" tabindex="3" onclick={handleMessageUpdate}>Update Message</button>
+            <button class="rebase-btn rebase-btn-ghost" tabindex="4" onclick={handleMessageCancel}>Cancel</button>
           </div>
         </div>
       {/if}
