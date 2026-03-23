@@ -31,7 +31,7 @@ Declared values (must be multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | Icon gaps, inline padding (input padding: 4px 6px) |
+| xs | 4px | Icon gaps, inline padding |
 | sm | 8px | Container padding (rebase form: 8px) |
 | md | 16px | Default element spacing |
 | lg | 24px | Section padding |
@@ -39,7 +39,7 @@ Declared values (must be multiples of 4):
 | 2xl | 48px | Major section breaks |
 | 3xl | 64px | Page-level spacing |
 
-Exceptions: Button row gap is 6px (established pattern in StagingPanel rebase form, not changing).
+Exceptions: none
 
 ---
 
@@ -100,6 +100,10 @@ Accent reserved for: selected commit row highlight, active branch indicator, int
 | Disabled opacity | 0.4 | Matches existing button disabled pattern |
 | Enabled cursor | `pointer` | Matches existing button enabled pattern |
 
+### Button row
+
+The button row container uses `display: flex` with a hard-coded `gap: 6px`. This is a legacy value inherited from the existing StagingPanel rebase form -- it is NOT part of the spacing scale. New buttons added to this row must use the existing gap; do not change it in this phase.
+
 ### Modified: OperationBanner handleSkip
 
 | Property | Change | Source |
@@ -146,7 +150,7 @@ Accent reserved for: selected commit row highlight, active branch indicator, int
          flex: 3              flex: 1          flex: 2
 ```
 
-- Container: `display: flex; gap: 6px;`
+- Container: `display: flex` with existing hard-coded gap (legacy value, not from spacing scale)
 - All buttons share: `height: 34px; border-radius: 4px; font-size: 12px; font-weight: 600;`
 - Flex ratios encode visual priority: Continue is the most prominent (3), Abort is secondary (2), Skip is tertiary (1)
 
