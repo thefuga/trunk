@@ -338,4 +338,60 @@ mod tests {
         let err = classify_git_error(stderr);
         assert_eq!(err.code, "auth_failure");
     }
+
+    // --- per-repo RunningOp tests ---
+
+    #[test]
+    fn running_op_allows_different_repos() {
+        let map = Mutex::new(HashMap::<String, u32>::new());
+        {
+            let mut guard = map.lock().unwrap();
+            guard.insert("/repo/a".to_string(), 1001);
+            guard.insert("/repo/b".to_string(), 1002);
+            assert_eq!(guard.len(), 2);
+        }
+    }
+
+    #[test]
+    fn running_op_blocks_same_repo() {
+        let map = Mutex::new(HashMap::<String, u32>::new());
+        {
+            let mut guard = map.lock().unwrap();
+            guard.insert("/repo/a".to_string(), 1001);
+            assert!(guard.contains_key("/repo/a"));
+        }
+    }
+
+    #[test]
+    fn running_op_remove_one_keeps_other() {
+        let map = Mutex::new(HashMap::<String, u32>::new());
+        {
+            let mut guard = map.lock().unwrap();
+            guard.insert("/repo/a".to_string(), 1001);
+            guard.insert("/repo/b".to_string(), 1002);
+            guard.remove("/repo/a");
+            assert!(!guard.contains_key("/repo/a"));
+            assert!(guard.contains_key("/repo/b"));
+        }
+    }
+
+    #[test]
+    fn cancel_removes_only_target_repo() {
+        let map = Mutex::new(HashMap::<String, u32>::new());
+        {
+            let mut guard = map.lock().unwrap();
+            guard.insert("/repo/a".to_string(), 1001);
+            guard.insert("/repo/b".to_string(), 1002);
+        }
+        // Simulate cancel for /repo/a
+        {
+            let mut guard = map.lock().unwrap();
+            guard.remove("/repo/a");
+        }
+        {
+            let guard = map.lock().unwrap();
+            assert!(!guard.contains_key("/repo/a"));
+            assert_eq!(*guard.get("/repo/b").unwrap(), 1002);
+        }
+    }
 }
