@@ -1,0 +1,168 @@
+<script lang="ts">
+  import type { FileStatus } from '../lib/types.js';
+  import type { FlatRow } from '../lib/flatten-tree.js';
+  import { buildTree } from '../lib/build-tree.js';
+  import { flattenTree, findFocusIndex } from '../lib/flatten-tree.js';
+  import DirectoryRow from './DirectoryRow.svelte';
+  import FileRow from './FileRow.svelte';
+
+  interface Props {
+    files: FileStatus[];
+    treeMode: boolean;
+    actionLabel: string;
+    loadingFiles?: Set<string>;
+    onfileaction: (path: string) => void;
+    onfileclick?: (path: string) => void;
+    onfilecontextmenu?: (e: MouseEvent, path: string, status: FileStatus) => void;
+  }
+
+  let {
+    files,
+    treeMode,
+    actionLabel,
+    loadingFiles,
+    onfileaction,
+    onfileclick,
+    onfilecontextmenu,
+  }: Props = $props();
+
+  let expanded = $state<Set<string>>(new Set());
+  let focusIndex = $state(0);
+  let lastFocusedPath = $state<string | null>(null);
+
+  // Track previous tree mode to detect actual changes (not initial render)
+  let prevTreeMode: boolean | undefined;
+
+  let tree = $derived(buildTree(files));
+  let flatRows = $derived<FlatRow[]>(
+    treeMode
+      ? flattenTree(tree, expanded)
+      : files.map((f) => ({
+          type: 'file' as const,
+          depth: 0,
+          node: { type: 'file' as const, name: f.path, path: f.path, file: f },
+          parentPath: null,
+        }))
+  );
+
+  // Reset on mode change (D-09): when treeMode changes, reset expanded/focus
+  $effect(() => {
+    const currentMode = treeMode;
+    if (prevTreeMode !== undefined && prevTreeMode !== currentMode) {
+      expanded = new Set();
+      focusIndex = 0;
+      lastFocusedPath = null;
+    }
+    prevTreeMode = currentMode;
+  });
+
+  // Focus preservation on data change (D-13)
+  $effect(() => {
+    // Track files array changes
+    void files.length;
+    if (lastFocusedPath && flatRows.length > 0) {
+      const newIdx = findFocusIndex(flatRows, lastFocusedPath);
+      const row = flatRows[newIdx];
+      const rowPath = row?.node.path;
+      if (rowPath === lastFocusedPath) {
+        focusIndex = newIdx;
+      } else {
+        focusIndex = Math.min(focusIndex, Math.max(0, flatRows.length - 1));
+      }
+    } else if (flatRows.length > 0) {
+      focusIndex = Math.min(focusIndex, flatRows.length - 1);
+    } else {
+      focusIndex = 0;
+    }
+  });
+
+  function toggleExpanded(path: string) {
+    const next = new Set(expanded);
+    if (next.has(path)) {
+      next.delete(path);
+    } else {
+      next.add(path);
+    }
+    expanded = next;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (flatRows.length === 0) return;
+    const row = flatRows[focusIndex];
+    if (!row) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        focusIndex = Math.min(focusIndex + 1, flatRows.length - 1);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        focusIndex = Math.max(focusIndex - 1, 0);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (row.type === 'directory') {
+          if (!row.expanded) {
+            toggleExpanded(row.node.path);
+          } else {
+            // Move to first child
+            focusIndex = Math.min(focusIndex + 1, flatRows.length - 1);
+          }
+        }
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (row.type === 'directory' && row.expanded) {
+          toggleExpanded(row.node.path);
+        } else if (row.parentPath) {
+          // Jump to parent directory
+          const parentIdx = flatRows.findIndex(
+            (r) => r.type === 'directory' && r.node.path === row.parentPath
+          );
+          if (parentIdx >= 0) focusIndex = parentIdx;
+        }
+        break;
+      case 'Enter':
+        if (row.type === 'file') {
+          onfileclick?.(row.node.file.path);
+        }
+        break;
+    }
+    // Track focused path for preservation across data changes
+    const focusedRow = flatRows[focusIndex];
+    lastFocusedPath = focusedRow?.node.path ?? null;
+  }
+</script>
+
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<div
+  role={treeMode ? 'tree' : 'list'}
+  tabindex="0"
+  onkeydown={handleKeydown}
+  style="flex: 1; overflow-y: auto; min-height: 0; outline: none;"
+>
+  {#each flatRows as row, i (row.type === 'file' ? row.node.path : `dir:${row.node.path}`)}
+    {#if row.type === 'directory'}
+      <DirectoryRow
+        node={row.node}
+        depth={row.depth}
+        expanded={row.expanded}
+        focused={i === focusIndex}
+        ontoggle={() => toggleExpanded(row.node.path)}
+      />
+    {:else}
+      <FileRow
+        file={row.node.file}
+        actionLabel={actionLabel}
+        isLoading={loadingFiles?.has(row.node.file.path) ?? false}
+        onaction={() => onfileaction(row.node.file.path)}
+        onclick={() => onfileclick?.(row.node.file.path)}
+        oncontextmenu={onfilecontextmenu ? (e) => onfilecontextmenu!(e, row.node.file.path, row.node.file) : undefined}
+        depth={treeMode ? row.depth : 0}
+        displayName={treeMode ? row.node.name : undefined}
+        focused={i === focusIndex}
+      />
+    {/if}
+  {/each}
+</div>
