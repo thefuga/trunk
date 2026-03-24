@@ -1,4 +1,7 @@
 import { LazyStore } from '@tauri-apps/plugin-store';
+import type { PersistedTab } from './tab-types.js';
+
+export type { PersistedTab } from './tab-types.js';
 
 export interface RecentRepo { name: string; path: string; }
 
@@ -192,5 +195,27 @@ export async function getRebaseColumnVisibility(): Promise<RebaseColumnVisibilit
 
 export async function setRebaseColumnVisibility(visibility: RebaseColumnVisibility): Promise<void> {
   await store.set(REBASE_COLUMN_VISIBILITY_KEY, visibility);
+  await store.save();
+}
+
+// Tab persistence
+const TABS_KEY = 'open_tabs';
+const ACTIVE_TAB_KEY = 'active_tab_id';
+
+export async function getOpenTabs(): Promise<PersistedTab[]> {
+  return (await store.get<PersistedTab[]>(TABS_KEY)) ?? [];
+}
+
+export async function setOpenTabs(tabs: PersistedTab[]): Promise<void> {
+  await store.set(TABS_KEY, tabs);
+  await store.save();
+}
+
+export async function getActiveTabId(): Promise<string | null> {
+  return (await store.get<string>(ACTIVE_TAB_KEY)) ?? null;
+}
+
+export async function setActiveTabId(id: string): Promise<void> {
+  await store.set(ACTIVE_TAB_KEY, id);
   await store.save();
 }
