@@ -158,8 +158,8 @@ Plans:
   5. Undo/redo, remote state, and all per-repo state are scoped to each tab — actions in one tab never affect another
 **Plans**: 3 plans
 Plans:
-- [ ] 45-01-PLAN.md — Type contracts, factory functions, tab persistence helpers, unit tests
-- [ ] 45-02-PLAN.md — RepoView extraction, App.svelte tab manager, component prop threading
+- [x] 45-01-PLAN.md — Type contracts, factory functions, tab persistence helpers, unit tests
+- [x] 45-02-PLAN.md — RepoView extraction, App.svelte tab manager, component prop threading
 - [ ] 45-03-PLAN.md — TabBar rewrite, dirty detection, human verification
 **UI hint**: yes
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 32-36 | v0.7 | 8/8 | Complete | 2026-03-19 |
 | 37-43 | v0.8 | 19/19 | Complete | 2026-03-23 |
 | 44. Backend State Scoping | v0.9 | 1/1 | Complete | 2026-03-23 |
-| 45. Frontend Tab Architecture | v0.9 | 0/3 | Planned    |  |
+| 45. Frontend Tab Architecture | v0.9 | 2/3 | In Progress|  |
 | 46. Tree View Data Layer | v0.9 | 0/? | Not started | - |
 | 47. Tree View UI Integration | v0.9 | 0/? | Not started | - |
 | 48. Polish & Differentiators | v0.9 | 0/? | Not started | - |

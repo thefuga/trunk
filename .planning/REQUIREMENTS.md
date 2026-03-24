@@ -9,9 +9,9 @@ Requirements for milestone v0.9 Multi-tab & Tree View. Each maps to roadmap phas
 
 ### Multi-tab
 
-- [ ] **TAB-01**: User can open multiple repositories as separate tabs in a single window
-- [ ] **TAB-02**: User can create a new tab via Cmd+T, which shows the splash/project picker
-- [ ] **TAB-03**: User can close a tab via Cmd+W or the X button on the tab
+- [x] **TAB-01**: User can open multiple repositories as separate tabs in a single window
+- [x] **TAB-02**: User can create a new tab via Cmd+T, which shows the splash/project picker
+- [x] **TAB-03**: User can close a tab via Cmd+W or the X button on the tab
 - [ ] **TAB-04**: User can switch tabs via Cmd+1-9 and Ctrl+Tab/Ctrl+Shift+Tab
 - [x] **TAB-05**: Each tab has fully independent state (graph, staging, diffs, selection, rebase/merge)
 - [x] **TAB-06**: Open tabs and active tab are persisted and restored on app relaunch
@@ -69,9 +69,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | BACK-01 | Phase 44 | Complete |
-| TAB-01 | Phase 45 | Pending |
-| TAB-02 | Phase 45 | Pending |
-| TAB-03 | Phase 45 | Pending |
+| TAB-01 | Phase 45 | Complete |
+| TAB-02 | Phase 45 | Complete |
+| TAB-03 | Phase 45 | Complete |
 | TAB-04 | Phase 45 | Pending |
 | TAB-05 | Phase 45 | Complete |
 | TAB-06 | Phase 45 | Complete |
