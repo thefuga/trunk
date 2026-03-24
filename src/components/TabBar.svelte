@@ -33,8 +33,8 @@
       tabindex="0"
       aria-selected={tab.id === activeTabId}
     >
-      <span class="truncate" style="max-width: 200px;">{tab.repoName || 'New Tab'}</span>
       {#if tab.dirty}<span class="dirty-dot"></span>{/if}
+      <span class="truncate" style="max-width: 200px;">{tab.repoName || 'New Tab'}</span>
       <button
         class="close-btn"
         onclick={(e: MouseEvent) => { e.stopPropagation(); onclose(tab.id, e.shiftKey); }}
