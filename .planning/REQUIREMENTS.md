@@ -25,9 +25,9 @@ Requirements for milestone v0.9 Multi-tab & Tree View. Each maps to roadmap phas
 - [ ] **TREE-01**: User can toggle between flat file list and directory tree view in staging panel
 - [ ] **TREE-02**: User can toggle between flat file list and directory tree view in commit diffs
 - [ ] **TREE-03**: User can toggle between flat file list and directory tree view in merge editor
-- [ ] **TREE-04**: Directory nodes expand/collapse with chevron indicators
-- [ ] **TREE-05**: Expand/collapse state is preserved across status refreshes (staging a file doesn't collapse the tree)
-- [ ] **TREE-06**: User can navigate the tree with arrow keys (up/down to move, left/right to collapse/expand)
+- [x] **TREE-04**: Directory nodes expand/collapse with chevron indicators
+- [x] **TREE-05**: Expand/collapse state is preserved across status refreshes (staging a file doesn't collapse the tree)
+- [x] **TREE-06**: User can navigate the tree with arrow keys (up/down to move, left/right to collapse/expand)
 - [x] **TREE-07**: Single-child directory paths are compressed (e.g. src/lib/ instead of src > lib)
 - [ ] **TREE-08**: User can stage/unstage an entire directory via action on the directory node
 - [ ] **TREE-09**: Directory nodes show file count badges
@@ -80,9 +80,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TREE-01 | Phase 47 | Pending |
 | TREE-02 | Phase 47 | Pending |
 | TREE-03 | Phase 47 | Pending |
-| TREE-04 | Phase 47 | Pending |
-| TREE-05 | Phase 47 | Pending |
-| TREE-06 | Phase 47 | Pending |
+| TREE-04 | Phase 47 | Complete |
+| TREE-05 | Phase 47 | Complete |
+| TREE-06 | Phase 47 | Complete |
 | TAB-08 | Phase 48 | Pending |
 | TAB-09 | Phase 48 | Pending |
 | TAB-10 | Phase 48 | Pending |
