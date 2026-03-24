@@ -122,7 +122,7 @@ Full details: [milestones/v0.8-ROADMAP.md](milestones/v0.8-ROADMAP.md)
 
 </details>
 
-### 🚧 v0.9 Multi-tab & Tree View (In Progress)
+### v0.9 Multi-tab & Tree View (In Progress)
 
 **Milestone Goal:** Enable working with multiple repositories via tabs and browsing files as directory trees instead of flat lists.
 
@@ -156,7 +156,11 @@ Plans:
   3. Open tabs and the active tab persist across app relaunch — reopening the app restores the same tabs
   4. Background tabs with uncommitted changes display a dirty indicator (dot badge) on the tab
   5. Undo/redo, remote state, and all per-repo state are scoped to each tab — actions in one tab never affect another
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 45-01-PLAN.md — Type contracts, factory functions, tab persistence helpers, unit tests
+- [ ] 45-02-PLAN.md — RepoView extraction, App.svelte tab manager, component prop threading
+- [ ] 45-03-PLAN.md — TabBar rewrite, dirty detection, human verification
 **UI hint**: yes
 
 ### Phase 46: Tree View Data Layer
@@ -212,11 +216,11 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 32-36 | v0.7 | 8/8 | Complete | 2026-03-19 |
 | 37-43 | v0.8 | 19/19 | Complete | 2026-03-23 |
 | 44. Backend State Scoping | v0.9 | 1/1 | Complete | 2026-03-23 |
-| 45. Frontend Tab Architecture | v0.9 | 0/? | Not started | - |
+| 45. Frontend Tab Architecture | v0.9 | 0/3 | Not started | - |
 | 46. Tree View Data Layer | v0.9 | 0/? | Not started | - |
 | 47. Tree View UI Integration | v0.9 | 0/? | Not started | - |
 | 48. Polish & Differentiators | v0.9 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-23 — Phase 44 complete (1/1 plans)*
+*Last updated: 2026-03-24 — Phase 45 planned (3 plans)*
