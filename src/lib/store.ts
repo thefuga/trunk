@@ -219,3 +219,15 @@ export async function setActiveTabId(id: string): Promise<void> {
   await store.set(ACTIVE_TAB_KEY, id);
   await store.save();
 }
+
+// Tree view preference
+const TREE_VIEW_KEY = 'tree_view_enabled';
+
+export async function getTreeViewEnabled(): Promise<boolean> {
+  return (await store.get<boolean>(TREE_VIEW_KEY)) ?? false;
+}
+
+export async function setTreeViewEnabled(enabled: boolean): Promise<void> {
+  await store.set(TREE_VIEW_KEY, enabled);
+  await store.save();
+}
