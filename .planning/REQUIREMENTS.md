@@ -22,9 +22,9 @@ Requirements for milestone v0.9 Multi-tab & Tree View. Each maps to roadmap phas
 
 ### Tree View
 
-- [ ] **TREE-01**: User can toggle between flat file list and directory tree view in staging panel
-- [ ] **TREE-02**: User can toggle between flat file list and directory tree view in commit diffs
-- [ ] **TREE-03**: User can toggle between flat file list and directory tree view in merge editor
+- [x] **TREE-01**: User can toggle between flat file list and directory tree view in staging panel
+- [x] **TREE-02**: User can toggle between flat file list and directory tree view in commit diffs
+- [x] **TREE-03**: User can toggle between flat file list and directory tree view in merge editor
 - [x] **TREE-04**: Directory nodes expand/collapse with chevron indicators
 - [x] **TREE-05**: Expand/collapse state is preserved across status refreshes (staging a file doesn't collapse the tree)
 - [x] **TREE-06**: User can navigate the tree with arrow keys (up/down to move, left/right to collapse/expand)
@@ -77,9 +77,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TAB-06 | Phase 45 | Complete |
 | TAB-07 | Phase 45 | Complete |
 | TREE-07 | Phase 46 | Complete |
-| TREE-01 | Phase 47 | Pending |
-| TREE-02 | Phase 47 | Pending |
-| TREE-03 | Phase 47 | Pending |
+| TREE-01 | Phase 47 | Complete |
+| TREE-02 | Phase 47 | Complete |
+| TREE-03 | Phase 47 | Complete |
 | TREE-04 | Phase 47 | Complete |
 | TREE-05 | Phase 47 | Complete |
 | TREE-06 | Phase 47 | Complete |

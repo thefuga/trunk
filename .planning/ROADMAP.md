@@ -188,7 +188,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 47-01-PLAN.md — flattenTree TDD, DirectoryRow component, FileRow props, store persistence, CSS token
-- [ ] 47-02-PLAN.md — TreeFileList component, StagingPanel/CommitDetail/RepoView integration, toggle button, keyboard nav
+- [x] 47-02-PLAN.md — TreeFileList component, StagingPanel/CommitDetail/RepoView integration, toggle button, keyboard nav
 - [ ] 47-03-PLAN.md — Human verification of all TREE requirements
 **UI hint**: yes
 
@@ -224,7 +224,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 44. Backend State Scoping | v0.9 | 1/1 | Complete | 2026-03-23 |
 | 45. Frontend Tab Architecture | v0.9 | 3/3 | Complete    | 2026-03-24 |
 | 46. Tree View Data Layer | v0.9 | 0/1 | Complete    | 2026-03-24 |
-| 47. Tree View UI Integration | v0.9 | 1/3 | In Progress|  |
+| 47. Tree View UI Integration | v0.9 | 2/3 | In Progress|  |
 | 48. Polish & Differentiators | v0.9 | 0/? | Not started | - |
 
 ---

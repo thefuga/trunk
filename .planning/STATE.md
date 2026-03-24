@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: Multi-tab & Tree View
 status: Ready to execute
-stopped_at: Completed 47-01-PLAN.md
-last_updated: "2026-03-24T18:14:59.072Z"
+stopped_at: Completed 47-02-PLAN.md
+last_updated: "2026-03-24T18:21:50.861Z"
 last_activity: 2026-03-24
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-23 after v0.9 milestone started)
 ## Current Position
 
 Phase: 47 (tree-view-ui-integration) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Plan: 2 of 3
 | Phase 45 P03 | 5m | 2 tasks | 3 files |
 | Phase 46 P01 | 4m | 2 tasks | 2 files |
 | Phase 47 P01 | 3min | 2 tasks | 6 files |
+| Phase 47 P02 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Plan: 2 of 3
 - [Phase 47]: flattenTree uses recursive approach matching buildTree, producing FlatRow[] in one pass
 - [Phase 47]: findFocusIndex returns 0 (not -1) when path not found for safe array indexing
 - [Phase 47]: color-tree-focus reuses color-selected-row via CSS custom property reference
+- [Phase 47]: TreeFileList owns expanded Set and focusIndex per-instance for per-section state
+- [Phase 47]: CommitDetail uses DIFF_STATUS_MAP adapter to bridge FileDiff and FileStatus types for unified tree rendering
 
 ### Pending Todos
 
@@ -88,7 +91,7 @@ Plan: 2 of 3
 ## Session Continuity
 
 Last activity: 2026-03-24
-Last session: 2026-03-24T18:14:59.068Z
-Stopped at: Completed 47-01-PLAN.md
+Last session: 2026-03-24T18:21:50.857Z
+Stopped at: Completed 47-02-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 47
