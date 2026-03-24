@@ -488,6 +488,12 @@
             )
 
             resizeObserver = new ResizeObserver(() => {
+                // Always update height when container resizes — even before initialized.
+                // Tabs mounted under display:none get 0 height; when they become visible
+                // the ResizeObserver fires and we must capture the real height.
+                const h = heightManager.container?.getBoundingClientRect().height ?? 0
+                if (Number.isFinite(h) && h > 0) height = h
+
                 if (!heightManager.initialized) return
                 updateHeightAndScroll(true)
             })
