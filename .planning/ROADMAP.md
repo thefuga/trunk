@@ -127,7 +127,7 @@ Full details: [milestones/v0.8-ROADMAP.md](milestones/v0.8-ROADMAP.md)
 **Milestone Goal:** Enable working with multiple repositories via tabs and browsing files as directory trees instead of flat lists.
 
 - [x] **Phase 44: Backend State Scoping** — Make RunningOp per-repo so tabs can run concurrent remote operations (completed 2026-03-23)
-- [ ] **Phase 45: Frontend Tab Architecture** — Extract RepoView from App.svelte, add tab state management, per-repo context, tab bar, shortcuts, persistence, dirty indicator
+- [x] **Phase 45: Frontend Tab Architecture** — Extract RepoView from App.svelte, add tab state management, per-repo context, tab bar, shortcuts, persistence, dirty indicator (completed 2026-03-24)
 - [ ] **Phase 46: Tree View Data Layer** — Build and test the pure buildTree utility with path compression and sorting
 - [ ] **Phase 47: Tree View UI Integration** — Wire tree view into staging panel, commit diffs, and merge editor with expand/collapse, keyboard navigation, and state preservation
 - [ ] **Phase 48: Polish & Differentiators** — Tab context menu, middle-click close, duplicate detection, directory staging, count badges, Expand All/Collapse All
@@ -160,7 +160,7 @@ Plans:
 Plans:
 - [x] 45-01-PLAN.md — Type contracts, factory functions, tab persistence helpers, unit tests
 - [x] 45-02-PLAN.md — RepoView extraction, App.svelte tab manager, component prop threading
-- [ ] 45-03-PLAN.md — TabBar rewrite, dirty detection, human verification
+- [x] 45-03-PLAN.md — TabBar rewrite, dirty detection, human verification
 **UI hint**: yes
 
 ### Phase 46: Tree View Data Layer
@@ -216,7 +216,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48
 | 32-36 | v0.7 | 8/8 | Complete | 2026-03-19 |
 | 37-43 | v0.8 | 19/19 | Complete | 2026-03-23 |
 | 44. Backend State Scoping | v0.9 | 1/1 | Complete | 2026-03-23 |
-| 45. Frontend Tab Architecture | v0.9 | 2/3 | In Progress|  |
+| 45. Frontend Tab Architecture | v0.9 | 3/3 | Complete   | 2026-03-24 |
 | 46. Tree View Data Layer | v0.9 | 0/? | Not started | - |
 | 47. Tree View UI Integration | v0.9 | 0/? | Not started | - |
 | 48. Polish & Differentiators | v0.9 | 0/? | Not started | - |

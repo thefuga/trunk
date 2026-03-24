@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: Multi-tab & Tree View
-status: Ready to execute
-stopped_at: Completed 45-02-PLAN.md
-last_updated: "2026-03-24T03:52:07.383Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 45-03-PLAN.md
+last_updated: "2026-03-24T04:01:18.255Z"
 last_activity: 2026-03-24
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -38,6 +38,7 @@ Plan: 3 of 3
 | Phase 44 P01 | 8m | 2 tasks | 4 files |
 | Phase 45 P01 | 4m | 2 tasks | 7 files |
 | Phase 45 P02 | 7m | 2 tasks | 7 files |
+| Phase 45 P03 | 5m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -54,6 +55,8 @@ Plan: 3 of 3
 - [Phase 45]: App.svelte owns per-tab state creation via getOrCreateTabState; RepoView receives as props, never creates its own
 - [Phase 45]: Keep-alive rendering uses display:contents/none for zero-cost hidden tabs per D-08
 - [Phase 45]: StagingPanel threads clearRedoStack prop to CommitForm (prop chain for per-tab state)
+- [Phase 45]: TabBar uses div[role=tab] instead of nested buttons for HTML validation (button-in-button forbidden)
+- [Phase 45]: Dirty detection via repo-changed watcher (no polling) with staged+unstaged>0 threshold and initial check on restore
 
 ### Pending Todos
 
@@ -78,7 +81,7 @@ Plan: 3 of 3
 ## Session Continuity
 
 Last activity: 2026-03-24
-Last session: 2026-03-24T03:52:07.380Z
-Stopped at: Completed 45-02-PLAN.md
+Last session: 2026-03-24T04:01:18.251Z
+Stopped at: Completed 45-03-PLAN.md
 Resume file: None
 Next action: /gsd:discuss-phase 45
