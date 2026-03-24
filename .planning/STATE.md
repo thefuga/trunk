@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: Multi-tab & Tree View
-status: Ready to discuss/plan
-stopped_at: Phase 45 context gathered
-last_updated: "2026-03-24T01:04:16.747Z"
-last_activity: 2026-03-23 — Phase 44 complete (1/1 plans, verified)
+status: Phase 45 executing — Plan 01 complete
+stopped_at: Completed 45-01-PLAN.md
+last_updated: "2026-03-24T03:36:34.000Z"
+last_activity: 2026-03-24 — Phase 45 Plan 01 complete (tab types, factories, persistence)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
+  total_plans: 4
+  completed_plans: 2
+  percent: 25
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-23 after v0.9 milestone started)
 
 ## Current Position
 
-Phase: 45 of 48 (Frontend Tab Architecture) — next up
-Plan: —
-Status: Ready to discuss/plan
-Last activity: 2026-03-23 — Phase 44 complete (1/1 plans, verified)
+Phase: 45 of 48 (Frontend Tab Architecture) — executing
+Plan: 2 of 3
+Status: Phase 45 executing — Plan 01 complete
+Last activity: 2026-03-24 — Phase 45 Plan 01 complete (tab types, factories, persistence)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [██░░░░░░░░] 20%
 | Commits | 155 | 76 | 88 | ~30 | 111 | ~129 | -- | 61 |
 | Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 |
 | Phase 44 P01 | 8m | 2 tasks | 4 files |
+| Phase 45 P01 | 4m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -52,6 +53,8 @@ Progress: [██░░░░░░░░] 20%
 - [Phase 44]: RunningOp uses HashMap<String, u32> keyed by repo path for per-repo remote op isolation
 - [Phase 44]: force_close_repo cancels running op via SIGTERM before cleaning state (D-03)
 - [Phase 44]: close_repo intentionally does NOT touch RunningOp (D-02 graceful behavior)
+- [Phase 45]: $state() must be assigned to variable declaration — factory uses const state = $state({...}); return state
+- [Phase 45]: Backward-compat singleton aliases call factory at module scope; consumers compile without changes until Plan 02
 
 ### Pending Todos
 
@@ -75,8 +78,8 @@ Progress: [██░░░░░░░░] 20%
 
 ## Session Continuity
 
-Last activity: 2026-03-23
-Last session: 2026-03-24T01:04:16.744Z
-Stopped at: Phase 45 context gathered
-Resume file: .planning/phases/45-frontend-tab-architecture/45-CONTEXT.md
-Next action: /gsd:discuss-phase 45
+Last activity: 2026-03-24
+Last session: 2026-03-24T03:36:34.000Z
+Stopped at: Completed 45-01-PLAN.md
+Resume file: None
+Next action: Execute 45-02-PLAN.md
