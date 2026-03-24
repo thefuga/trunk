@@ -189,9 +189,9 @@
     style="
       width: 100%;
       height: 28px;
-      background: var(--color-accent);
-      color: white;
-      border: none;
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid var(--color-success-border);
       border-radius: 4px;
       font-size: 12px;
       cursor: pointer;

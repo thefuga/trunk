@@ -507,9 +507,9 @@
           <button
             onclick={(e) => { e.stopPropagation(); markAllResolved(); }}
             style="
-              background: var(--color-btn-unstage-bg);
-              color: var(--color-btn-unstage);
-              border: 1px solid var(--color-btn-unstage-border);
+              background: var(--color-warning-bg);
+              color: var(--color-warning);
+              border: 1px solid var(--color-warning-border);
               border-radius: 4px;
               font-size: 10px;
               font-weight: 600;
@@ -573,10 +573,10 @@
             <button
               onclick={(e) => { e.stopPropagation(); markAllResolved(); }}
               style="
-                background: var(--color-btn-stage-bg);
-                color: var(--color-btn-stage);
+                background: var(--color-success-bg);
+                color: var(--color-success);
                 font-size: 11px;
-                border: 1px solid var(--color-btn-stage-border);
+                border: 1px solid var(--color-success-border);
                 border-radius: 4px;
                 cursor: pointer;
                 padding: 2px 8px;
@@ -595,10 +595,10 @@
             <button
               onclick={(e) => { e.stopPropagation(); handleDiscardAll(); }}
               style="
-                background: var(--color-btn-discard-bg);
-                color: var(--color-btn-discard);
+                background: var(--color-danger-bg);
+                color: var(--color-danger);
                 font-size: 11px;
-                border: 1px solid var(--color-btn-discard-border);
+                border: 1px solid var(--color-danger-border);
                 border-radius: 4px;
                 cursor: pointer;
                 padding: 2px 8px;
@@ -611,10 +611,10 @@
             <button
               onclick={(e) => { e.stopPropagation(); stageAll(); }}
               style="
-                background: var(--color-btn-stage-bg);
-                color: var(--color-btn-stage);
+                background: var(--color-success-bg);
+                color: var(--color-success);
                 font-size: 11px;
-                border: 1px solid var(--color-btn-stage-border);
+                border: 1px solid var(--color-success-border);
                 border-radius: 4px;
                 cursor: pointer;
                 padding: 2px 8px;
@@ -692,10 +692,10 @@
           <button
             onclick={(e) => { e.stopPropagation(); unstageAll(); }}
             style="
-              background: var(--color-btn-unstage-bg);
-              color: var(--color-btn-unstage);
+              background: var(--color-warning-bg);
+              color: var(--color-warning);
               font-size: 11px;
-              border: 1px solid var(--color-btn-unstage-border);
+              border: 1px solid var(--color-warning-border);
               border-radius: 4px;
               cursor: pointer;
               padding: 2px 8px;
@@ -796,9 +796,9 @@
           style="
             flex: 3;
             height: 34px;
-            background: var(--color-btn-continue-bg);
-            color: var(--color-btn-continue);
-            border: 1px solid var(--color-btn-continue-border);
+            background: var(--color-success-bg);
+            color: var(--color-success);
+            border: 1px solid var(--color-success-border);
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
@@ -814,9 +814,9 @@
           style="
             flex: 1;
             height: 34px;
-            background: var(--color-btn-skip-bg);
-            color: var(--color-btn-skip);
-            border: 1px solid var(--color-btn-skip-border);
+            background: var(--color-warning-bg);
+            color: var(--color-warning);
+            border: 1px solid var(--color-warning-border);
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
@@ -832,9 +832,9 @@
           style="
             flex: 2;
             height: 34px;
-            background: var(--color-btn-abort-bg);
-            color: var(--color-btn-abort);
-            border: 1px solid var(--color-btn-abort-border);
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+            border: 1px solid var(--color-danger-border);
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
@@ -896,9 +896,9 @@
         style="
           flex: 3;
           height: 34px;
-          background: var(--color-btn-continue-bg);
-          color: var(--color-btn-continue);
-          border: 1px solid var(--color-btn-continue-border);
+          background: var(--color-success-bg);
+          color: var(--color-success);
+          border: 1px solid var(--color-success-border);
           border-radius: 4px;
           font-size: 12px;
           cursor: {allResolved && !mergeLoading ? 'pointer' : 'not-allowed'};
@@ -913,9 +913,9 @@
         style="
           flex: 2;
           height: 34px;
-          background: var(--color-btn-abort-bg);
-          color: var(--color-btn-abort);
-          border: 1px solid var(--color-btn-abort-border);
+          background: var(--color-danger-bg);
+          color: var(--color-danger);
+          border: 1px solid var(--color-danger-border);
           border-radius: 4px;
           font-size: 12px;
           cursor: {mergeLoading ? 'not-allowed' : 'pointer'};

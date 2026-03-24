@@ -85,10 +85,10 @@
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--color-border);
-  background: {isMerge ? 'var(--color-banner-merge-bg)' : 'var(--color-banner-rebase-bg)'};
-  border-left: 3px solid {isMerge ? 'var(--color-banner-merge-border)' : 'var(--color-banner-rebase-border)'};
+  background: {isMerge ? 'var(--color-banner-warning-bg)' : 'var(--color-banner-info-bg)'};
+  border-left: 3px solid {isMerge ? 'var(--color-banner-warning-border)' : 'var(--color-banner-info-border)'};
 ">
-  <span style="color: {isMerge ? 'var(--color-banner-merge-border)' : 'var(--color-banner-rebase-border)'}; display: inline-flex; align-items: center; flex-shrink: 0;">
+  <span style="color: {isMerge ? 'var(--color-banner-warning-border)' : 'var(--color-banner-info-border)'}; display: inline-flex; align-items: center; flex-shrink: 0;">
     {#if isMerge}<GitMerge size={14} />{:else}<GitBranch size={14} />{/if}
   </span>
   <div style="font-size: 12px; color: var(--color-text); flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
@@ -132,10 +132,10 @@
         onclick={handleContinue}
         disabled={loading}
         style="
-          background: var(--color-btn-continue-bg);
-          color: var(--color-btn-continue);
+          background: var(--color-success-bg);
+          color: var(--color-success);
           font-size: 11px;
-          border: 1px solid var(--color-btn-continue-border);
+          border: 1px solid var(--color-success-border);
           border-radius: 4px;
           cursor: pointer;
           padding: 2px 8px;
@@ -146,10 +146,10 @@
         onclick={handleSkip}
         disabled={loading}
         style="
-          background: var(--color-btn-skip-bg);
-          color: var(--color-btn-skip);
+          background: var(--color-warning-bg);
+          color: var(--color-warning);
           font-size: 11px;
-          border: 1px solid var(--color-btn-skip-border);
+          border: 1px solid var(--color-warning-border);
           border-radius: 4px;
           cursor: pointer;
           padding: 2px 8px;
@@ -160,10 +160,10 @@
         onclick={handleAbort}
         disabled={loading}
         style="
-          background: var(--color-btn-abort-bg);
-          color: var(--color-btn-abort);
+          background: var(--color-danger-bg);
+          color: var(--color-danger);
           font-size: 11px;
-          border: 1px solid var(--color-btn-abort-border);
+          border: 1px solid var(--color-danger-border);
           border-radius: 4px;
           cursor: pointer;
           padding: 2px 8px;

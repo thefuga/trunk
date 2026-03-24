@@ -327,7 +327,7 @@
     "
   >
     {#if isHunkAllTaken(side, row.regionIdx)}
-      <Check size={14} style="color: var(--color-merge-taken-check);" />
+      <Check size={14} style="color: var(--color-success);" />
     {:else}
       <span style="width: 14px; height: 14px; display: inline-block;"></span>
     {/if}
@@ -364,10 +364,10 @@
       justify-content: center;
     ">
       {#if taken}
-        <span class="icon-taken"><Check size={14} style="color: var(--color-merge-taken-check);" /></span>
-        <span class="icon-remove"><CircleX size={14} style="color: var(--color-merge-remove-icon);" /></span>
+        <span class="icon-taken"><Check size={14} style="color: var(--color-success);" /></span>
+        <span class="icon-remove"><CircleX size={14} style="color: var(--color-danger);" /></span>
       {:else}
-        <span class="icon-add"><Check size={14} style="color: var(--color-merge-taken-check);" /></span>
+        <span class="icon-add"><Check size={14} style="color: var(--color-success);" /></span>
       {/if}
     </span>
     <span style="
@@ -461,8 +461,8 @@
         <!-- Header -->
         <div style="
           height: 28px;
-          background: var(--color-merge-current-header);
-          border-bottom: 1px solid var(--color-merge-current-border);
+          background: var(--color-accent-bg);
+          border-bottom: 1px solid var(--color-accent-border);
           display: flex;
           align-items: center;
           padding: 0 8px;
@@ -474,10 +474,10 @@
           <button
             onclick={handleTakeAllCurrent}
             style="
-              background: var(--color-btn-continue-bg);
-              border: 1px solid var(--color-btn-continue-border);
+              background: var(--color-success-bg);
+              border: 1px solid var(--color-success-border);
               border-radius: 3px;
-              color: var(--color-btn-continue);
+              color: var(--color-success);
               font-size: 11px;
               font-family: var(--font-sans, sans-serif);
               padding: 2px 8px;
@@ -522,8 +522,8 @@
         <!-- Header -->
         <div style="
           height: 28px;
-          background: var(--color-merge-incoming-header);
-          border-bottom: 1px solid var(--color-merge-incoming-border);
+          background: var(--color-success-bg);
+          border-bottom: 1px solid var(--color-success);
           display: flex;
           align-items: center;
           padding: 0 8px;
@@ -535,10 +535,10 @@
           <button
             onclick={handleTakeAllIncoming}
             style="
-              background: var(--color-btn-continue-bg);
-              border: 1px solid var(--color-btn-continue-border);
+              background: var(--color-success-bg);
+              border: 1px solid var(--color-success-border);
               border-radius: 3px;
-              color: var(--color-btn-continue);
+              color: var(--color-success);
               font-size: 11px;
               font-family: var(--font-sans, sans-serif);
               padding: 2px 8px;
@@ -583,8 +583,8 @@
       <!-- Header: 3-column grid so the nav naturally centers -->
       <div style="
         height: 28px;
-        background: var(--color-merge-output-header);
-        border-bottom: 1px solid var(--color-merge-output-border);
+        background: var(--color-muted-bg);
+        border-bottom: 1px solid var(--color-text-muted);
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
@@ -656,10 +656,10 @@
             onclick={handleSaveAndResolve}
             disabled={saving}
             style="
-              background: var(--color-btn-continue-bg);
-              border: 1px solid var(--color-btn-continue-border);
+              background: var(--color-success-bg);
+              border: 1px solid var(--color-success-border);
               border-radius: 3px;
-              color: var(--color-btn-continue);
+              color: var(--color-success);
               font-size: 11px;
               font-family: var(--font-sans, sans-serif);
               padding: 2px 8px;

@@ -19,60 +19,37 @@
   --color-diff-add-bg-selected: rgba(74, 222, 128, 0.25);
   --color-diff-delete-bg-selected: rgba(248, 113, 113, 0.25);
 
-  /* Hunk action button colors */
-  --color-btn-stage: #4ade80;
-  --color-btn-stage-bg: rgba(74, 222, 128, 0.15);
-  --color-btn-stage-border: rgba(74, 222, 128, 0.3);
-  --color-btn-discard: #f87171;
-  --color-btn-discard-bg: rgba(248, 113, 113, 0.15);
-  --color-btn-discard-border: rgba(248, 113, 113, 0.3);
-  --color-btn-unstage: #fbbf24;
-  --color-btn-unstage-bg: rgba(251, 191, 36, 0.15);
-  --color-btn-unstage-border: rgba(251, 191, 36, 0.3);
+  /* Semantic status colors */
+  --color-success: #4ade80;
+  --color-success-bg: rgba(74, 222, 128, 0.15);
+  --color-success-border: rgba(74, 222, 128, 0.3);
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(248, 113, 113, 0.15);
+  --color-danger-border: rgba(248, 113, 113, 0.3);
+  --color-danger-bg-subtle: rgba(248, 113, 113, 0.08);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.15);
+  --color-warning-border: rgba(251, 191, 36, 0.3);
+  --color-accent-alt: #d2a8ff;
+  --color-accent-bg: rgba(56, 139, 253, 0.15);
+  --color-accent-border: #58a6ff;
+  --color-muted-bg: rgba(139, 148, 158, 0.1);
 
-  /* Operation banner colors */
-  --color-banner-merge-bg: rgba(250, 204, 21, 0.08);
-  --color-banner-merge-border: #facc15;
-  --color-banner-rebase-bg: rgba(96, 165, 250, 0.08);
-  --color-banner-rebase-border: #60a5fa;
+  /* Banner colors */
+  --color-banner-warning-bg: rgba(250, 204, 21, 0.08);
+  --color-banner-warning-border: #facc15;
+  --color-banner-info-bg: rgba(96, 165, 250, 0.08);
+  --color-banner-info-border: #60a5fa;
 
-  /* Operation banner button colors */
-  --color-btn-continue: #4ade80;
-  --color-btn-continue-bg: rgba(74, 222, 128, 0.15);
-  --color-btn-continue-border: rgba(74, 222, 128, 0.3);
-  --color-btn-abort: #f87171;
-  --color-btn-abort-bg: rgba(248, 113, 113, 0.15);
-  --color-btn-abort-border: rgba(248, 113, 113, 0.3);
-  --color-btn-skip: #fbbf24;
-  --color-btn-skip-bg: rgba(251, 191, 36, 0.15);
-  --color-btn-skip-border: rgba(251, 191, 36, 0.3);
-
-  /* Conflict section warning badge */
+  /* Badge colors */
   --color-badge-warning: #facc15;
   --color-badge-warning-bg: rgba(250, 204, 21, 0.15);
-
-  /* Merge editor panel headers */
-  --color-merge-current-header: rgba(56, 139, 253, 0.15);
-  --color-merge-current-border: #58a6ff;
-  --color-merge-incoming-header: rgba(74, 222, 128, 0.15);
-  --color-merge-incoming-border: #4ade80;
-  --color-merge-output-header: rgba(139, 148, 158, 0.1);
-  --color-merge-output-border: #8b949e;
-  --color-merge-taken-check: #4ade80;
-  --color-merge-remove-icon: #f87171;
-  --color-merge-dimmed: 0.5;
 
   /* Hunk highlight flash */
   --color-hunk-flash: rgba(96, 165, 250, 0.3);
 
-  /* Rebase editor action colors */
-  --color-rebase-pick: #4ade80;
-  --color-rebase-reword: #fbbf24;
-  --color-rebase-squash: #d2a8ff;
-  --color-rebase-drop: #f87171;
-  --color-rebase-drop-opacity: 0.4;
-  --color-rebase-error: #f87171;
-  --color-rebase-error-bg: rgba(248, 113, 113, 0.08);
+  /* Utility */
+  --opacity-dimmed: 0.4;
 
   /* Graph lane colors — vivid 8-color dark-theme palette, high contrast on #0d1117 */
   --lane-0: #58a6ff;

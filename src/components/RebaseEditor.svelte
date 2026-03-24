@@ -87,13 +87,13 @@
   function actionColor(action: string): string {
     switch (action) {
       case 'pick':
-        return 'var(--color-rebase-pick)';
+        return 'var(--color-success)';
       case 'reword':
-        return 'var(--color-rebase-reword)';
+        return 'var(--color-warning)';
       case 'squash':
-        return 'var(--color-rebase-squash)';
+        return 'var(--color-accent-alt)';
       case 'drop':
-        return 'var(--color-rebase-drop)';
+        return 'var(--color-danger)';
       default:
         return 'var(--color-text-muted)';
     }
@@ -709,21 +709,21 @@
   }
 
   .rebase-btn-cancel {
-    background: var(--color-btn-abort-bg);
-    border: 1px solid var(--color-btn-abort-border);
-    color: var(--color-btn-abort);
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger);
   }
 
   .rebase-btn-start {
-    background: var(--color-btn-continue-bg);
-    border: 1px solid var(--color-btn-continue-border);
-    color: var(--color-btn-continue);
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success-border);
+    color: var(--color-success);
   }
 
   .rebase-btn-confirm {
-    background: var(--color-btn-continue-bg);
-    border: 1px solid var(--color-btn-continue-border);
-    color: var(--color-btn-continue);
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success-border);
+    color: var(--color-success);
   }
 
   /* --- Column header --- */
@@ -788,16 +788,16 @@
   }
 
   .rebase-row-drop {
-    opacity: var(--color-rebase-drop-opacity);
+    opacity: var(--opacity-dimmed);
   }
 
   .rebase-row-squash {
     padding-left: 16px;
-    border-left: 2px solid var(--color-rebase-squash);
+    border-left: 2px solid var(--color-accent-alt);
   }
 
   .rebase-row-squash.rebase-row-focused {
-    border-left: 2px solid var(--color-rebase-squash);
+    border-left: 2px solid var(--color-accent-alt);
   }
 
   .rebase-squash-arrow {
@@ -806,7 +806,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 12px;
-    color: var(--color-rebase-squash);
+    color: var(--color-accent-alt);
     z-index: 1;
     pointer-events: none;
   }
@@ -947,9 +947,9 @@
   /* --- Validation error --- */
 
   .rebase-validation-error {
-    background: var(--color-rebase-error-bg);
+    background: var(--color-danger-bg-subtle);
     padding: 4px 12px;
     font-size: 11px;
-    color: var(--color-rebase-error);
+    color: var(--color-danger);
   }
 </style>

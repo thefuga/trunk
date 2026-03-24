@@ -306,10 +306,10 @@
       <button
         disabled={hunkOperationInFlight}
         style="
-          background: var(--color-btn-stage-bg);
-          border: 1px solid var(--color-btn-stage-border);
+          background: var(--color-success-bg);
+          border: 1px solid var(--color-success-border);
           border-radius: 3px;
-          color: var(--color-btn-stage);
+          color: var(--color-success);
           font-size: 11px;
           font-family: var(--font-sans, sans-serif);
           padding: 2px 8px;
@@ -326,10 +326,10 @@
       <button
         disabled={hunkOperationInFlight}
         style="
-          background: var(--color-btn-unstage-bg);
-          border: 1px solid var(--color-btn-unstage-border);
+          background: var(--color-warning-bg);
+          border: 1px solid var(--color-warning-border);
           border-radius: 3px;
-          color: var(--color-btn-unstage);
+          color: var(--color-warning);
           font-size: 11px;
           font-family: var(--font-sans, sans-serif);
           padding: 2px 8px;
@@ -438,10 +438,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-discard-bg);
-                    border: 1px solid var(--color-btn-discard-border);
+                    background: var(--color-danger-bg);
+                    border: 1px solid var(--color-danger-border);
                     border-radius: 3px;
-                    color: var(--color-btn-discard);
+                    color: var(--color-danger);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
@@ -456,10 +456,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-stage-bg);
-                    border: 1px solid var(--color-btn-stage-border);
+                    background: var(--color-success-bg);
+                    border: 1px solid var(--color-success-border);
                     border-radius: 3px;
-                    color: var(--color-btn-stage);
+                    color: var(--color-success);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
@@ -475,10 +475,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-discard-bg);
-                    border: 1px solid var(--color-btn-discard-border);
+                    background: var(--color-danger-bg);
+                    border: 1px solid var(--color-danger-border);
                     border-radius: 3px;
-                    color: var(--color-btn-discard);
+                    color: var(--color-danger);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
@@ -493,10 +493,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-stage-bg);
-                    border: 1px solid var(--color-btn-stage-border);
+                    background: var(--color-success-bg);
+                    border: 1px solid var(--color-success-border);
                     border-radius: 3px;
-                    color: var(--color-btn-stage);
+                    color: var(--color-success);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
@@ -516,10 +516,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-unstage-bg);
-                    border: 1px solid var(--color-btn-unstage-border);
+                    background: var(--color-warning-bg);
+                    border: 1px solid var(--color-warning-border);
                     border-radius: 3px;
-                    color: var(--color-btn-unstage);
+                    color: var(--color-warning);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
@@ -535,10 +535,10 @@
                 <button
                   disabled={hunkOperationInFlight}
                   style="
-                    background: var(--color-btn-unstage-bg);
-                    border: 1px solid var(--color-btn-unstage-border);
+                    background: var(--color-warning-bg);
+                    border: 1px solid var(--color-warning-border);
                     border-radius: 3px;
-                    color: var(--color-btn-unstage);
+                    color: var(--color-warning);
                     font-size: 11px;
                     font-family: var(--font-sans, sans-serif);
                     padding: 2px 8px;
