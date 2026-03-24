@@ -128,10 +128,11 @@
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   function persistTabs() {
+    // Active tab ID saved immediately (no debounce) so it survives Cmd+Q
+    setActiveTabId(activeTabId);
     if (persistTimer) clearTimeout(persistTimer);
     persistTimer = setTimeout(async () => {
       await setOpenTabs(tabs.map(t => ({ id: t.id, repoPath: t.repoPath, repoName: t.repoName })));
-      await setActiveTabId(activeTabId);
     }, 500);
   }
 
@@ -287,6 +288,16 @@
     }
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
+  });
+
+  // Trigger resize recalculation when switching tabs so virtual lists
+  // that were mounted under display:none get correct viewport dimensions.
+  $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    activeTabId; // track
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
   });
 
   // Dirty detection: listen for repo-changed events and update tab.dirty for ALL tabs (TAB-07, D-04, D-05)
