@@ -41,11 +41,12 @@ created: 2026-03-23
 | 45-01-01 | 01 | 1 | TAB-05 | unit | `bun run test -- src/lib/remote-state.svelte.test.ts` | ❌ W0 | ⬜ pending |
 | 45-01-02 | 01 | 1 | TAB-05 | unit | `bun run test -- src/lib/undo-redo.svelte.test.ts` | ❌ W0 | ⬜ pending |
 | 45-01-03 | 01 | 1 | TAB-06 | unit | `bun run test -- src/lib/store.test.ts` | ❌ W0 | ⬜ pending |
-| 45-01-04 | 01 | 1 | TAB-07 | unit | `bun run test -- src/lib/tab-dirty.test.ts` | ❌ W0 | ⬜ pending |
 | 45-XX-XX | XX | X | TAB-01 | manual-only | N/A (UI rendering) | N/A | ⬜ pending |
 | 45-XX-XX | XX | X | TAB-02 | manual-only | N/A (keyboard + UI) | N/A | ⬜ pending |
 | 45-XX-XX | XX | X | TAB-03 | manual-only | N/A (keyboard + UI) | N/A | ⬜ pending |
 | 45-XX-XX | XX | X | TAB-04 | manual-only | N/A (keyboard + UI) | N/A | ⬜ pending |
+
+*Removed 45-01-04 (src/lib/tab-dirty.test.ts): dirty detection is an inline boolean expression (`staged + unstaged > 0`) in App.svelte's repo-changed listener, not an extracted pure function. A dedicated test file would be testing framework wiring, not logic. TAB-07 is verified via manual testing in Plan 03's checkpoint.*
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
