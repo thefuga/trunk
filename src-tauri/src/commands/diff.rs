@@ -99,6 +99,7 @@ pub fn diff_unstaged_inner(
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
     opts.include_untracked(true);
+    opts.recurse_untracked_dirs(true);
     opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
     walk_diff_into_file_diffs(diff)
@@ -401,6 +402,28 @@ mod tests {
         assert_eq!(fd.path, "new_file.txt");
         assert!(!fd.hunks.is_empty(), "expected hunks with content for untracked file");
         assert!(!fd.hunks[0].lines.is_empty(), "expected lines in hunk for untracked file");
+    }
+
+    #[test]
+    fn diff_unstaged_untracked_file_in_subdirectory() {
+        let dir = make_test_repo();
+        let path = dir.path().to_string_lossy().to_string();
+        let state_map = make_state_map(dir.path());
+
+        // Create an untracked file inside a new subdirectory
+        std::fs::create_dir_all(dir.path().join("docs")).unwrap();
+        std::fs::write(dir.path().join("docs/notes.md"), "hello\nworld\n").unwrap();
+
+        let result = super::diff_unstaged_inner(&path, "docs/notes.md", &state_map);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+
+        let file_diffs = result.unwrap();
+        assert!(!file_diffs.is_empty(), "expected non-empty file_diffs for untracked file in subdir");
+
+        let fd = &file_diffs[0];
+        assert_eq!(fd.path, "docs/notes.md");
+        assert!(!fd.hunks.is_empty(), "expected hunks with content");
+        assert!(!fd.hunks[0].lines.is_empty(), "expected lines in hunk");
     }
 
     // Test 9: get_commit_detail_committer_fields

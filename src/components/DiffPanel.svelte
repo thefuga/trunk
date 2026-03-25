@@ -11,9 +11,10 @@
     diffKind?: 'unstaged' | 'staged' | 'commit';
     repoPath?: string;
     onhunkaction?: (filePath: string) => Promise<void>;
+    loading?: boolean;
   }
 
-  let { fileDiffs, commitDetail, selectedPath = null, onclose, diffKind = 'commit', repoPath = '', onhunkaction }: Props = $props();
+  let { fileDiffs, commitDetail, selectedPath = null, onclose, diffKind = 'commit', repoPath = '', onhunkaction, loading = false }: Props = $props();
 
   let hunkOperationInFlight = $state(false);
   let focusedHunkIndex = $state(0);
@@ -364,7 +365,7 @@
   <div style="flex: 1; overflow-y: auto; min-height: 0;">
 
   <!-- Empty state -->
-  {#if fileDiffs.length === 0 && commitDetail === null}
+  {#if fileDiffs.length === 0 && commitDetail === null && !loading}
     <div style="
       flex: 1;
       display: flex;

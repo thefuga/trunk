@@ -6,7 +6,7 @@
   import MergeEditor from './MergeEditor.svelte';
   import RebaseEditor from './RebaseEditor.svelte';
   import CommitDetail from './CommitDetail.svelte';
-  import { safeInvoke } from '../lib/invoke.js';
+  import { safeInvoke, type TrunkError } from '../lib/invoke.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { setLeftPaneWidth, setLeftPaneCollapsed, setRightPaneWidth, setRightPaneCollapsed, getTreeViewEnabled, setTreeViewEnabled } from '../lib/store.js';
   import type { RemoteState } from '../lib/remote-state.svelte.js';
@@ -60,6 +60,7 @@
   // Staging file selection (from StagingPanel)
   let selectedFile = $state<{ path: string; kind: 'unstaged' | 'staged' | 'conflicted' } | null>(null);
   let stagingDiffFiles = $state<FileDiff[]>([]);
+  let stagingDiffLoading = $state(false);
 
   // Commit selection (from CommitGraph)
   let selectedCommitOid = $state<string | null>(null);
@@ -119,6 +120,7 @@
   function clearStagingDiff() {
     selectedFile = null;
     stagingDiffFiles = [];
+    stagingDiffLoading = false;
   }
 
   function clearCommitFileDiff() {
@@ -174,11 +176,16 @@
       stagingDiffFiles = [];
       return;
     }
+    stagingDiffLoading = true;
     try {
       const command = kind === 'unstaged' ? 'diff_unstaged' : 'diff_staged';
       stagingDiffFiles = await safeInvoke<FileDiff[]>(command, { path: repoPath, filePath: path });
-    } catch {
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Failed to load diff', 'error');
       stagingDiffFiles = [];
+    } finally {
+      stagingDiffLoading = false;
     }
   }
 
@@ -541,6 +548,7 @@
         selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
         diffKind={selectedCommitFile ? 'commit' : (selectedFile?.kind === 'conflicted' ? 'commit' : selectedFile?.kind ?? 'commit')}
         {repoPath}
+        loading={stagingDiffLoading}
         onhunkaction={async (filePath) => {
           if (selectedFile) {
             await refetchFileDiff(filePath, selectedFile.kind);
