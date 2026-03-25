@@ -158,6 +158,29 @@
     }
   }
 
+  async function handleDiscardDirectory(dirPath: string) {
+    const files = (status?.unstaged ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await ask(
+      `Discard all changes in ${dirPath}/ (${files.length} file${files.length === 1 ? '' : 's'})? This cannot be undone.`,
+      { title: 'Discard Directory Changes', kind: 'warning' }
+    );
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(files.map(f => safeInvoke('discard_file', { path: repoPath, filePath: f.path })));
+      await loadStatus();
+      showToast(`Discarded ${files.length} files in ${dirPath}/`, 'success');
+    } catch (e) {
+      const err = e as TrunkError;
+      showToast(err.message ?? 'Discard failed', 'error');
+    }
+  }
+
   async function showUnstagedContextMenu(e: MouseEvent, filePath: string, fileStatus: FileStatusType) {
     const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
     const isUntracked = fileStatus === 'New';
@@ -177,6 +200,28 @@
     await menu.popup();
   }
 
+  async function showUnstagedDirContextMenu(e: MouseEvent, dirPath: string) {
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const files = (status?.unstaged ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({
+          text: `Stage All (${files.length})`,
+          action: () => { stageDirectory(dirPath); },
+        }),
+        await MenuItem.new({
+          text: `Discard All (${files.length})`,
+          action: () => { handleDiscardDirectory(dirPath).catch(() => {}); },
+        }),
+      ],
+    });
+    await menu.popup();
+  }
+
   async function showStagedContextMenu(e: MouseEvent, filePath: string) {
     const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
     const absPath = repoPath + '/' + filePath;
@@ -186,6 +231,24 @@
         await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
         await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({ text: 'Unstage File', action: () => { unstageFile(filePath); } }),
+      ],
+    });
+    await menu.popup();
+  }
+
+  async function showStagedDirContextMenu(e: MouseEvent, dirPath: string) {
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const files = (status?.staged ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({
+          text: `Unstage All (${files.length})`,
+          action: () => { unstageDirectory(dirPath); },
+        }),
       ],
     });
     await menu.popup();
@@ -214,6 +277,50 @@
         await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(filePath).catch(() => {}); } }),
         await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+      ],
+    });
+    await menu.popup();
+  }
+
+  async function resolveDirectory(dirPath: string) {
+    const files = (status?.conflicted ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+    for (const f of files) {
+      await safeInvoke('stage_file', { path: repoPath, filePath: f.path });
+    }
+    await loadStatus();
+  }
+
+  async function unresolveDirectory(dirPath: string) {
+    const files = (status?.staged ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+    for (const f of files) {
+      await safeInvoke('unstage_file', { path: repoPath, filePath: f.path });
+    }
+    await loadStatus();
+  }
+
+  async function showConflictedDirContextMenu(e: MouseEvent, dirPath: string) {
+    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const files = (status?.conflicted ?? []).filter(
+      f => f.path.startsWith(dirPath + '/') || f.path === dirPath
+    );
+    if (files.length === 0) return;
+
+    const menu = await Menu.new({
+      items: [
+        await MenuItem.new({
+          text: `Resolve All (${files.length})`,
+          action: () => { resolveDirectory(dirPath); },
+        }),
+        await MenuItem.new({
+          text: `Unresolve All (${files.length})`,
+          action: () => { unresolveDirectory(dirPath); },
+        }),
       ],
     });
     await menu.popup();
@@ -635,6 +742,7 @@
             onfileaction={() => {}}
             onfileclick={(path) => onfileselect?.(path, 'conflicted')}
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
+            ondirectorycontextmenu={(e, dirPath) => showConflictedDirContextMenu(e, dirPath)}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -747,6 +855,7 @@
             onfileclick={(path) => onfileselect?.(path, 'conflicted')}
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
             ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
+            ondirectorycontextmenu={(e, dirPath) => showConflictedDirContextMenu(e, dirPath)}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -760,6 +869,7 @@
             onfileclick={(path) => onfileselect?.(path, 'unstaged')}
             onfilecontextmenu={(e, path, file) => showUnstagedContextMenu(e, path, file.status)}
             ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
+            ondirectorycontextmenu={(e, dirPath) => showUnstagedDirContextMenu(e, dirPath)}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -827,6 +937,7 @@
           onfileclick={(path) => onfileselect?.(path, 'staged')}
           onfilecontextmenu={(e, path) => showStagedContextMenu(e, path)}
           ondirectoryaction={(dirPath) => unstageDirectory(dirPath)}
+          ondirectorycontextmenu={(e, dirPath) => showStagedDirContextMenu(e, dirPath)}
           {expandAllSignal}
           {collapseAllSignal}
         />
