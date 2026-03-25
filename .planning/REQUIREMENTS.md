@@ -17,11 +17,11 @@ Requirements for CI/CD & Releases milestone. Each maps to roadmap phases.
 
 ### Release
 
-- [ ] **REL-01**: Tag push (v*) triggers cross-platform builds for macOS ARM, macOS Intel, Linux x64, and Windows x64
-- [ ] **REL-02**: Release workflow produces .dmg (macOS), .AppImage (Linux), and .msi (Windows) installers
-- [ ] **REL-03**: Release workflow produces portable .tar.gz archives for each platform
-- [ ] **REL-04**: Build artifacts are uploaded as workflow artifacts for later attachment to a manually created GitHub Release
-- [ ] **REL-05**: Linux builds use ubuntu-22.04 for AppImage glibc compatibility
+- [x] **REL-01**: Tag push (v*) triggers cross-platform builds for macOS ARM, macOS Intel, Linux x64, and Windows x64
+- [x] **REL-02**: Release workflow produces .dmg (macOS), .AppImage (Linux), and .msi (Windows) installers
+- [x] **REL-03**: Release workflow produces portable .tar.gz archives for each platform
+- [x] **REL-04**: Build artifacts are uploaded as workflow artifacts for later attachment to a manually created GitHub Release
+- [x] **REL-05**: Linux builds use ubuntu-22.04 for AppImage glibc compatibility
 
 ### Distribution
 
@@ -56,11 +56,11 @@ Requirements for CI/CD & Releases milestone. Each maps to roadmap phases.
 | CI-03 | Phase 50 | Complete |
 | CI-04 | Phase 50 | Complete |
 | CI-05 | Phase 50 | Complete |
-| REL-01 | Phase 51 | Pending |
-| REL-02 | Phase 51 | Pending |
-| REL-03 | Phase 51 | Pending |
-| REL-04 | Phase 51 | Pending |
-| REL-05 | Phase 51 | Pending |
+| REL-01 | Phase 51 | Complete |
+| REL-02 | Phase 51 | Complete |
+| REL-03 | Phase 51 | Complete |
+| REL-04 | Phase 51 | Complete |
+| REL-05 | Phase 51 | Complete |
 | DIST-01 | Phase 52 | Pending |
 
 **Coverage:**

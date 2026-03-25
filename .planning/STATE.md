@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.10
 milestone_name: CI/CD & Releases
-status: Ready to plan
-stopped_at: Phase 51 context gathered
-last_updated: "2026-03-25T23:38:04.026Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 51-01-PLAN.md
+last_updated: "2026-03-25T23:54:20.448Z"
 last_activity: 2026-03-25
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25 after v0.10 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 50 — ci-quality-gates
+**Current focus:** Phase 51 — cross-platform-release-pipeline
 
 ## Current Position
 
-Phase: 51
-Plan: Not started
+Phase: 51 (cross-platform-release-pipeline) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Plan: Not started
 | Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 | 3 |
 | Phase 50 P01 | 20min | 2 tasks | 96 files |
 | Phase 50 P02 | 1min | 1 tasks | 1 files |
+| Phase 51 P01 | 2min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -52,6 +53,9 @@ Plan: Not started
 - [Phase 50]: Clippy alone satisfies both cargo check and cargo clippy requirements (superset)
 - [Phase 50]: rust-cache save-if restricted to main branch to prevent PR cache pollution
 - [Phase 50]: Two-gate CI pipeline: fast checks (biome, fmt, svelte-check) gate heavy checks (clippy, test, vitest)
+- [Phase 51]: macos-15-intel replaces deprecated macos-13 for Intel builds
+- [Phase 51]: Build-only tauri-action (no tagName/releaseName) for artifact-only workflow
+- [Phase 51]: rust-cache save-if on tag pushes for infrequent release builds
 
 ### Pending Todos
 
@@ -79,7 +83,7 @@ Plan: Not started
 ## Session Continuity
 
 Last activity: 2026-03-25
-Last session: 2026-03-25T23:38:04.021Z
-Stopped at: Phase 51 context gathered
-Resume file: .planning/phases/51-cross-platform-release-pipeline/51-CONTEXT.md
+Last session: 2026-03-25T23:54:20.444Z
+Stopped at: Completed 51-01-PLAN.md
+Resume file: None
 Next action: /gsd:plan-phase 50

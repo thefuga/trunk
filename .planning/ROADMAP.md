@@ -141,7 +141,7 @@ Full details: [milestones/v0.9-ROADMAP.md](milestones/v0.9-ROADMAP.md)
 **Milestone Goal:** Ship cross-platform release binaries and enforce code quality with automated CI.
 
 - [x] **Phase 50: CI Quality Gates** - Biome setup, Rust checks, frontend checks, and formatting enforcement on every push/PR (completed 2026-03-25)
-- [ ] **Phase 51: Cross-Platform Release Pipeline** - Tag-triggered builds producing installers and archives for macOS, Linux, and Windows
+- [x] **Phase 51: Cross-Platform Release Pipeline** - Tag-triggered builds producing installers and archives for macOS, Linux, and Windows (completed 2026-03-25)
 - [ ] **Phase 52: Homebrew Distribution** - Homebrew cask formula for macOS installation via `brew install --cask`
 
 ## Phase Details
@@ -171,9 +171,9 @@ Plans:
   3. The release workflow produces portable .tar.gz archives alongside the installers for each platform
   4. All build artifacts are uploaded as GitHub Actions workflow artifacts, downloadable from the workflow run page
   5. Linux builds run on ubuntu-22.04 (not ubuntu-latest) to ensure AppImage glibc compatibility with older distributions
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 51-01-PLAN.md -- Create release workflow with matrix builds, portable archives, and artifact upload
+- [x] 51-01-PLAN.md -- Create release workflow with matrix builds, portable archives, and artifact upload
 
 ### Phase 52: Homebrew Distribution
 **Goal**: macOS users can install Trunk via Homebrew with a single command
