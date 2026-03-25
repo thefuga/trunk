@@ -324,6 +324,45 @@
 
 ---
 
+## Milestone: v0.9 — Multi-tab & Tree View
+
+**Shipped:** 2026-03-25
+**Phases:** 6 | **Plans:** 13 | **Commits:** 88 | **Timeline:** 3 days
+
+### What Was Built
+- Per-repo backend state scoping: HashMap-keyed RunningOp for independent remote operations across tabs
+- Multi-tab frontend: factory-based per-tab state, keep-alive rendering, Cmd+T/W/1-9 shortcuts, dirty indicators, persisted tabs
+- TabBar with context menu, middle-click close, duplicate detection, drag-and-drop reorder via SortableJS
+- Trie-based flat-to-tree data layer with path compression, directory-before-file sorting, 19 TDD tests
+- Tree view UI: DirectoryRow/FileRow components, VS Code-style keyboard navigation, LazyStore-persisted toggle
+- Tree features: directory staging, file count badges, Expand All/Collapse All, directory right-click context menus
+
+### What Worked
+- **Factory function migration**: Per-tab state factories with backward-compat singleton aliases allowed incremental migration — consumers compiled without changes until Plan 02
+- **Keep-alive rendering (display:contents/none)**: Zero-cost hidden tabs — no remount overhead when switching, Rust cache makes initial mount fast anyway
+- **TDD for data layer**: buildTree (19 tests) and flattenTree (12 tests) were pure functions, perfect for TDD — caught path compression edge cases early
+- **Parallel plan execution**: Plans 49-01 and 49-02 executed in parallel with worktree isolation — no conflicts on independent file sets
+- **Existing patterns reuse**: SortableJS from RebaseEditor, dynamic Tauri menu imports from tab context menu, prefix-match directory staging — minimal new patterns needed
+
+### What Was Inefficient
+- **SortableJS {#key} bug**: Plan followed RebaseEditor's {#key items} pattern, but TabBar's `tabs` changes more frequently (dirty state), causing the Sortable to orphan. Required post-execution fix — the pattern wasn't wrong for RebaseEditor but was wrong for TabBar
+- **Missing new-tab deduplication**: Cmd+T could open unlimited empty tabs — caught in manual testing after execution, not in planning
+- **Missing copy-path in directory menus**: File context menus had copy path but directory menus didn't — inconsistency caught in manual testing
+
+### Patterns Established
+- **Per-tab state factory**: createRemoteState()/createUndoRedoState() returning $state objects — reusable for any per-instance state isolation
+- **Keep-alive tab rendering**: display:contents for active, display:none for hidden — App.svelte as tab orchestrator, RepoView as per-repo island
+- **Trie-based tree building**: O(n) flat-to-tree with path compression — generic utility, not coupled to any component
+- **Signal counter for expand/collapse**: Increment counter, child detects change via $effect — avoids prop drilling callbacks
+
+### Key Lessons
+1. **Don't blindly copy patterns across contexts**: {#key items} worked in RebaseEditor because `items` only changed on reorder; TabBar's `tabs` changes for many reasons (dirty state, add/close) — same pattern, different failure mode
+2. **Fastest milestone yet per plan**: 13 plans in 3 days — small focused phases with clear dependencies enabled rapid execution
+3. **Manual testing catches UX gaps that automated checks miss**: Both the new-tab dedup and copy-path inconsistency were UX issues, not type/logic errors
+4. **Parallel execution works well for independent file sets**: 49-01 (TabBar) and 49-02 (StagingPanel/TreeFileList/DirectoryRow) had zero overlap — worktree isolation unnecessary for file-disjoint plans
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -338,6 +377,7 @@
 | v0.6 | 2 | 6 | 16 | UI polish milestone — established patterns enabled fastest per-plan pace yet |
 | v0.7 | 2 | 5 | 8 | Feature milestone — TDD backend + clean UI separation, zero gap-closure requirements |
 | v0.8 | 4 | 7 | 19 | Most complex milestone — merge editor, interactive rebase, file-based IPC, audit-driven gap closure |
+| v0.9 | 3 | 6 | 13 | Fastest per-plan pace — multi-tab + tree view, parallel execution, zero gap closures needed |
 
 ### Top Lessons (Verified Across Milestones)
 

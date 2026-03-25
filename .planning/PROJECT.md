@@ -82,23 +82,19 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ Skip conflicting commit during rebase from inline UI — v0.8
 - ✓ Tech debt cleanup: removed orphaned diff_conflicted command, fixed rebaseBaseName lookup, cleaned dead imports — v0.8
 
+- ✓ Multi-tab: independent repo tabs with keep-alive rendering, Cmd+T/W/1-9 shortcuts, dirty indicators, persisted state — v0.9
+- ✓ Tab interactions: context menu (Close Others/All, Copy Path), middle-click close, duplicate detection, drag-and-drop reorder — v0.9
+- ✓ Tree view: directory tree toggle in staging panel, commit diffs, and merge editor with keyboard navigation — v0.9
+- ✓ Tree data layer: trie-based flat-to-tree with path compression, directory-before-file sorting — v0.9
+- ✓ Tree features: directory staging, file count badges, Expand All / Collapse All, directory right-click context menus — v0.9
+- ✓ Backend: per-repo remote operation isolation via HashMap-keyed RunningOp — v0.9
+
 ### Active
 
-## Current Milestone: v0.9 Multi-tab & Tree View
-
-**Goal:** Enable working with multiple repositories via tabs and browsing files as directory trees instead of flat lists.
-
-**Target features:**
-- Multiple repo tabs — each tab opens a different repository with independent state
-- Splash screen as new-tab page — opening a new tab shows the project picker / recent repos
-- ✓ Tree view toggle — switch between flat file list and directory tree view everywhere (staging panel, commit diffs, merge editor) — v0.9
-- ✓ Tab context menu (Close Others, Close All, Copy Path), middle-click close, duplicate tab detection — v0.9
-- ✓ Directory staging, file count badges, Expand All / Collapse All — v0.9
-- ✓ Tab drag-and-drop reorder with persisted order, directory right-click context menus for bulk operations — v0.9
+(No active requirements — next milestone not yet defined)
 
 ### Planned
 
-- **v0.9**: Multi-tab & Tree View — multiple repo tabs, directory tree file lists
 - **v0.10**: CI/CD & Releases — GitHub Actions CI, cross-platform release publishing (macOS, Linux, Windows)
 - **v1.0**: Infrastructure — E2E test harness (GOOS-style), performance benchmarks
 
@@ -108,11 +104,14 @@ A developer can open any Git repository, browse its full commit history as a vis
 - Commit signing — deferred to v1.0
 - Auto-updates — deferred to v1.0
 - Mobile / web versions — desktop only
+- Tab drag to new OS window — requires Tauri multi-window, state serialization
+- Workspace/group management — GitKraken-style cloud team feature; overkill for personal use
+- Virtual scrolling for file tree — staging file counts rarely exceed 500
 
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.8, v0.9 in progress with 49 phases across 9 milestones. ~12,000 LOC TypeScript/Svelte, ~9,300 LOC Rust.
+- **Current state**: Shipped v0.9 with 49 phases across 9 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -176,6 +175,11 @@ A developer can open any Git repository, browse its full commit history as a vis
 | git2 Index::conflicts() iterator for merge sides | git2 0.19 only exposes iterator API, not conflict_get() | ✓ Good — clean extraction of ours/theirs/base content |
 | Sequential scan for three-way merge parsing | Simple sync-point search instead of full LCS/Myers diff | ✓ Good — adequate for conflict region detection, minimal complexity |
 | No success toast on merge/rebase/skip | Graph refresh via repo-changed event is sufficient feedback | ✓ Good — consistent silent-success pattern across all operations |
+| Destroy/recreate over keep-alive for tab switching | Simpler than caching, Rust cache makes remount fast | ✓ Revised — ended up using keep-alive (display:contents/none) for zero-cost hidden tabs |
+| Per-tab state via factory functions | $state() factories replacing global singletons for remote/undo-redo state isolation | ✓ Good — backward-compat singleton aliases kept consumers compiling during migration |
+| Trie-based flat-to-tree algorithm | O(n) conversion with path compression; compression guard checks child type === directory | ✓ Good — 19 TDD tests, clean separation of data/UI layers |
+| SortableJS for drag reorder | Same library already used in RebaseEditor; forceFallback:true for cross-platform | ✓ Good — {#key} wrapper caused bug (orphaned Sortable), fixed by removing it |
+| Dynamic imports for Tauri menu/dialog | @tauri-apps/api/menu and plugin-dialog loaded on demand, not at module level | ✓ Good — reduces initial bundle, matches existing pattern |
 
 ## Evolution
 
@@ -195,4 +199,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after Phase 49 (tab drag reorder & tree context menu) complete*
+*Last updated: 2026-03-25 after v0.9 milestone (Multi-tab & Tree View)*

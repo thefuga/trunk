@@ -1,5 +1,24 @@
 # Milestones
 
+## v0.9 Multi-tab & Tree View (Shipped: 2026-03-25)
+
+**Phases completed:** 6 phases, 13 plans, 22 tasks
+
+**Key accomplishments:**
+
+- Factory functions replacing global singletons for per-tab remote/undo-redo state, TabInfo/PersistedTab type contracts, and LazyStore tab persistence helpers with 14 unit tests
+- RepoView.svelte extracted with 563 lines of per-repo state, App.svelte rewritten as 321-line tab orchestrator with keep-alive rendering and Cmd+T/W/1-9 keyboard shortcuts
+- Multi-tab TabBar.svelte with 144 lines: dirty indicator dots, close buttons, + new tab button, horizontal scroll, and repo-changed watcher-driven dirty detection in App.svelte
+- Pure buildTree utility with trie-based algorithm, path compression, and directory-before-file sorting -- 19 TDD tests all green
+- flattenTree utility with 12 passing tests, DirectoryRow component, FileRow tree-mode extensions, LazyStore persistence, and CSS focus token
+- TreeFileList component with VS Code-style keyboard navigation wired into StagingPanel (4 sections), CommitDetail, and global toggle button with LazyStore persistence
+- Native Tauri context menu on tabs (Close Others/Close All/Copy Path), middle-click graceful close, and duplicate repo detection with silent tab switching
+- Directory count badges, hover stage/unstage buttons on directories, and Expand All / Collapse All header buttons for tree view
+- SortableJS drag-and-drop tab reordering with auto-scroll, new-tab exclusion, and persisted order
+- Right-click context menus on directory nodes for bulk stage/unstage/discard/resolve using native Tauri menus with file count display and discard confirmation
+
+---
+
 ## v0.8 Conflict & Rebase (Shipped: 2026-03-23)
 
 **Phases completed:** 7 phases, 19 plans, 36 tasks
