@@ -1,6 +1,7 @@
 <script lang="ts">
   import VirtualList from './VirtualList.svelte';
   import { tick, untrack } from 'svelte';
+  import { listen } from '@tauri-apps/api/event';
   import { safeInvoke, type TrunkError } from '../lib/invoke.js';
   import { showToast } from '../lib/toast.svelte.js';
   import type { GraphCommit, GraphResponse, EdgeType, StashEntry } from '../lib/types.js';
@@ -780,24 +781,21 @@
     }
   });
 
-  // Cmd+F keyboard handler — capture phase to intercept before WebView native find (P7)
+  // Cmd+F search toggle — handled via native menu accelerator (registered in Rust)
+  // so it works regardless of WebView focus state (e.g. after fullscreen/maximize).
   $effect(() => {
-    function handleSearchKeydown(e: KeyboardEvent) {
-      if (e.key === 'f' && ((e.metaKey && !e.ctrlKey) || (e.ctrlKey && !e.metaKey))) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (searchOpen) {
-          // Already open: focus input and select all text (VS Code behavior)
-          const input = document.querySelector('.search-bar-input') as HTMLInputElement | null;
-          if (input) { input.focus(); input.select(); }
-        } else {
-          searchOpen = true;
-        }
+    let unlisten: (() => void) | undefined;
+    listen<void>('search-toggle', () => {
+      if (searchOpen) {
+        const input = document.querySelector('.search-bar-input') as HTMLInputElement | null;
+        if (input) { input.focus(); input.select(); }
+      } else {
+        searchOpen = true;
       }
-    }
-    window.addEventListener('keydown', handleSearchKeydown, { capture: true });
+    }).then((fn) => { unlisten = fn; });
+
     return () => {
-      window.removeEventListener('keydown', handleSearchKeydown, { capture: true });
+      unlisten?.();
       if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
     };
   });

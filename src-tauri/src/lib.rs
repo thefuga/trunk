@@ -5,6 +5,8 @@ mod state;
 mod watcher;
 
 use state::{CommitCache, RepoState, RunningOp};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::Emitter;
 use watcher::WatcherState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,6 +16,54 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .setup(|app| {
+            let find = MenuItemBuilder::with_id("find", "Find")
+                .accelerator("CmdOrCtrl+F")
+                .build(app)?;
+
+            let app_menu = SubmenuBuilder::new(app, "Trunk")
+                .about(None)
+                .separator()
+                .quit()
+                .build()?;
+
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .separator()
+                .item(&find)
+                .build()?;
+
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .fullscreen()
+                .build()?;
+
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&app_menu)
+                .item(&edit_menu)
+                .item(&view_menu)
+                .item(&window_menu)
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(|app, event| {
+                if event.id().as_ref() == "find" {
+                    let _ = app.emit("search-toggle", ());
+                }
+            });
+
+            Ok(())
+        })
         .manage(RepoState(Default::default()))
         .manage(CommitCache(Default::default()))
         .manage(RunningOp(Default::default()))
