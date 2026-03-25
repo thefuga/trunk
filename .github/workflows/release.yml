@@ -68,3 +68,33 @@ jobs:
         with:
           args: ${{ matrix.args }}
           tauriScript: bunx tauri
+
+      - name: Create portable archive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos
+          tar -czf trunk-macos-${{ matrix.rust_target }}.tar.gz *.app
+
+      - name: Create portable archive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd src-tauri/target/release/bundle/appimage
+          tar -czf trunk-linux-x86_64.tar.gz *.AppImage
+
+      - name: Create portable archive (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd src-tauri/target/release
+          tar -czf trunk-windows-x86_64.tar.gz trunk.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trunk-${{ matrix.platform }}-${{ matrix.rust_target || 'x64' }}
+          path: |
+            src-tauri/target/**/release/bundle/**/*.dmg
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/**/*.msi
+            src-tauri/target/**/release/bundle/**/*.tar.gz
+            src-tauri/target/**/release/*.tar.gz
+          if-no-files-found: error
