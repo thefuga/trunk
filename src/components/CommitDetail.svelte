@@ -208,7 +208,6 @@
         files={fileStatusList}
         treeMode={treeViewEnabled}
         actionLabel=""
-        storageKey="{repoPath}:commit_detail"
         onfileaction={() => {}}
         onfileclick={(path) => onfileselect(path)}
         onfilecontextmenu={(e, path) => showFileContextMenu(e, path)}

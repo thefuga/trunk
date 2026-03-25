@@ -3,7 +3,6 @@
   import type { FlatRow } from '../lib/flatten-tree.js';
   import { buildTree } from '../lib/build-tree.js';
   import { flattenTree, findFocusIndex, collectDirPaths, migrateExpanded } from '../lib/flatten-tree.js';
-  import { getExpandedPaths, setExpandedPaths } from '../lib/store.js';
   import { untrack } from 'svelte';
   import DirectoryRow from './DirectoryRow.svelte';
   import FileRow from './FileRow.svelte';
@@ -13,7 +12,6 @@
     treeMode: boolean;
     actionLabel: string;
     loadingFiles?: Set<string>;
-    storageKey?: string;
     onfileaction: (path: string) => void;
     onfileclick?: (path: string) => void;
     onfilecontextmenu?: (e: MouseEvent, path: string, status: FileStatus) => void;
@@ -24,7 +22,6 @@
     treeMode,
     actionLabel,
     loadingFiles,
-    storageKey,
     onfileaction,
     onfileclick,
     onfilecontextmenu,
@@ -33,25 +30,9 @@
   let expanded = $state<Set<string>>(new Set());
   let focusIndex = $state(0);
   let lastFocusedPath = $state<string | null>(null);
-  let loaded = $state(false);
 
   // Track previous tree mode to detect actual changes (not initial render)
   let prevTreeMode: boolean | undefined;
-
-  // Restore expanded paths from store on mount
-  $effect(() => {
-    const key = storageKey;
-    if (key) {
-      getExpandedPaths(key).then(paths => {
-        if (paths.length > 0) {
-          expanded = new Set(paths);
-        }
-        loaded = true;
-      });
-    } else {
-      loaded = true;
-    }
-  });
 
   let tree = $derived(buildTree(files));
 
@@ -83,7 +64,6 @@
       expanded = new Set();
       focusIndex = 0;
       lastFocusedPath = null;
-      if (storageKey) setExpandedPaths(storageKey, []);
     }
     prevTreeMode = currentMode;
   });
@@ -116,7 +96,6 @@
       next.add(path);
     }
     expanded = next;
-    if (storageKey) setExpandedPaths(storageKey, [...next]);
   }
 
   function handleKeydown(e: KeyboardEvent) {

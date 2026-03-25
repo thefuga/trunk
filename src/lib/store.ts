@@ -232,12 +232,3 @@ export async function setTreeViewEnabled(enabled: boolean): Promise<void> {
   await store.save();
 }
 
-// Tree view expanded paths (per-section persistence)
-export async function getExpandedPaths(key: string): Promise<string[]> {
-  return (await store.get<string[]>(`tree_expanded_${key}`)) ?? [];
-}
-
-export async function setExpandedPaths(key: string, paths: string[]): Promise<void> {
-  await store.set(`tree_expanded_${key}`, paths);
-  await store.save();
-}
