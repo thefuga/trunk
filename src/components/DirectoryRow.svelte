@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight } from '@lucide/svelte';
+  import { ChevronDown, ChevronRight, Plus, Minus } from '@lucide/svelte';
   import type { DirectoryNode } from '../lib/build-tree.js';
+  import { countFiles } from '../lib/build-tree.js';
 
   interface Props {
     node: DirectoryNode;
@@ -8,11 +9,15 @@
     expanded: boolean;
     focused: boolean;
     ontoggle: () => void;
+    actionLabel?: string;
+    onaction?: () => void;
   }
 
-  let { node, depth, expanded, focused, ontoggle }: Props = $props();
+  let { node, depth, expanded, focused, ontoggle, actionLabel = '', onaction }: Props = $props();
 
   let hovered = $state(false);
+
+  let fileCount = $derived(countFiles(node.children));
 </script>
 
 <div
@@ -48,4 +53,33 @@
     white-space: nowrap;
     font-weight: 500;
   ">{node.name}</span>
+  <span style="
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 400;
+    flex-shrink: 0;
+  ">({fileCount})</span>
+  <span style="flex: 1;"></span>
+  {#if hovered && actionLabel && onaction}
+    <button
+      onclick={(e) => { e.stopPropagation(); onaction(); }}
+      aria-label={actionLabel === '+' ? 'Stage directory' : 'Unstage directory'}
+      style="
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: {actionLabel === '+' ? 'var(--color-success)' : 'var(--color-danger)'};
+        display: flex;
+        align-items: center;
+        padding: 0 4px;
+        line-height: 1;
+      "
+    >
+      {#if actionLabel === '+'}
+        <Plus size={11} />
+      {:else}
+        <Minus size={11} />
+      {/if}
+    </button>
+  {/if}
 </div>

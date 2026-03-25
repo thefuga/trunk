@@ -122,3 +122,34 @@ function sortNodes(nodes: TreeNode[]): TreeNode[] {
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
 }
+
+/**
+ * Count the total number of files (recursively) within a tree node array.
+ * Counts only file nodes, not directory nodes.
+ */
+export function countFiles(nodes: TreeNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      count++;
+    } else {
+      count += countFiles(node.children);
+    }
+  }
+  return count;
+}
+
+/**
+ * Collect all file paths recursively from a tree node array.
+ */
+export function collectFilePaths(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      paths.push(node.path);
+    } else {
+      paths.push(...collectFilePaths(node.children));
+    }
+  }
+  return paths;
+}

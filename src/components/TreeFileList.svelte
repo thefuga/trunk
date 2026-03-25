@@ -15,6 +15,9 @@
     onfileaction: (path: string) => void;
     onfileclick?: (path: string) => void;
     onfilecontextmenu?: (e: MouseEvent, path: string, status: FileStatus) => void;
+    ondirectoryaction?: (dirPath: string) => void;
+    expandAllSignal?: number;
+    collapseAllSignal?: number;
   }
 
   let {
@@ -25,6 +28,9 @@
     onfileaction,
     onfileclick,
     onfilecontextmenu,
+    ondirectoryaction,
+    expandAllSignal = 0,
+    collapseAllSignal = 0,
   }: Props = $props();
 
   let expanded = $state<Set<string>>(new Set());
@@ -66,6 +72,24 @@
       lastFocusedPath = null;
     }
     prevTreeMode = currentMode;
+  });
+
+  // Expand All signal: when incremented, expand all directories
+  let prevExpandAll = 0;
+  $effect(() => {
+    if (expandAllSignal > 0 && expandAllSignal !== prevExpandAll) {
+      prevExpandAll = expandAllSignal;
+      expanded = collectDirPaths(tree);
+    }
+  });
+
+  // Collapse All signal: when incremented, collapse all directories
+  let prevCollapseAll = 0;
+  $effect(() => {
+    if (collapseAllSignal > 0 && collapseAllSignal !== prevCollapseAll) {
+      prevCollapseAll = collapseAllSignal;
+      expanded = new Set();
+    }
   });
 
   // Focus preservation on data change (D-13)
@@ -165,6 +189,8 @@
         expanded={row.expanded}
         focused={i === focusIndex}
         ontoggle={() => toggleExpanded(row.node.path)}
+        actionLabel={ondirectoryaction ? actionLabel : ''}
+        onaction={ondirectoryaction ? () => ondirectoryaction!(row.node.path) : undefined}
       />
     {:else}
       <FileRow
