@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: Multi-tab & Tree View
-status: Active
-stopped_at: Phase 49 context gathered
-last_updated: "2026-03-25T02:52:27.490Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 49-02-PLAN.md
+last_updated: "2026-03-25T03:23:09.434Z"
 last_activity: 2026-03-25
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 10
+  completed_phases: 5
+  total_plans: 13
+  completed_plans: 12
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23 after v0.9 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 48 — polish-differentiators
+**Current focus:** Phase 49 — tab-drag-tree-context-menu
 
 ## Current Position
 
-Phase: 49
-Plan: Not started
+Phase: 49 (tab-drag-tree-context-menu) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -44,6 +44,8 @@ Plan: Not started
 | Phase 47 P02 | 4min | 2 tasks | 4 files |
 | Phase 48 P01 | 4min | 2 tasks | 2 files |
 | Phase 48 P02 | 7min | 2 tasks | 4 files |
+| Phase 49 P01 | 2min | 2 tasks | 2 files |
+| Phase 49 P02 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +75,9 @@ Plan: Not started
 - [Phase 48]: Duplicate tab detection normalizes trailing slashes before repo path comparison
 - [Phase 48]: Directory staging uses flat file list prefix matching rather than tree traversal
 - [Phase 48]: Expand/collapse uses signal counter pattern (increment  counter, child  detects change)
+- [Phase 49]: Reused SortableJS pattern from RebaseEditor with horizontal direction for tab drag reorder
+- [Phase 49]: filter: '.new-tab-btn' with preventOnFilter: false excludes + button from drag while keeping it clickable
+- [Phase 49]: Directory context menus use native Tauri menus with file count display matching existing file context menu pattern
 
 ### Pending Todos
 
@@ -97,7 +102,7 @@ Plan: Not started
 ## Session Continuity
 
 Last activity: 2026-03-25
-Last session: 2026-03-25T02:52:27.486Z
-Stopped at: Phase 49 context gathered
-Resume file: .planning/phases/49-tab-drag-tree-context-menu/49-CONTEXT.md
+Last session: 2026-03-25T03:23:09.430Z
+Stopped at: Completed 49-02-PLAN.md
+Resume file: None
 Next action: Re-verify TREE-01, TREE-02, TREE-05, TREE-06
