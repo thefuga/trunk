@@ -231,7 +231,7 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48 → 49
 | 46. Tree View Data Layer | v0.9 | 0/1 | Complete    | 2026-03-24 |
 | 47. Tree View UI Integration | v0.9 | 3/3 | Complete    | 2026-03-25 |
 | 48. Polish & Differentiators | v0.9 | 2/3 | Complete    | 2026-03-25 |
-| 49. Tab Drag Reorder & Tree Context Menu | v0.9 | 0/? | Not started | - |
+| 49. Tab Drag Reorder & Tree Context Menu | v0.9 | 0/2 | Not started | - |
 
 ### Phase 49: Tab Drag Reorder & Tree Context Menu
 **Goal**: Drag-and-drop tab reordering and right-click context menu on tree view directories for bulk stage/unstage/resolve/discard operations
@@ -240,9 +240,12 @@ Phases execute in numeric order: 44 → 45 → 46 → 47 → 48 → 49
 **Success Criteria** (what must be TRUE):
   1. User can drag tabs to reorder them, and the new order persists across app relaunch
   2. User can right-click a directory in the tree view to access bulk actions (Stage All, Unstage All, Discard All, and resolve/unresolve for conflicted files)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 49-01-PLAN.md — SortableJS tab drag reorder with persistence
+- [ ] 49-02-PLAN.md — Directory context menus for bulk stage/unstage/discard/resolve
 **UI hint**: yes
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-25 — Phase 48 planned (3 plans)*
+*Last updated: 2026-03-25 — Phase 49 planned (2 plans)*
