@@ -48,7 +48,6 @@
   });
 </script>
 
-{#key tabs}
 <div class="tab-bar" bind:this={tabBarEl}>
   {#each tabs as tab (tab.id)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -79,7 +78,6 @@
     <Plus size={14} />
   </button>
 </div>
-{/key}
 
 <style>
   .tab-bar {
