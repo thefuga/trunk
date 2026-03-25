@@ -91,7 +91,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 **Target features:**
 - Multiple repo tabs — each tab opens a different repository with independent state
 - Splash screen as new-tab page — opening a new tab shows the project picker / recent repos
-- Tree view toggle — switch between flat file list and directory tree view everywhere (staging panel, commit diffs, merge editor)
+- ✓ Tree view toggle — switch between flat file list and directory tree view everywhere (staging panel, commit diffs, merge editor) — v0.9
 
 ### Planned
 
@@ -192,4 +192,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after v0.9 milestone started*
+*Last updated: 2026-03-25 after Phase 47 (tree view UI integration) complete*
