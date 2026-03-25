@@ -16,9 +16,9 @@ Requirements for milestone v0.9 Multi-tab & Tree View. Each maps to roadmap phas
 - [x] **TAB-05**: Each tab has fully independent state (graph, staging, diffs, selection, rebase/merge)
 - [x] **TAB-06**: Open tabs and active tab are persisted and restored on app relaunch
 - [x] **TAB-07**: Background tabs with uncommitted changes show a dirty indicator (dot badge)
-- [ ] **TAB-08**: User can right-click a tab for context menu (Close Others, Close All, Copy Path)
-- [ ] **TAB-09**: User can middle-click a tab to close it
-- [ ] **TAB-10**: Opening a repo that's already in a tab switches to the existing tab instead of duplicating
+- [x] **TAB-08**: User can right-click a tab for context menu (Close Others, Close All, Copy Path)
+- [x] **TAB-09**: User can middle-click a tab to close it
+- [x] **TAB-10**: Opening a repo that's already in a tab switches to the existing tab instead of duplicating
 
 ### Tree View
 
@@ -83,9 +83,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TREE-04 | Phase 47 | Complete |
 | TREE-05 | Phase 47 | Complete |
 | TREE-06 | Phase 47 | Complete |
-| TAB-08 | Phase 48 | Pending |
-| TAB-09 | Phase 48 | Pending |
-| TAB-10 | Phase 48 | Pending |
+| TAB-08 | Phase 48 | Complete |
+| TAB-09 | Phase 48 | Complete |
+| TAB-10 | Phase 48 | Complete |
 | TREE-08 | Phase 48 | Pending |
 | TREE-09 | Phase 48 | Pending |
 | TREE-10 | Phase 48 | Pending |
