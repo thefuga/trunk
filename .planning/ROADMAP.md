@@ -140,7 +140,7 @@ Full details: [milestones/v0.9-ROADMAP.md](milestones/v0.9-ROADMAP.md)
 
 **Milestone Goal:** Ship cross-platform release binaries and enforce code quality with automated CI.
 
-- [ ] **Phase 50: CI Quality Gates** - Prettier setup, Rust checks, frontend checks, and formatting enforcement on every push/PR
+- [ ] **Phase 50: CI Quality Gates** - Biome setup, Rust checks, frontend checks, and formatting enforcement on every push/PR
 - [ ] **Phase 51: Cross-Platform Release Pipeline** - Tag-triggered builds producing installers and archives for macOS, Linux, and Windows
 - [ ] **Phase 52: Homebrew Distribution** - Homebrew cask formula for macOS installation via `brew install --cask`
 
@@ -151,12 +151,15 @@ Full details: [milestones/v0.9-ROADMAP.md](milestones/v0.9-ROADMAP.md)
 **Depends on**: Nothing (first phase of v0.10)
 **Requirements**: CI-01, CI-02, CI-03, CI-04, CI-05
 **Success Criteria** (what must be TRUE):
-  1. Pushing a commit to any branch triggers a CI workflow that runs cargo check, clippy (-D warnings), cargo test, and cargo fmt --check -- and fails if any check fails
+  1. Pushing a commit to any branch triggers a CI workflow that runs cargo clippy (-D warnings), cargo test, and cargo fmt --check -- and fails if any check fails
   2. The same CI workflow runs bun install, bun run check (svelte-check), and bun run test (vitest) -- and fails if any check fails
-  3. The same CI workflow runs prettier --check on all frontend files -- and fails if any file is unformatted
-  4. Prettier is installed as a devDependency with .prettierrc config, and all existing frontend files pass prettier --check without changes
+  3. The same CI workflow runs biome ci on all frontend files -- and fails if any file is unformatted or has lint errors
+  4. Biome is installed as a devDependency with biome.json config, and all existing frontend files pass biome ci without changes
   5. Rust compilation in CI uses swatinem/rust-cache so repeat runs complete significantly faster than uncached builds
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 50-01-PLAN.md -- Fix pre-existing check failures + install and configure Biome
+- [ ] 50-02-PLAN.md -- Create GitHub Actions CI workflow with two-gate pipeline
 
 ### Phase 51: Cross-Platform Release Pipeline
 **Goal**: A git tag push produces downloadable platform-specific installers and archives for macOS (ARM + Intel), Linux, and Windows
@@ -192,8 +195,8 @@ Full details: [milestones/v0.9-ROADMAP.md](milestones/v0.9-ROADMAP.md)
 | v0.7 Hunk Staging & Search | 32-36 | 8/8 | Complete | 2026-03-19 |
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
-| v0.10 CI/CD & Releases | 50-52 | 0/0 | In progress | - |
+| v0.10 CI/CD & Releases | 50-52 | 0/2 | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-25 -- v0.10 roadmap added*
+*Last updated: 2026-03-25 -- Phase 50 plans created*
