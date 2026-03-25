@@ -45,6 +45,12 @@
 
   // Tab CRUD functions
   function addNewTab() {
+    const existing = tabs.find(t => t.repoPath === null);
+    if (existing) {
+      activeTabId = existing.id;
+      persistTabs();
+      return;
+    }
     const tab: TabInfo = {
       id: createTabId(),
       repoPath: null,

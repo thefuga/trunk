@@ -201,7 +201,8 @@
   }
 
   async function showUnstagedDirContextMenu(e: MouseEvent, dirPath: string) {
-    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + dirPath;
     const files = (status?.unstaged ?? []).filter(
       f => f.path.startsWith(dirPath + '/') || f.path === dirPath
     );
@@ -209,6 +210,9 @@
 
     const menu = await Menu.new({
       items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(dirPath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({
           text: `Stage All (${files.length})`,
           action: () => { stageDirectory(dirPath); },
@@ -237,7 +241,8 @@
   }
 
   async function showStagedDirContextMenu(e: MouseEvent, dirPath: string) {
-    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + dirPath;
     const files = (status?.staged ?? []).filter(
       f => f.path.startsWith(dirPath + '/') || f.path === dirPath
     );
@@ -245,6 +250,9 @@
 
     const menu = await Menu.new({
       items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(dirPath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({
           text: `Unstage All (${files.length})`,
           action: () => { unstageDirectory(dirPath); },
@@ -305,7 +313,8 @@
   }
 
   async function showConflictedDirContextMenu(e: MouseEvent, dirPath: string) {
-    const { Menu, MenuItem } = await import('@tauri-apps/api/menu');
+    const { Menu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const absPath = repoPath + '/' + dirPath;
     const files = (status?.conflicted ?? []).filter(
       f => f.path.startsWith(dirPath + '/') || f.path === dirPath
     );
@@ -313,6 +322,9 @@
 
     const menu = await Menu.new({
       items: [
+        await MenuItem.new({ text: 'Copy Relative Path', action: () => { writeText(dirPath).catch(() => {}); } }),
+        await MenuItem.new({ text: 'Copy Absolute Path', action: () => { writeText(absPath).catch(() => {}); } }),
+        await PredefinedMenuItem.new({ item: 'Separator' }),
         await MenuItem.new({
           text: `Resolve All (${files.length})`,
           action: () => { resolveDirectory(dirPath); },
