@@ -397,6 +397,7 @@
       onnew={addNewTab}
       oncontextmenu={showTabContextMenu}
       onauxclose={(id) => closeTab(id)}
+      onreorder={(newTabs) => { tabs = newTabs; persistTabs(); }}
     />
     <div data-tauri-drag-region class="flex-1 h-full"></div>
     {#if activeTab?.repoPath}
