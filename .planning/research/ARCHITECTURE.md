@@ -1,514 +1,481 @@
-# Architecture Patterns: Multi-Tab & Tree View Integration
+# Architecture Research: CI/CD Pipeline & Cross-Platform Release Publishing
 
-**Domain:** Desktop Git GUI -- multi-repository tab management and directory tree file views
-**Researched:** 2026-03-23
-**Confidence:** HIGH (based on full codebase audit of state.rs, App.svelte, all commands, watcher, store, and component hierarchy)
+**Domain:** Desktop app CI/CD for Tauri 2 + Svelte 5 + Rust
+**Researched:** 2026-03-25
+**Confidence:** HIGH
 
-## Current Architecture Overview
-
-```
-Single-Repo Architecture (v0.8)
-================================
-
- App.svelte (God Component)
-   |-- repoPath: string | null           <-- single active repo
-   |-- refreshSignal, dirtyCounts, etc.  <-- all repo-scoped state
-   |
-   |-- WelcomeScreen  (when repoPath === null)
-   |-- TabBar          (shows single repo name + close button)
-   |-- Toolbar         (receives repoPath)
-   |-- BranchSidebar   (receives repoPath)
-   |-- CommitGraph     (receives repoPath)
-   |-- StagingPanel    (receives repoPath)
-   |-- DiffPanel       (receives selectedFile data)
-   |-- MergeEditor     (receives repoPath + filePath)
-   |-- RebaseEditor    (receives repoPath + commits)
-   |-- CommitDetail    (receives commitDetail + fileDiffs)
-
- Rust Backend (state.rs)
-   RepoState:    Mutex<HashMap<String, PathBuf>>   <-- keyed by path, already multi-repo
-   CommitCache:  Mutex<HashMap<String, GraphResult>> <-- keyed by path, already multi-repo
-   WatcherState: Mutex<HashMap<String, Debouncer>>   <-- keyed by path, already multi-repo
-   RunningOp:    Mutex<Option<u32>>                  <-- SINGLE global PID
-
- Events
-   "repo-changed" -> payload: path string
-   All Tauri commands take `path: String` as first arg
-```
-
-### Critical Observation: Rust Is Already Multi-Repo Ready
-
-Every Rust state structure (RepoState, CommitCache, WatcherState) uses `HashMap<String, _>` keyed by repo path. The `open_repo` command inserts into these maps, `close_repo` removes. All commands accept a `path` argument and look up state by that key. The watcher emits `repo-changed` with the path as payload.
-
-**The only Rust change needed is RunningOp** -- it currently stores a single global PID, preventing concurrent remote operations across repos.
-
-### Where Multi-Repo Is NOT Ready: The Frontend
-
-App.svelte is a monolithic god component with ~500 lines of script. It holds a single `repoPath` state variable and ALL repo-scoped state (refreshSignal, dirtyCounts, headBranch, selectedFile, commitDetail, rebase state, etc.) as top-level `$state` variables. The WelcomeScreen/repo-view toggle is a simple `{#if repoPath === null}` conditional. There is no concept of "tabs" or "multiple active repo contexts."
-
-## Recommended Architecture: Multi-Tab
-
-### Component Structure
+## System Overview
 
 ```
-New Architecture
-=================
+                         GitHub Repository
+                               |
+              +----------------+----------------+
+              |                                 |
+         Push/PR trigger                  Tag push (v*)
+              |                                 |
+    +---------v----------+          +-----------v-----------+
+    |   CI Workflow       |          |   Release Workflow     |
+    |   (ci.yml)          |          |   (release.yml)        |
+    +---------------------+          +------------------------+
+    | ubuntu-latest only  |          | Matrix: 3 OS x targets |
+    |                     |          |                        |
+    | Rust checks:        |          | macos-latest:          |
+    |  - cargo check      |          |   aarch64-apple-darwin |
+    |  - cargo clippy      |          |   x86_64-apple-darwin  |
+    |  - cargo test        |          |                        |
+    |  - cargo fmt --check |          | ubuntu-22.04:          |
+    |                     |          |   x86_64 (default)     |
+    | Frontend checks:    |          |                        |
+    |  - bun run check    |          | windows-latest:        |
+    |  - bun run test     |          |   x86_64-pc-windows-   |
+    |  - prettier --check |          |   msvc                 |
+    +---------------------+          +------------------------+
+              |                                 |
+              v                                 v
+         Pass/Fail gate              tauri-apps/tauri-action@v0
+                                                |
+                                    +-----------v-----------+
+                                    | Per-platform artifacts |
+                                    | macOS: .dmg            |
+                                    | Linux: .AppImage, .deb |
+                                    | Windows: .msi, .nsis   |
+                                    +-----------+-----------+
+                                                |
+                                    +-----------v-----------+
+                                    | GitHub Release (draft) |
+                                    | + auto-generated notes |
+                                    +-----------------------+
 
- App.svelte (Shell)
-   |-- tabState (shared $state rune module)
-   |   |-- tabs: TabInfo[]
-   |   |-- activeTabId: string
-   |
-   |-- TabBar (multi-tab: shows all tabs, + button, close buttons)
-   |-- {#if activeTab is "new-tab"}
-   |     WelcomeScreen (splash / repo picker)
-   |-- {:else}
-   |     RepoView (new component -- extracts ALL current repo logic from App.svelte)
-   |       |-- repoPath from activeTab
-   |       |-- ALL current App.svelte repo state moves here
-   |       |-- Toolbar, BranchSidebar, CommitGraph, StagingPanel, etc.
-   |-- Toast (global, stays in App.svelte)
+                         Dependabot
+                    +-------------------+
+                    | dependabot.yml    |
+                    | - bun (/)         |
+                    | - cargo (src-tauri)|
+                    | - github-actions  |
+                    +-------------------+
 ```
 
-### New Types
+## Component Responsibilities
 
-```typescript
-// src/lib/types.ts additions
-interface TabInfo {
-  id: string;           // crypto.randomUUID()
-  kind: 'welcome' | 'repo';
-  repoPath?: string;    // set when kind === 'repo'
-  repoName?: string;
-}
-```
+| Component | Responsibility | New vs Modified |
+|-----------|---------------|-----------------|
+| `.github/workflows/ci.yml` | Run lint, type-check, and test on every push/PR | **NEW file** |
+| `.github/workflows/release.yml` | Build cross-platform binaries, publish GitHub Release on tag push | **NEW file** |
+| `.github/dependabot.yml` | Automated dependency update PRs for bun, cargo, and GH Actions | **NEW file** |
+| `.github/release.yml` | Categorize PRs for auto-generated release notes | **NEW file** |
+| `cliff.toml` | git-cliff configuration for changelog from conventional commits | **NEW file** |
+| `src-tauri/tauri.conf.json` | Bundle targets configuration (already `"all"`) | **No change needed** -- `"targets": "all"` already set |
+| `package.json` | Add `format:check` script for Prettier CI | **MODIFIED** -- add script |
+| `mise.toml` | Pinned tool versions (bun 1.3.8, rust 1.93.1) -- CI uses these as reference | **No change** -- read-only reference |
 
-### New Shared State Module: tab-state.svelte.ts
-
-```typescript
-// src/lib/tab-state.svelte.ts
-// Follows established pattern from remote-state.svelte.ts and undo-redo.svelte.ts
-
-export const tabState = $state({
-  tabs: [] as TabInfo[],
-  activeTabId: '' as string,
-});
-
-export function addTab(tab: TabInfo) { ... }
-export function removeTab(id: string) { ... }
-export function setActiveTab(id: string) { ... }
-export function updateTab(id: string, patch: Partial<TabInfo>) { ... }
-
-// Derived helper
-export function getActiveTab(): TabInfo | undefined {
-  return tabState.tabs.find(t => t.id === tabState.activeTabId);
-}
-```
-
-### Data Flow: Tab Switching
+## New File Structure
 
 ```
-User clicks tab B (was on tab A)
-  |
-  1. tabState.activeTabId = tabB.id
-  |
-  2. App.svelte's {#key activeTabId} block re-renders
-  |   Option A: {#key} destroys tab A's RepoView, mounts tab B's RepoView
-  |   Option B: render all RepoViews, hide inactive with CSS display:none
-  |
-  3. RepoView for tab B mounts with repoPath = tabB.repoPath
-  |   - If first mount: calls open_repo, starts watcher, populates state
-  |   - If re-mount (option A): calls open_repo again (idempotent -- just re-inserts HashMap)
-  |   - If unhide (option B): already mounted, just becomes visible
-  |
-  4. repo-changed events fire for ALL open repos continuously
-  |   - Each RepoView's $effect filters: event.payload === repoPath
-  |   - Already works this way! No change needed.
+.github/
+├── workflows/
+│   ├── ci.yml              # Lint + test on push/PR
+│   └── release.yml         # Build + publish on tag push
+├── dependabot.yml          # Dependency update automation
+└── release.yml             # Release notes categories
+cliff.toml                  # git-cliff changelog config (repo root)
 ```
 
-### Mount Strategy Decision: Destroy/Recreate vs Keep-Alive
+### Structure Rationale
 
-**Recommendation: Destroy/Recreate with `{#key}`** because:
+- **Two separate workflows** rather than one: CI runs on every push/PR (fast feedback, single runner), release runs only on tag push (expensive, multi-platform matrix). Separating them avoids wasting build minutes on every PR.
+- **cliff.toml at repo root**: git-cliff expects it there by default. No flag needed.
+- **`.github/release.yml`** (not a workflow): GitHub's built-in release notes categorization. Works with tauri-action's `generateReleaseNotes: true` input.
 
-1. **Memory**: Each RepoView + CommitGraph + SVG overlay consumes significant memory. Keeping 10+ repo views mounted simultaneously is wasteful.
-2. **Simplicity**: No need to manage hidden component lifecycle, pausing/resuming effects, or handling visibility changes.
-3. **Existing pattern**: The Rust backend already caches graph data in CommitCache (keyed by path). Re-mounting a RepoView that calls `open_repo` is fast because the cache is populated from the existing HashMap entry.
-4. **Perceived speed**: Tab switch latency is dominated by Rust `walk_commits` on first open. Subsequent switches hit the cache and feel instant.
-5. **The tradeoff**: Some per-tab UI state (scroll position, selected commit, expanded sections) is lost on switch. This is acceptable for v0.9 and can be enhanced later with a lightweight state snapshot in tabState.
+## Architectural Patterns
 
-```svelte
-<!-- App.svelte -->
-{#if activeTab?.kind === 'welcome' || !activeTab}
-  <WelcomeScreen onopen={handleTabOpen} />
-{:else}
-  {#key activeTab.id}
-    <RepoView repoPath={activeTab.repoPath!} repoName={activeTab.repoName!} />
-  {/key}
-{/if}
+### Pattern 1: Tag-Triggered Release Pipeline
+
+**What:** Release builds trigger on `push: tags: ['v*']`, not on branch push or manual dispatch.
+**When to use:** When you want releases to be a deliberate act (create tag) rather than automatic on every merge.
+**Trade-offs:** Requires discipline to tag properly. Prevents accidental releases. Cleanly separates "code ready" (merge to main) from "release ready" (push tag).
+
+**Flow:**
+```
+Developer: git tag v0.10.0 && git push origin v0.10.0
+    |
+    v
+GitHub Actions: release.yml triggers
+    |
+    v
+3-4 parallel jobs (macOS ARM, macOS Intel, Linux, Windows)
+    |
+    v
+All artifacts uploaded to draft GitHub Release
+    |
+    v
+Developer: reviews draft, publishes
 ```
 
-### Rust Changes
+### Pattern 2: Matrix Strategy with Platform-Specific Config
 
-#### 1. RunningOp: Per-Repo Remote Operations
+**What:** Single workflow file uses `strategy.matrix.include` to define per-platform runner OS, Rust target, and build args.
+**When to use:** Always for cross-platform Tauri builds. This is the canonical pattern from Tauri's official docs.
+**Trade-offs:** `fail-fast: false` means a macOS failure does not cancel Windows/Linux builds. Slightly longer total CI time, but you get all platform results.
 
-```rust
-// Before (v0.8)
-pub struct RunningOp(pub Mutex<Option<u32>>);
-
-// After (v0.9)
-pub struct RunningOp(pub Mutex<HashMap<String, u32>>);
-// Key: repo path, Value: PID
+**Configuration:**
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    include:
+      - platform: macos-latest
+        args: '--target aarch64-apple-darwin'
+        rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+      - platform: macos-latest
+        args: '--target x86_64-apple-darwin'
+        rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+      - platform: ubuntu-22.04
+        args: ''
+        rust_targets: ''
+      - platform: windows-latest
+        args: ''
+        rust_targets: ''
 ```
 
-This allows concurrent fetch/push across different repos. The `cancel_remote_op` command already takes `path` -- just change it to look up by path key instead of reading a single Option.
+**Why `ubuntu-22.04` not `ubuntu-latest`:** Tauri's WebKit2GTK dependency requires specific system packages. Ubuntu 22.04 is the explicitly tested and documented runner for Tauri builds. Using `ubuntu-latest` risks breakage when GitHub rolls forward the default runner image.
 
-#### 2. open_repo: Make Idempotent
+### Pattern 3: Bun Setup Before tauri-action
 
-Currently `open_repo` always walks the full commit graph. When switching tabs to an already-open repo, skip the walk if cache already has an entry:
+**What:** `oven-sh/setup-bun@v2` must be called before `tauri-apps/tauri-action@v0` because the project uses `bun.lock`. tauri-action auto-detects the lockfile and tries to run `bun` commands, but bun is not pre-installed on GitHub runners.
+**When to use:** Always when the project uses bun as package manager.
+**Trade-offs:** Extra setup step (~5s). Without it, tauri-action fails with `bun: not found` (documented issue #986).
 
-```rust
-// In open_repo, before walk_commits:
-{
-    let cache_lock = cache.0.lock().unwrap();
-    if cache_lock.contains_key(&path) {
-        // Already open -- just ensure watcher is running
-        return Ok(());
-    }
-}
-// ... proceed with walk_commits only if not cached
+**Required step order:**
+```yaml
+- uses: actions/checkout@v4
+- uses: oven-sh/setup-bun@v2          # Must come before tauri-action
+  with:
+    bun-version: '1.3.8'              # Pin to mise.toml version
+- uses: dtolnay/rust-toolchain@stable
+  with:
+    targets: ${{ matrix.rust_targets }}
+- uses: swatinem/rust-cache@v2
+  with:
+    workspaces: './src-tauri -> target'
+- run: bun install                     # Explicit install
+- uses: tauri-apps/tauri-action@v0     # Detects bun.lock, uses bun
 ```
 
-#### 3. No Other Rust Changes Needed
+### Pattern 4: Concurrency Groups for Release Safety
 
-All commands already take `path` and look up state by key. The watcher already emits per-path events. The Mutex-guarded HashMaps already support concurrent repos.
+**What:** `concurrency: { group: release-${{ github.ref }}, cancel-in-progress: true }` prevents duplicate release builds if a tag is pushed, deleted, and re-pushed quickly.
+**When to use:** Always on the release workflow.
 
-### Store Persistence Changes
+### Pattern 5: CI-Only Checks on Single Runner
 
-```typescript
-// store.ts changes
+**What:** Run all lint and test checks on `ubuntu-latest` only, not a full matrix. Rust and TypeScript checks do not need cross-platform validation at the lint level.
+**When to use:** For the CI workflow (not release). Saves significant GitHub Actions minutes.
+**Trade-offs:** A platform-specific compilation bug in Rust would not be caught until release build. Acceptable because: (a) git2 vendored-libgit2 builds are well-tested cross-platform, (b) the app has no platform-specific Rust code paths currently.
 
-// Before: single repo
-const OPEN_REPO_KEY = 'open_repo';
+## Data Flow
 
-// After: tab list
-const OPEN_TABS_KEY = 'open_tabs';
-const ACTIVE_TAB_KEY = 'active_tab_id';
-
-export async function getOpenTabs(): Promise<TabInfo[]> { ... }
-export async function setOpenTabs(tabs: TabInfo[]): Promise<void> { ... }
-export async function getActiveTabId(): Promise<string | null> { ... }
-export async function setActiveTabId(id: string | null): Promise<void> { ... }
-```
-
-On app launch: restore tabs from store, re-open each repo in Rust (sequential, not parallel, to avoid hammering IO), set active tab.
-
-### Keyboard Shortcuts
-
-| Shortcut | Action | Reference |
-|----------|--------|-----------|
-| Cmd+T | New tab (welcome screen) | GitKraken/Fork pattern |
-| Cmd+W | Close active tab | Standard |
-| Cmd+1..9 | Switch to tab N | GitKraken pattern |
-| Cmd+Shift+[ / ] | Previous/Next tab | Standard macOS |
-
-## Recommended Architecture: Tree View
-
-### Problem
-
-Currently, all file lists (StagingPanel unstaged/staged/conflicted, CommitDetail file diffs) render flat paths like `src/components/CommitGraph.svelte`. Users want to toggle between flat list and directory tree view.
-
-### File List Locations (Components That Need Tree View)
-
-| Component | File Source | Data Type |
-|-----------|------------|-----------|
-| StagingPanel | `get_status` | `FileStatus[]` (unstaged, staged, conflicted) |
-| CommitDetail | `diff_commit` | `FileDiff[]` |
-| MergeEditor | conflicted file list | Single file (no tree needed) |
-
-### Tree Data Model
-
-```typescript
-// src/lib/file-tree.ts (new pure utility, no Svelte runes)
-
-export interface TreeNode {
-  name: string;           // "CommitGraph.svelte" or "components"
-  path: string;           // full relative path: "src/components/CommitGraph.svelte"
-  isDirectory: boolean;
-  children: TreeNode[];   // sorted: directories first, then files, both alphabetical
-  // For leaf nodes only:
-  file?: FileStatus | FileDiff;  // original data for actions/clicks
-}
-
-export function buildTree<T extends { path: string }>(
-  files: T[],
-  getFile: (item: T) => T
-): TreeNode[] {
-  // 1. Split each path by '/'
-  // 2. Build nested map: Map<string, TreeNode>
-  // 3. Sort: dirs first, then alpha within each group
-  // 4. Return root children array
-}
-
-export function flattenTree(nodes: TreeNode[]): TreeNode[] {
-  // For keyboard navigation: DFS traversal respecting expanded state
-}
-```
-
-### Conversion Algorithm
+### CI Workflow Trigger Flow
 
 ```
-Input:  ["src/lib/types.ts", "src/lib/invoke.ts", "src/App.svelte", "README.md"]
+Push to any branch OR Pull Request opened/synchronized
+    |
+    v
+ci.yml starts on ubuntu-latest
+    |
+    +---> Install bun (oven-sh/setup-bun@v2, bun-version: 1.3.8)
+    +---> Install Rust (dtolnay/rust-toolchain@stable)
+    +---> Cache: swatinem/rust-cache@v2 (workspaces: ./src-tauri -> target)
+    |
+    v
+Parallel check groups (can use separate jobs or sequential steps):
 
-Step 1: Split paths into segments
-  ["src", "lib", "types.ts"]
-  ["src", "lib", "invoke.ts"]
-  ["src", "App.svelte"]
-  ["README.md"]
+    Rust checks (in src-tauri/):
+    ├── cargo check
+    ├── cargo clippy -- -D warnings
+    ├── cargo test
+    └── cargo fmt --all -- --check
 
-Step 2: Insert into trie (Map-based)
-  root/
-    src/               (dir)
-      lib/             (dir)
-        types.ts       (file, leaf)
-        invoke.ts      (file, leaf)
-      App.svelte       (file, leaf)
-    README.md          (file, leaf)
-
-Step 3: Sort each level (dirs first, alpha)
-  root/
-    src/
-      lib/
-        invoke.ts
-        types.ts
-      App.svelte
-    README.md
+    Frontend checks:
+    ├── bun install
+    ├── bun run check          (svelte-check)
+    ├── bun run test           (vitest run)
+    └── bunx prettier --check "src/**/*.{ts,svelte,css,html}"
 ```
 
-This is a pure frontend transformation. No Rust changes needed -- git2 already returns flat paths.
-
-### Component Structure for Tree View
+### Release Workflow Trigger Flow
 
 ```
-FileList (new wrapper component)
-  |-- viewMode: 'flat' | 'tree' (persisted in LazyStore)
-  |-- toggle button in header
-  |
-  |-- {#if viewMode === 'flat'}
-  |     {#each files as f}
-  |       <FileRow file={f} ... />   (existing component, unchanged)
-  |
-  |-- {:else}
-  |     {#each treeNodes as node}
-  |       <TreeRow {node} depth={0} ... />   (new component)
-  |         |-- if directory: chevron + folder icon + name + file count badge
-  |         |-- if file: indent + status icon + name + hover action
-  |         |-- onclick directory: toggle expanded
-  |         |-- onclick file: same as current FileRow click
+git tag v0.10.0 && git push origin v0.10.0
+    |
+    v
+release.yml starts (4 parallel matrix jobs)
+    |
+    +---> Each job: checkout, setup bun, setup rust, install deps
+    |
+    +---> ubuntu-22.04: apt-get install system deps
+    |         (libwebkit2gtk-4.1-dev, libappindicator3-dev,
+    |          librsvg2-dev, patchelf)
+    |
+    +---> bun install (all jobs)
+    |
+    +---> tauri-apps/tauri-action@v0
+    |         - Builds frontend (bun run build via tauri.conf.json beforeBuildCommand)
+    |         - Compiles Rust backend
+    |         - Bundles platform artifacts
+    |         - Uploads to GitHub Release
+    |
+    v
+Draft GitHub Release created with:
+    - Auto-generated release notes (from PR titles since last tag)
+    - macOS: 2 .dmg files (ARM + Intel)
+    - Linux: .AppImage + .deb
+    - Windows: .msi + .exe (NSIS)
 ```
 
-### New Components
+### Version Synchronization Points
 
-**FileList.svelte** -- wraps the flat/tree toggle logic:
-- Accepts `files: FileStatus[] | FileDiff[]`, `viewMode`, callbacks
-- Converts to tree when needed using `buildTree()`
-- Renders either flat FileRow list or recursive TreeRow list
+Three files contain version numbers that must stay in sync:
 
-**TreeRow.svelte** -- renders a single tree node:
-- Indentation: `padding-left: {depth * 16}px`
-- Directory: ChevronDown/ChevronRight + Folder icon + name + `(N files)` count
-- File: StatusIcon + name + hover action button
-- Uses existing FileRow action pattern (stage/unstage/discard)
-- Expanded state tracked per-directory in a `Set<string>` of expanded paths
-
-### Where Tree View Integrates
-
-**StagingPanel.svelte** -- Replace the three `{#each}` file lists:
-```svelte
-<!-- Before -->
-{#each status?.unstaged ?? [] as f (f.path)}
-  <FileRow file={f} ... />
-{/each}
-
-<!-- After -->
-<FileList
-  files={status?.unstaged ?? []}
-  viewMode={fileViewMode}
-  actionLabel="+"
-  onaction={(path) => stageFile(path)}
-  onclick={(path) => onfileselect?.(path, 'unstaged')}
-/>
+```
+package.json          --> "version": "0.10.0"
+src-tauri/Cargo.toml  --> version = "0.10.0"
+src-tauri/tauri.conf.json --> "version": "0.10.0"
 ```
 
-**CommitDetail.svelte** -- Replace the file list section:
-```svelte
-<!-- Before -->
-{#each fileDiffs as fd (fd.path)}
-  <button onclick={() => onfileselect(fd.path)}>...</button>
-{/each}
+tauri-action reads the version from `tauri.conf.json` and substitutes `__VERSION__` in `tagName` and `releaseName`. The tag version and config version should match.
 
-<!-- After -->
-<FileList
-  files={fileDiffs}
-  viewMode={fileViewMode}
-  onaction={(path) => onfileselect(path)}
-/>
+## Key Integration Points
+
+### tauri-apps/tauri-action@v0 (core release action)
+
+| Input | Value | Purpose |
+|-------|-------|---------|
+| `tagName` | `v__VERSION__` | Git tag name (version from tauri.conf.json) |
+| `releaseName` | `Trunk v__VERSION__` | Display name on GitHub Release |
+| `releaseDraft` | `true` | Create as draft -- manual publish required |
+| `prerelease` | `false` | Not a prerelease |
+| `generateReleaseNotes` | `true` | Use GitHub's auto-generated notes from PR titles |
+| `args` | `${{ matrix.args }}` | Platform-specific `--target` flag |
+
+**Outputs used:**
+- `releaseId` -- all matrix jobs upload to same release
+- `releaseHtmlUrl` -- URL for the draft release
+
+### oven-sh/setup-bun@v2
+
+| Input | Value | Purpose |
+|-------|-------|---------|
+| `bun-version` | `1.3.8` | Match mise.toml pinned version |
+
+Note: Bun installs faster than Node.js. Cache is usually not needed (bun install is faster than GH Actions cache restore for most projects), but setup-bun@v2 does cache the binary itself.
+
+### dtolnay/rust-toolchain@stable
+
+| Input | Value | Purpose |
+|-------|-------|---------|
+| `targets` | Platform-dependent | macOS needs both `aarch64-apple-darwin,x86_64-apple-darwin`; others use default |
+
+### swatinem/rust-cache@v2
+
+| Input | Value | Purpose |
+|-------|-------|---------|
+| `workspaces` | `./src-tauri -> target` | Tauri's Cargo.toml is in subdirectory |
+
+This is critical for build performance. First build: ~15-20 min for Rust compilation. Cached builds: ~3-5 min.
+
+### Dependabot Integration
+
+Three ecosystems configured in single `dependabot.yml`:
+
+| Ecosystem | Directory | Schedule | Notes |
+|-----------|-----------|----------|-------|
+| `bun` | `/` | weekly | Reads `bun.lock` (text format, supported since bun 1.1.39) |
+| `cargo` | `/src-tauri` | weekly | Reads `Cargo.toml` + `Cargo.lock` |
+| `github-actions` | `/` | weekly | Keeps action versions current |
+
+## Secrets & Environment Variables
+
+### Required for Unsigned Builds (Phase 1)
+
+| Secret | Required | Purpose |
+|--------|----------|---------|
+| `GITHUB_TOKEN` | Auto-provided | Upload release artifacts, create releases |
+
+No additional secrets needed for unsigned builds. `GITHUB_TOKEN` is automatically available.
+
+### Required for Code Signing (Future -- Out of Scope for v0.10)
+
+| Secret | Platform | Purpose |
+|--------|----------|---------|
+| `APPLE_CERTIFICATE` | macOS | Base64-encoded .p12 signing certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | macOS | Certificate password |
+| `APPLE_SIGNING_IDENTITY` | macOS | Certificate identity string |
+| `APPLE_TEAM_ID` | macOS | Apple Developer team ID |
+| `APPLE_ID` | macOS | Apple ID email for notarization |
+| `APPLE_PASSWORD` | macOS | App-specific password (not Apple ID password) |
+| `AZURE_CLIENT_ID` | Windows | Azure Key Vault for code signing |
+| `AZURE_TENANT_ID` | Windows | Azure tenant |
+| `AZURE_CLIENT_SECRET` | Windows | Azure client secret |
+
+Code signing is explicitly out of scope for v0.10. Unsigned builds work fine for personal use and GitHub distribution. Users will see Gatekeeper/SmartScreen warnings but can bypass them.
+
+## Changelog Generation
+
+### Recommended: Two-Layer Approach
+
+**Layer 1 -- GitHub Auto-Generated Release Notes** (for GitHub Release page)
+- tauri-action's `generateReleaseNotes: true` input
+- Configured via `.github/release.yml` categories
+- Groups PRs by label into sections (Features, Bug Fixes, Other)
+- Zero maintenance, works immediately
+
+**Layer 2 -- git-cliff** (for `CHANGELOG.md` file in repo)
+- Configured via `cliff.toml` at repo root
+- Parses conventional commit messages
+- Run locally before tagging: `git-cliff -o CHANGELOG.md`
+- Groups: Features (feat), Bug Fixes (fix), Performance (perf), Refactor, etc.
+- Skips: chore(deps), chore(release), CI commits
+
+Both layers serve different purposes: GitHub Release notes are for people browsing releases on GitHub; CHANGELOG.md is for people reading the repo.
+
+### git-cliff Configuration
+
+```toml
+[changelog]
+header = """
+# Changelog\n
+All notable changes to this project will be documented in this file.\n
+"""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | upper_first | trim }}\
+{% endfor %}
+{% endfor %}\n
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^style", group = "Styling" },
+  { message = "^chore\\(deps\\)", skip = true },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore|^ci", group = "Miscellaneous" },
+]
+sort_commits = "oldest"
 ```
 
-### View Mode Persistence
+## Bundle Artifacts Per Platform
 
-```typescript
-// store.ts addition
-const FILE_VIEW_MODE_KEY = 'file_view_mode';
+The existing `tauri.conf.json` has `"targets": "all"`, which produces all platform-appropriate formats automatically:
 
-export async function getFileViewMode(): Promise<'flat' | 'tree'> {
-  return (await store.get<'flat' | 'tree'>(FILE_VIEW_MODE_KEY)) ?? 'flat';
-}
-export async function setFileViewMode(mode: 'flat' | 'tree'): Promise<void> {
-  await store.set(FILE_VIEW_MODE_KEY, mode);
-  await store.save();
-}
-```
+| Platform | Runner | Artifacts | Location |
+|----------|--------|-----------|----------|
+| macOS ARM | `macos-latest` | `.app`, `.dmg` | `target/aarch64-apple-darwin/release/bundle/` |
+| macOS Intel | `macos-latest` | `.app`, `.dmg` | `target/x86_64-apple-darwin/release/bundle/` |
+| Linux x64 | `ubuntu-22.04` | `.AppImage`, `.deb` | `target/release/bundle/` |
+| Windows x64 | `windows-latest` | `.msi`, `.exe` (NSIS) | `target/release/bundle/` |
 
-The view mode is global (not per-tab) -- when you toggle tree view, all file lists switch.
+tauri-action automatically uploads all bundle artifacts to the GitHub Release.
 
-## Integration Points Summary
+## Anti-Patterns
 
-### New Files to Create
+### Anti-Pattern 1: Universal macOS Binary in CI
 
-| File | Type | Purpose |
-|------|------|---------|
-| `src/lib/tab-state.svelte.ts` | Shared state | Tab list, active tab, mutations |
-| `src/lib/file-tree.ts` | Pure utility | `buildTree()`, `flattenTree()` |
-| `src/lib/file-tree.test.ts` | Tests | Tree building edge cases |
-| `src/components/RepoView.svelte` | Component | Extracted repo workspace (from App.svelte) |
-| `src/components/FileList.svelte` | Component | Flat/tree toggle wrapper |
-| `src/components/TreeRow.svelte` | Component | Single tree node renderer |
+**What people do:** Try to build a universal macOS binary (`--target universal-apple-darwin`) in CI.
+**Why it's wrong:** Universal binaries require both ARM and Intel Rust toolchains and lipo. It is simpler and more reliable to build separate ARM and Intel .dmg files. GitHub runners are all x86_64, so cross-compiling to ARM is the standard approach.
+**Do this instead:** Two separate macOS matrix entries, one per architecture. Users download the correct .dmg for their Mac.
 
-### Existing Files to Modify
+### Anti-Pattern 2: Running Full Build Matrix for CI Checks
 
-| File | Change | Scope |
-|------|--------|-------|
-| `src/App.svelte` | Extract repo logic to RepoView, add tab management shell | **Major refactor** |
-| `src/components/TabBar.svelte` | Multi-tab rendering, + button, close per tab, drag-reorder | **Major rewrite** |
-| `src/components/StagingPanel.svelte` | Replace FileRow loops with FileList | Moderate |
-| `src/components/CommitDetail.svelte` | Replace file list with FileList | Moderate |
-| `src/lib/store.ts` | Add tab persistence, file view mode | Small additions |
-| `src/lib/types.ts` | Add TabInfo type | Small addition |
-| `src-tauri/src/state.rs` | RunningOp -> HashMap | Small |
-| `src-tauri/src/commands/repo.rs` | Make open_repo idempotent (skip if cached) | Small |
-| `src-tauri/src/commands/remote.rs` | Per-repo PID lookup | Small |
+**What people do:** Run `cargo check`, `cargo test`, `bun run check` on all 4 platform runners.
+**Why it's wrong:** Wastes 4x the GitHub Actions minutes. Lint and type checks are platform-independent for this codebase.
+**Do this instead:** Single `ubuntu-latest` runner for CI checks. Platform-specific compilation is validated at release time.
 
-### Files NOT Modified
+### Anti-Pattern 3: Using `ubuntu-latest` for Tauri Builds
 
-- All other Rust command files (staging, history, branches, diff, etc.) -- already multi-repo via path key
-- watcher.rs -- already per-repo
-- All SVG/graph rendering code -- unaffected
-- invoke.ts, types for graph/diff/branch -- unaffected
+**What people do:** Use `ubuntu-latest` for the release build.
+**Why it's wrong:** `ubuntu-latest` tracks the newest Ubuntu LTS. When GitHub bumps it from 22.04 to 24.04, WebKit2GTK package names or versions may change, breaking builds silently.
+**Do this instead:** Pin `ubuntu-22.04` for release builds. Explicit > implicit.
 
-## Patterns to Follow
+### Anti-Pattern 4: Auto-Publishing Releases
 
-### Pattern 1: Shared $state Rune Module for Tabs
+**What people do:** Set `releaseDraft: false` so releases go live immediately when the tag is pushed.
+**Why it's wrong:** If one platform build fails, you have a published release with incomplete artifacts. No chance to review.
+**Do this instead:** `releaseDraft: true`. Review the draft, verify all 4 artifacts are present, then publish manually.
 
-**What:** Use the established `$state` rune module pattern (like `remote-state.svelte.ts`) for tab state.
-**Why:** Consistent with codebase conventions. Avoids prop drilling tab info through every component.
-**When:** Any component needs to read tab list or active tab (TabBar, App.svelte).
+### Anti-Pattern 5: Forgetting Bun Setup
 
-### Pattern 2: Extract-Then-Compose Refactor
+**What people do:** Rely on tauri-action to handle package manager setup.
+**Why it's wrong:** tauri-action detects `bun.lock` and tries to use bun, but bun is not installed on GitHub runners. Fails with `bun: not found`.
+**Do this instead:** Always add `oven-sh/setup-bun@v2` before tauri-action when project uses bun.
 
-**What:** Extract the RepoView by literally moving App.svelte's repo-scoped script block into a new component. App.svelte becomes a thin shell.
-**Why:** The current App.svelte has ~40 state variables and ~20 functions all scoped to a single repo. Moving them intact preserves all existing behavior.
-**When:** Phase 1 of implementation -- do this before adding tab logic.
+### Anti-Pattern 6: Version Drift Between Config Files
 
-### Pattern 3: Pure Function Tree Builder
+**What people do:** Update version in `package.json` but forget `tauri.conf.json` or `Cargo.toml`.
+**Why it's wrong:** tauri-action reads version from `tauri.conf.json`. If it does not match the git tag, the release will have wrong version metadata. Cargo.toml drift causes `cargo build` warnings.
+**Do this instead:** Use a release script that bumps all three files atomically, or document the manual steps clearly.
 
-**What:** `buildTree()` is a pure function with no Svelte dependencies. Input: flat file array. Output: TreeNode array.
-**Why:** Easily unit-testable. Can be used in StagingPanel, CommitDetail, and future components without duplication.
-**When:** Tree view implementation phase.
+## Build Performance Expectations
 
-### Pattern 4: `{#key}` for Tab Switching
+| Scenario | Estimated Time | Notes |
+|----------|---------------|-------|
+| CI workflow (all checks) | 3-5 min | Single runner, Rust cache warm |
+| CI workflow (cold cache) | 10-15 min | First run or cache miss |
+| Release build (per platform, warm) | 5-8 min | Rust cache + bun cache |
+| Release build (per platform, cold) | 15-25 min | Full Rust compilation |
+| Release total (all platforms parallel) | 15-25 min | Bottleneck is slowest platform |
+| macOS with notarization (future) | +2-5 min | Apple's notarization service |
 
-**What:** Use Svelte's `{#key activeTab.id}` to destroy/recreate RepoView on tab switch.
-**Why:** Simpler than keep-alive. Memory-efficient. Rust cache makes re-mount fast.
-**When:** After RepoView extraction is complete.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Keep All Tabs Mounted with display:none
-
-**What:** Render all RepoViews and toggle visibility.
-**Why bad:** Each RepoView has effects listening to `repo-changed`, SVG overlays consuming memory, virtual list scroll state. With 10+ tabs, memory and event handler accumulation becomes problematic.
-**Instead:** Use `{#key}` destroy/recreate. Accept the tradeoff of losing scroll position on tab switch.
-
-### Anti-Pattern 2: Pass repoPath Through Every Component Prop
-
-**What:** Thread `repoPath` from App -> RepoView -> every child.
-**Why bad:** Already the pattern, but once tabs exist, components may need to know "am I the active tab?" for pausing updates. Prop drilling gets worse.
-**Instead:** `repoPath` stays as a prop on RepoView (which gets it from tab state). Children receive it from RepoView props. Tab state module is only used by App.svelte and TabBar.
-
-### Anti-Pattern 3: Building Tree in Rust
-
-**What:** Add a Rust command to return a tree-structured file status.
-**Why bad:** The flat list is the natural output of `git2::Repository::statuses()`. Converting to tree in Rust adds serialization complexity, new types, and gains nothing -- the JS transformation is O(n) and trivial.
-**Instead:** Pure frontend transformation in `file-tree.ts`.
-
-### Anti-Pattern 4: Global Event Bus for Tab Changes
-
-**What:** Use Tauri events to communicate tab changes between components.
-**Why bad:** Tab switching is purely a frontend concern. Adding Rust->frontend events for something that's just UI state adds unnecessary complexity.
-**Instead:** Svelte 5 reactive state via `tab-state.svelte.ts`.
+**Cache key factors:**
+- `swatinem/rust-cache` uses `Cargo.lock` hash. Dependency updates invalidate cache.
+- Bun install is typically faster than cache restore, so bun caching is optional.
+- GitHub Actions cache has 10GB limit per repository.
 
 ## Suggested Build Order
 
-The build order is driven by dependencies -- each phase can be tested independently.
+Based on dependency analysis, the CI/CD milestone should be built in this order:
 
-```
-Phase 1: Extract RepoView (prerequisite for tabs)
-  - Create RepoView.svelte from App.svelte repo code
-  - App.svelte becomes thin shell
-  - Zero behavior change -- pure refactor
-  - Test: app works exactly as before
+1. **CI workflow first** -- provides immediate value on every push/PR. No external dependencies or secrets needed. Validates that existing code passes all checks.
 
-Phase 2: Tab State + TabBar (multi-tab infrastructure)
-  - Create tab-state.svelte.ts
-  - Rewrite TabBar.svelte for multi-tab
-  - Wire App.svelte to use tab state
-  - Add tab persistence in store.ts
-  - Cmd+T/W/1-9 keyboard shortcuts
-  - New tab shows WelcomeScreen
-  - Test: open multiple repos in tabs, switch between them
+2. **Dependabot configuration** -- trivial to add alongside CI. Dependabot PRs will exercise the CI workflow, validating both.
 
-Phase 3: RunningOp Per-Repo (unblock concurrent remote ops)
-  - Change RunningOp to HashMap<String, u32>
-  - Update remote commands and cancel_remote_op
-  - Make open_repo idempotent (skip if cached)
-  - Test: fetch in repo A while pushing in repo B
+3. **Release workflow** -- depends on CI workflow patterns being validated. Requires understanding of build matrix and tauri-action configuration. Start with unsigned builds (no secrets beyond GITHUB_TOKEN).
 
-Phase 4: File Tree Utility (pure logic, no UI)
-  - Create file-tree.ts with buildTree()
-  - Create file-tree.test.ts with edge cases
-  - Test: unit tests pass for nested dirs, single files, empty input
+4. **Changelog generation** -- depends on release workflow. git-cliff can be set up locally first, then integrated into release flow. `.github/release.yml` for GitHub auto-notes is trivial.
 
-Phase 5: Tree View Components (UI integration)
-  - Create FileList.svelte (flat/tree wrapper)
-  - Create TreeRow.svelte (tree node renderer)
-  - Integrate into StagingPanel (unstaged, staged, conflicted)
-  - Integrate into CommitDetail (commit file diffs)
-  - Add view mode toggle + persistence
-  - Test: toggle between flat/tree in both panels
-```
-
-## Scalability Considerations
-
-| Concern | At 3 tabs | At 10 tabs | At 30+ tabs |
-|---------|-----------|------------|-------------|
-| Memory (Rust) | ~50MB (3 cached GraphResults) | ~150MB | Consider LRU eviction for CommitCache |
-| FS watchers | 3 notify watchers | 10 watchers | May need watcher pooling |
-| Tab bar width | Fits easily | Tabs need to shrink/scroll | Horizontal scroll + overflow menu |
-| Open repo startup | Sequential, ~1s total | ~3s sequential | Lazy-load: only open active tab's repo, open others on first switch |
+5. **Version bump scripting** -- optional tooling to keep version numbers in sync across `package.json`, `Cargo.toml`, and `tauri.conf.json`. Can be a simple shell script.
 
 ## Sources
 
-- Full codebase audit: state.rs, lib.rs, App.svelte, TabBar.svelte, WelcomeScreen.svelte, store.ts, all command files
-- [Tauri 2 State Management](https://v2.tauri.app/develop/state-management/) -- confirms Mutex<HashMap> pattern for multi-key state
-- [GitKraken Interface Documentation](https://help.gitkraken.com/gitkraken-desktop/interface/) -- tab UX patterns (Cmd+T, Cmd+1-9, drag-reorder)
-- [GitKraken tab performance feedback](https://feedback.gitkraken.com/suggestions/196509/improve-performance-when-switching-tabs) -- validates destroy/recreate concern
-- [Flat paths to tree algorithm](https://gist.github.com/Aracki/477fe5246e8c29b6440e49627e30eb0c) -- trie-based approach reference
+- [Tauri v2 Official GitHub Pipeline Guide](https://v2.tauri.app/distribute/pipelines/github/) -- HIGH confidence
+- [tauri-apps/tauri-action Repository](https://github.com/tauri-apps/tauri-action) -- HIGH confidence
+- [tauri-action Issue #986: bun not found](https://github.com/tauri-apps/tauri-action/issues/986) -- HIGH confidence (documents critical bun gotcha)
+- [oven-sh/setup-bun Action](https://github.com/oven-sh/setup-bun) -- HIGH confidence
+- [Bun CI/CD Guide](https://bun.com/docs/guides/runtime/cicd) -- HIGH confidence
+- [Dependabot Supported Ecosystems](https://docs.github.com/en/code-security/dependabot/ecosystems-supported-by-dependabot/supported-ecosystems-and-repositories) -- HIGH confidence
+- [Dependabot bun support GA announcement](https://github.blog/changelog/2025-02-13-dependabot-version-updates-now-support-the-bun-package-manager-ga/) -- HIGH confidence
+- [GitHub Auto-Generated Release Notes](https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes) -- HIGH confidence
+- [git-cliff Repository](https://github.com/orhun/git-cliff) -- HIGH confidence
+- [git-cliff GitHub Integration](https://git-cliff.org/docs/integration/github/) -- HIGH confidence
+- [Ship Your Tauri v2 App Like a Pro (Part 2)](https://dev.to/tomtomdu73/ship-your-tauri-v2-app-like-a-pro-github-actions-and-release-automation-part-22-2ef7) -- MEDIUM confidence (community tutorial, verified against official docs)
+- [Tauri v2 macOS Code Signing](https://v2.tauri.app/distribute/sign/macos/) -- HIGH confidence (reference for future milestone)
+- [Tauri v2 Windows Code Signing](https://v2.tauri.app/distribute/sign/windows/) -- HIGH confidence (reference for future milestone)
+
+---
+*Architecture research for: CI/CD Pipeline & Cross-Platform Release Publishing for Tauri 2 desktop app*
+*Researched: 2026-03-25*

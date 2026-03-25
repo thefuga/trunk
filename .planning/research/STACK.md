@@ -1,300 +1,253 @@
-# Stack Research: Trunk v0.9
+# Stack Research: CI/CD & Cross-Platform Release Publishing
 
-**Domain:** Multi-tab repository management + directory tree file views for Tauri 2 + Svelte 5 Git GUI
-**Researched:** 2026-03-23
+**Domain:** Desktop app CI/CD pipeline (Tauri 2 + Svelte 5 + Rust)
+**Researched:** 2026-03-25
 **Confidence:** HIGH
 
-## Existing Stack (DO NOT change)
+## Recommended Stack
 
-| Layer | Technology | Version | Notes |
-|-------|-----------|---------|-------|
-| Framework | Tauri 2 | 2.x | Desktop shell, IPC via `invoke`/`listen` |
-| Frontend | Svelte 5 | 5.x | Vite SPA, runes (`$state`, `$derived`, `$effect`) |
-| Styling | Tailwind CSS v4 | 4.x | Forced dark theme via CSS custom properties |
-| Git backend | `git2` (libgit2) | 0.19 | `vendored-libgit2` feature, all local ops |
-| Git CLI | subprocess | -- | Remote ops (fetch/pull/push), cherry-pick/revert |
-| Icons | `@lucide/svelte` | ^0.577 | SVG icon components |
-| FS watching | `notify` + `notify-debouncer-mini` | 7 / 0.5 | 300ms debounce |
-| State persistence | `tauri-plugin-store` | 2.4.2 | LazyStore for UI prefs |
-| Async runtime | `tokio` | 1 | `process`, `io-util` features |
-| Virtual scroll | `@humanspeak/svelte-virtual-list` | ^0.4.2 | Commit graph virtualization |
-| Drag & drop | `sortablejs` | ^1.15.7 | Interactive rebase reordering |
-| Clipboard | `tauri-plugin-clipboard-manager` | 2.x | Copy SHA/path |
-| Window state | `tauri-plugin-window-state` | 2.x | Restore window size/position |
+### Core CI/CD Actions
 
-## New Dependencies
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `tauri-apps/tauri-action` | `@v0` (v0.6.2) | Build + bundle + upload Tauri app per platform | Official Tauri action. Handles Rust compilation, frontend build, bundling (.dmg/.AppImage/.nsis), and GitHub Release upload in one step. v0 is the stable release line (v0.6.2 latest patch, March 2025). A v1 exists on the dev branch but is NOT stable-released -- do not use it. |
+| `orhun/git-cliff-action` | `@v4` (v4.7.1) | Generate changelog from conventional commits | git-cliff v2.12.0 is the Rust-native changelog generator. 120ms for 10k commits vs 30s for Node-based alternatives. Project already uses conventional commits (`feat:`, `fix:`, `chore:`, `docs:`), so it maps directly with zero workflow changes. |
+| `actions/checkout` | `@v4` | Repository checkout | Standard. Must use `fetch-depth: 0` for release workflow (git-cliff needs full history to generate changelog). CI workflow can use default shallow clone. |
+| `oven-sh/setup-bun` | `@v2` (v2.2.0) | Install Bun runtime on runners | Project uses `bun.lock` (text format). GitHub runners do NOT pre-install Bun. tauri-action auto-detects `bun.lock` and expects Bun on PATH. Without this step, builds fail with `bun: not found`. |
+| `dtolnay/rust-toolchain` | `@stable` | Install Rust toolchain | Industry standard replacement for the deprecated/archived `actions-rs/toolchain`. Concise, actively maintained. `@stable` resolves to current stable (1.93.x as of March 2026). |
+| `Swatinem/rust-cache` | `@v2` | Cache Cargo build artifacts | Saves 2-5 minutes per build. Uses Cargo.lock hash for cache keys. Essential given git2's vendored-libgit2 compile time (~3-5 min uncached). Must be placed AFTER `dtolnay/rust-toolchain`. |
 
-| Dependency | Version | Purpose | Why Needed |
-|-----------|---------|---------|------------|
-| **None** | -- | -- | Both features are implementable with the existing stack. No new crates or npm packages required. |
+### Dependabot
 
-## Core Finding: Zero New Dependencies
+| Technology | Config Version | Purpose | Why Recommended |
+|------------|----------------|---------|-----------------|
+| GitHub Dependabot | v2 (config format) | Automated dependency PRs for Cargo + npm | Built into GitHub, zero maintenance overhead. Covers both `cargo` (Rust crates) and `npm` (package.json) ecosystems. Note: Bun is not a separate Dependabot ecosystem -- use `npm` ecosystem with the root directory containing `package.json`. |
 
-Both v0.9 features (multi-tab and tree view) require **zero new dependencies**. The reasoning:
+### Bundle Targets per Platform
 
-1. **Multi-tab**: Tabs are HTML/JS-only UI within a single Tauri window. The backend already supports multiple open repos via `RepoState(HashMap<String, PathBuf>)`, `CommitCache(HashMap<String, GraphResult>)`, and `WatcherState(HashMap<String, Debouncer>)`. The `repo-changed` event already carries the repo path as payload, and all existing listeners already filter by `event.payload === repoPath`. The infrastructure is already multi-repo capable -- only the frontend assumes one active repo.
+| Platform | GitHub Runner | Bundle Format | Output File | Notes |
+|----------|---------------|---------------|-------------|-------|
+| macOS ARM (Apple Silicon) | `macos-latest` | dmg | `trunk_x.y.z_aarch64.dmg` | Native build on ARM runner |
+| macOS Intel | `macos-latest` | dmg | `trunk_x.y.z_x64.dmg` | Cross-compiled via `--target x86_64-apple-darwin` on same ARM runner |
+| Linux x64 | `ubuntu-22.04` | appimage, deb | `.AppImage`, `.deb` | Use 22.04 (not 24.04) for widest glibc compatibility |
+| Windows x64 | `windows-latest` | nsis | `trunk_x.y.z_x64-setup.exe` | NSIS over MSI: cross-compilable, per-user install, consumer-friendly |
 
-2. **Tree view**: A directory tree is a ~100 LOC recursive Svelte component. File lists in this app are small (typically 1-100 files in staging, rarely 1000+). No need for a virtual-scroll tree or third-party tree library. Svelte 5 supports recursive self-import natively -- no `<svelte:self>` needed.
+### Supporting Tools
 
----
+| Tool | Version | Purpose | When to Use |
+|------|---------|---------|-------------|
+| `git-cliff` | 2.12.0 | Local changelog generation | Optional local install for previewing changelogs during development. CI uses the GitHub Action. |
+| `prettier` | latest | Frontend code formatting | New devDependency. CI runs `prettier --check`. Not yet configured (no `.prettierrc` found). |
+| `prettier-plugin-svelte` | latest | Svelte file formatting for Prettier | Required companion for Prettier to handle `.svelte` files. |
 
-## Stack Decisions
+### Development Tools (CI Steps)
 
-### 1. Multi-Tab: Single Window, HTML/JS Tabs (NOT Tauri multi-window)
+| Tool | CI Command | Purpose | Notes |
+|------|------------|---------|-------|
+| `cargo fmt` | `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | Rust formatting check | Check-only mode, no writes. No `rustfmt.toml` exists -- defaults are fine. |
+| `cargo clippy` | `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` | Rust linting | `-D warnings` fails CI on any clippy warning. Catches common mistakes. |
+| `cargo test` | `cargo test --manifest-path src-tauri/Cargo.toml` | Rust unit tests | Project has `#[cfg(test)]` modules in 12+ files (staging, branches, graph, etc.). |
+| `cargo check` | `cargo check --manifest-path src-tauri/Cargo.toml` | Rust type checking | Faster than full build. Use as first Rust CI step for quick failure. |
+| `bun run check` | `bun run check` | svelte-check (TypeScript) | Already in package.json. Runs `svelte-check --tsconfig ./tsconfig.json`. |
+| `bun run test` | `bun run test` | Vitest frontend tests | Already in package.json. Runs `vitest run`. |
+| `prettier` | `bunx prettier --check "src/**/*.{ts,svelte,css}"` | Frontend formatting | New addition. Needs `.prettierrc` and `.prettierignore` files created. |
 
-**Decision:** Implement tabs as pure frontend Svelte components within a single Tauri window.
+## Installation
 
-**Why NOT Tauri multi-window or multi-webview:**
-- Tauri 2's multi-webview support is experimental and has known bugs (e.g., closing a webview can panic, issue #8888).
-- Each Tauri webview is a separate process/context with no shared JavaScript state -- every piece of UI state would need to pass through Rust IPC.
-- The UX goal is browser-like tabs (drag to reorder, Cmd+T to open, Cmd+W to close), not separate OS windows.
-- Every professional Git GUI (GitKraken, Fork, SourceTree) uses single-window HTML/JS tabs, not native multi-window.
-- Spacedrive (a production Tauri app) implements tabs the same way -- pure frontend.
+No new runtime dependencies. All additions are CI-only (GitHub Actions config) or dev tooling.
 
-**Architecture:**
+```bash
+# Dev dependency for formatting checks (only new npm packages)
+bun add -D prettier prettier-plugin-svelte
 
-```
-App.svelte (tab container)
-  |-- TabBar.svelte (tab strip with + button)
-  |-- {#each tabs as tab}
-  |     RepoView.svelte (all current App.svelte repo content, extracted)
-  |   OR
-  |     WelcomeScreen.svelte (new-tab page / splash)
-  |-- {/each} (only active tab rendered, or all with display:none)
-```
-
-**Key pattern -- extract `RepoView`:** The current `App.svelte` contains ~500 lines of repo-specific state (repoPath, refreshSignal, dirtyCounts, selectedFile, commitDetail, etc.). This gets extracted into a new `RepoView.svelte` component. `App.svelte` becomes a thin tab orchestrator that mounts one `RepoView` per tab.
-
-**State isolation strategy:**
-- Each tab is a `RepoView` component instance with its own `$state` variables. Svelte component instances naturally isolate state -- no extra work needed.
-- The Rust backend already isolates per-repo: `RepoState`, `CommitCache`, and `WatcherState` are all `HashMap<String, ...>` keyed by repo path.
-- The `repo-changed` event already carries the path as payload. Each `RepoView` instance already filters `event.payload === repoPath`. No backend changes needed.
-- Shared global state (zoom level, pane widths) stays in `store.ts` and applies to all tabs.
-
-**Tab state to persist (via LazyStore):**
-- `open_tabs: Array<{ path: string; name: string }>` -- ordered list of open tabs
-- `active_tab_index: number` -- which tab is focused
-- Replaces the current `open_repo: { path, name }` single-repo persistence
-
-**Rendering strategy -- mount active tab only (with keepalive via state):**
-- Only mount the active tab's `RepoView` in the DOM. Unmounted tabs lose their component state.
-- For cheap "tab restore": When switching back to a tab, `RepoView` mounts fresh and re-fetches from the Rust cache (which is already populated and warm). The `CommitCache` holds the full graph per repo path, so re-mount is just an IPC call + render -- fast enough (<100ms).
-- Alternative: keep all tabs mounted with `display: none` on inactive ones. This preserves scroll position and selection state but increases memory. Start with unmount + re-fetch; optimize to keep-alive later if UX demands it.
-
-**Confidence:** HIGH -- the backend is already multi-repo. Tabs are pure UI. This is the same approach as Spacedrive, GitKraken, and Fork.
-
----
-
-### 2. Tree View: Custom Recursive Svelte Component (NOT a library)
-
-**Decision:** Build a custom `FileTree.svelte` + `TreeNode.svelte` recursive component. No third-party tree library.
-
-**Why NOT `@keenmate/svelte-treeview`:**
-- It pulls in FlexSearch as a dependency (we do not need text search in file trees).
-- It has 743 weekly npm downloads -- low adoption, risk of abandonment.
-- It ships its own SCSS styles that would conflict with our Tailwind + CSS custom properties theme system.
-- Its feature set (drag & drop, search, editing, virtual scroll for 50k+ nodes) is massively overengineered for our use case of rendering 1-500 file paths as a tree.
-- The `nodeTemplate` snippet customization would still require fighting the library's CSS and structure.
-
-**Why custom is better here:**
-- A recursive tree view in Svelte 5 is ~80-120 lines of code total.
-- Our file trees are small: staging panel shows working tree status (rarely >100 files), commit diffs show changed files (rarely >500), merge editor shows conflicted files (rarely >20).
-- We already have `FileRow.svelte` with status icons, hover actions, and context menus. A tree view just wraps it with expand/collapse at directory nodes.
-- Full control over CSS custom properties, hover states, action buttons, and integration with existing staging/diff workflows.
-- No risk of breaking changes from third-party library updates.
-
-**Data structure -- flat path to tree conversion:**
-
-The backend already returns `FileStatus[]` with flat paths (e.g., `"src/lib/store.ts"`). Transform on the frontend:
-
-```typescript
-interface TreeNode {
-  name: string;          // "store.ts" or "lib"
-  path: string;          // "src/lib/store.ts" (full relative path)
-  isDir: boolean;
-  children: TreeNode[];  // sorted: dirs first, then files, both alphabetical
-  file?: FileStatus;     // present only for leaf files
-}
-
-function buildTree(files: FileStatus[]): TreeNode[] {
-  const root: TreeNode = { name: '', path: '', isDir: true, children: [] };
-  for (const file of files) {
-    const parts = file.path.split('/');
-    let current = root;
-    for (let i = 0; i < parts.length; i++) {
-      const isLast = i === parts.length - 1;
-      const partPath = parts.slice(0, i + 1).join('/');
-      let child = current.children.find(c => c.name === parts[i]);
-      if (!child) {
-        child = {
-          name: parts[i],
-          path: partPath,
-          isDir: !isLast,
-          children: [],
-          file: isLast ? file : undefined,
-        };
-        current.children.push(child);
-      }
-      current = child;
-    }
-  }
-  sortTree(root);
-  return root.children;
-}
+# Optional: git-cliff for local changelog preview
+cargo install git-cliff
+# Or without installing: bunx git-cliff
 ```
 
-**Component structure:**
+### New Files to Create
 
-```svelte
-<!-- FileTree.svelte -->
-<script lang="ts">
-  import FileTreeNode from './FileTreeNode.svelte';
-  // props: files, onaction, onclick, etc.
-  // $derived: tree = buildTree(files)
-</script>
-{#each tree as node}
-  <FileTreeNode {node} depth={0} ... />
-{/each}
-
-<!-- FileTreeNode.svelte (recursive) -->
-<script lang="ts">
-  import FileTreeNode from './FileTreeNode.svelte'; // self-import for recursion
-  // if node.isDir: render expand/collapse toggle + directory name
-  // if node.file: render existing FileRow component
-</script>
-{#if node.isDir}
-  <div class="dir-row" onclick={toggle}>
-    <ChevronRight/ChevronDown /> {node.name}
-  </div>
-  {#if expanded}
-    {#each node.children as child}
-      <FileTreeNode node={child} depth={depth + 1} ... />
-    {/each}
-  {/if}
-{:else}
-  <FileRow file={node.file} ... />
-{/if}
+```
+.github/workflows/ci.yml              # Lint + test on every push and PR
+.github/workflows/release.yml         # Build all platforms + publish on tag push
+.github/dependabot.yml                # Automated dependency update PRs
+cliff.toml                            # git-cliff changelog configuration
+.prettierrc                           # Prettier formatting config
+.prettierignore                       # Exclude build artifacts from formatting
 ```
 
-**Expand/collapse state:** Store expanded directory paths in a `Set<string>` as `$state`. Default: expand all directories (file counts are small). Persist toggle preference (flat vs tree) in LazyStore, but not individual expansion state (it changes too often with working tree edits).
+## Architecture: Two-Workflow Design
 
-**Toggle between flat and tree view:** A toggle button in the staging panel header and commit detail header. Store the preference per-component-type (staging vs commit detail) in LazyStore. Default to flat (preserving current behavior) so the upgrade is non-breaking.
+### Workflow 1: CI (`ci.yml`) -- Every Push + PR
 
-**Performance:** The `buildTree` transform is O(n * d) where n = file count, d = average path depth. For 500 files at depth 5, that is 2500 string comparisons -- sub-millisecond. No virtual scrolling needed for tree view; the existing scroll container handles it.
+```
+Trigger: push to any branch, pull_request targeting main
+Runner: ubuntu-latest (single platform, fastest feedback)
+Purpose: Code quality gate -- fail fast on lint/test/type errors
 
-**Confidence:** HIGH -- recursive Svelte 5 components are well-documented, the data transform is trivial, and file counts in our use cases are small.
+Steps:
+  1. actions/checkout@v4
+  2. oven-sh/setup-bun@v2
+  3. bun install
+  4. dtolnay/rust-toolchain@stable
+  5. Swatinem/rust-cache@v2
+  6. cargo fmt --check
+  7. cargo clippy -- -D warnings
+  8. cargo test
+  9. bun run check (svelte-check)
+  10. bun run test (vitest)
+  11. bunx prettier --check
+```
 
----
+No matrix needed. Single `ubuntu-latest` runner catches all lint and test failures. Cross-platform compilation is only needed for releases.
 
-### 3. Tab Bar: Custom Component (NOT sortablejs for tab drag)
+### Workflow 2: Release (`release.yml`) -- Tag Push
 
-**Decision:** Build a custom `TabBar.svelte` with basic Cmd+T/Cmd+W keyboard shortcuts. Defer tab drag-to-reorder to a later milestone.
+```
+Trigger: push tags matching 'v*' (e.g., v0.10.0)
+Purpose: Build all platforms, generate changelog, publish GitHub Release
 
-**Why:** Tab reordering is a nice-to-have, not a table-stakes feature for v0.9. The existing `sortablejs` dependency could be reused for tab drag later, but adding drag behavior to tabs introduces edge cases (drag a tab out to create a new window, drag between windows) that are out of scope.
+Job 1 -- Changelog:
+  1. actions/checkout@v4 (fetch-depth: 0)
+  2. orhun/git-cliff-action@v4 (generate release body)
+  3. Create draft GitHub Release with changelog body
 
-**Tab bar features for v0.9:**
-- Horizontal tab strip showing repo name per tab
-- Active tab indicator (accent color underline)
-- Close button (X) on each tab
-- "+" button to open a new tab (shows WelcomeScreen)
-- Middle-click to close a tab (standard browser behavior)
-- Cmd+T to open a new tab, Cmd+W to close current tab
-- Cmd+1-9 to switch to tab by index
-- Scroll overflow when many tabs open (horizontal scroll or min-width shrink)
+Job 2 -- Build (matrix, depends on Job 1):
+  Matrix:
+    - { platform: macos-latest, args: '--target aarch64-apple-darwin' }
+    - { platform: macos-latest, args: '--target x86_64-apple-darwin' }
+    - { platform: ubuntu-22.04, args: '' }
+    - { platform: windows-latest, args: '' }
+  Steps:
+    1. actions/checkout@v4
+    2. oven-sh/setup-bun@v2
+    3. bun install
+    4. dtolnay/rust-toolchain@stable (with targets for macOS cross-compile)
+    5. Swatinem/rust-cache@v2
+    6. Install Linux deps (Ubuntu only)
+    7. tauri-apps/tauri-action@v0 (build + upload to release from Job 1)
+```
 
-**Confidence:** HIGH -- purely UI work with established patterns.
+Release is created as **draft** so the developer can review artifacts and changelog before publishing.
 
----
+### Dependabot Config (`dependabot.yml`)
 
-## Integration Notes
+```
+Ecosystems:
+  - cargo (directory: /src-tauri, weekly, label: dependencies)
+  - npm (directory: /, weekly, label: dependencies)
+  - github-actions (directory: /, weekly, label: dependencies)
+```
 
-### Backend Changes Required
+Include `github-actions` ecosystem to keep action versions updated (checkout, setup-bun, rust-toolchain, etc.).
 
-**Minimal.** The Rust backend is already multi-repo capable:
+## Key Integration Points
 
-1. **`open_repo`**: Already inserts into `RepoState(HashMap)`, `CommitCache(HashMap)`, and starts a watcher per path. Opening a second repo while another is open already works.
+### tauri.conf.json -- No Changes Needed
 
-2. **`close_repo`**: Already removes a single path from all state maps and stops its watcher. Does not affect other open repos.
+Current config has `"targets": "all"` in the bundle section. This is correct -- tauri-action automatically selects platform-appropriate targets. The `args` matrix parameter handles target architecture (`--target x86_64-apple-darwin` for Intel Mac cross-compile).
 
-3. **`repo-changed` event**: Already carries path as payload. Multiple watchers already coexist.
+### Version Management
 
-4. **All commands accept `path: String`**: Every Tauri command already takes the repo path as an argument and opens a fresh `Repository::open(path)` per call. No command assumes a single global repo.
+Version is currently `0.1.0` in `package.json`, `tauri.conf.json`, and `Cargo.toml`. Before creating the first release tag:
+1. Bump all three files to the actual release version (e.g., `0.10.0`)
+2. Commit the version bump
+3. Tag with `v0.10.0`
+4. Push the tag -- this triggers the release workflow
 
-**One concern: memory.** Each open tab holds a full `GraphResult` in `CommitCache`. For a repo with 50k commits, that is ~20-30MB. With 10 tabs open, that is 200-300MB. This is acceptable for a desktop app, but worth monitoring. If needed, an LRU eviction on `CommitCache` can be added later (evict oldest unused repo when cache exceeds a threshold).
+The `__VERSION__` placeholder in tauri-action reads from `tauri.conf.json`'s `version` field.
 
-### Frontend Changes Required
+### Tag Convention
 
-1. **Extract `RepoView.svelte`** from current `App.svelte` repo content (~lines 30-500 of state + template).
-2. **Refactor `App.svelte`** into tab orchestrator: `tabs: Tab[]` state, `activeTabIndex`, tab lifecycle methods.
-3. **Evolve `TabBar.svelte`** from current single-tab display to multi-tab strip.
-4. **Evolve `store.ts`**: Replace `open_repo` with `open_tabs` + `active_tab_index`.
-5. **Build `FileTree.svelte` + `FileTreeNode.svelte`** (~120 LOC total).
-6. **Build `buildTree()` utility** in a new `src/lib/tree.ts` (~50 LOC).
-7. **Add tree/flat toggle** to `StagingPanel.svelte`, `CommitDetail.svelte`, and `MergeEditor.svelte` file list sections.
-8. **Persist view preference** (flat vs tree) in LazyStore.
+Use `v{VERSION}` tags (e.g., `v0.10.0`). Configure tauri-action with:
+- `tagName: v__VERSION__` -- creates/finds the tag matching the app version
+- `releaseName: Trunk v__VERSION__` -- human-readable release title
 
-### Keyboard Shortcuts
+Configure git-cliff's `tag_pattern` to match `v[0-9]*`.
 
-| Shortcut | Action | Scope |
-|----------|--------|-------|
-| Cmd+T | New tab (WelcomeScreen) | Global |
-| Cmd+W | Close current tab | Global |
-| Cmd+1-9 | Switch to tab N | Global |
-| Cmd+Shift+] | Next tab | Global |
-| Cmd+Shift+[ | Previous tab | Global |
+### Linux Build Dependencies
 
-These must be registered at the `App.svelte` level, before the existing Cmd+F (search) handler which lives in `CommitGraph.svelte`.
+The Ubuntu runner needs system packages for Tauri 2 (WebKit2GTK 4.1):
 
----
+```bash
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
 
-## What NOT to Add
+### Bun Lock File Detection
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Tauri multi-window / multi-webview | Experimental, no shared JS state, separate process per webview, known panics on close | HTML/JS tabs in single window |
-| `@keenmate/svelte-treeview` | Pulls FlexSearch, overengineered for <500 file trees, own SCSS breaks our theme, 743 weekly downloads | Custom ~120 LOC recursive component |
-| `svelte-file-tree-explorer` | Svelte 4 only, last updated 2021, dead project | Custom component |
-| `@svar/svelte-filemanager` | Full file manager UI with its own layout, far too heavy for a file list sub-component | Custom component |
-| Skeleton / shadcn-svelte tree views | Would require adopting those UI frameworks; conflicts with existing Tailwind + CSS custom properties | Custom component |
-| `directory-tree` npm package | Reads from filesystem via Node.js -- we are in a browser context, files come from git2 backend | Frontend `buildTree()` utility |
-| Svelte router (svelte-spa-router, etc.) | Tabs are not URL routes. No navigation/history needed. Component show/hide is sufficient | Conditional rendering `{#if activeTab === i}` |
-| State management library (zustand-svelte, etc.) | Svelte 5 runes (`$state`, `$derived`) are the state management. Component instance isolation gives us per-tab state for free | `$state` runes in each `RepoView` instance |
-| Tab drag-to-reorder | Nice-to-have, not table stakes for v0.9. Existing `sortablejs` can be reused later | Defer to future milestone |
+The project uses `bun.lock` (Bun's newer text format, not the old binary `bun.lockb`). Tauri CLI detection was fixed in PR #12998 (March 2025) to recognize both formats. tauri-action inherits this fix. The `oven-sh/setup-bun@v2` step must come before `tauri-action` so Bun is on PATH when detected.
 
----
+## cliff.toml Configuration
+
+The project's conventional commit style maps cleanly to changelog groups:
+
+| Commit Prefix | Changelog Group | Include in Changelog |
+|---------------|-----------------|----------------------|
+| `feat:` / `feat(scope):` | Features | Yes |
+| `fix:` / `fix(scope):` | Bug Fixes | Yes |
+| `chore:` | Miscellaneous | Skip (internal) |
+| `docs:` | Documentation | Skip (GSD planning artifacts) |
+| `refactor:` | Refactoring | Skip (internal) |
+
+Skip `docs:` commits because the project's commit history is heavily docs-commit-laden from GSD planning workflow -- these are not user-facing changes.
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| Single window HTML tabs | Tauri multi-window | If each repo needs true OS-level window management (e.g., dual-monitor drag-out). Revisit when Tauri multi-webview stabilizes. |
-| Custom tree component | `@keenmate/svelte-treeview` | If file trees grow to 10k+ items and need virtual scrolling. Unlikely in a Git GUI staging panel. |
-| Unmount inactive tabs | Keep all tabs mounted (display:none) | If users report slow tab switching or loss of scroll position becomes a UX pain point. Easy to switch later. |
-| Flat-first default | Tree-first default | After user testing. Tree may become preferred once available; let usage data decide. |
+| `tauri-apps/tauri-action@v0` | Manual `cargo tauri build` steps | Never for this project. tauri-action handles bundling, artifact naming, release upload, and updater JSON in one step. Manual approach requires 50+ lines of YAML duplicating all of this. |
+| `git-cliff` (Rust) | `conventional-changelog` (Node) | If project were Node-only. git-cliff is ~250x faster and Rust-native, matching this project's stack. |
+| `git-cliff` | GitHub auto-generated release notes | If you want zero configuration. GitHub's built-in notes list PR titles only and don't group by conventional commit type. git-cliff produces a properly grouped, customizable changelog. |
+| NSIS (`.exe`) for Windows | MSI (`.msi`) | For enterprise/Group Policy deployment. MSI requires a Windows-only build (WiX Toolset cannot cross-compile). NSIS works on all host platforms, supports per-user install, and is the better choice for a consumer desktop app. |
+| `ubuntu-22.04` for Linux builds | `ubuntu-24.04` | When minimum glibc compatibility is not a concern. 22.04 produces binaries compatible with older Linux systems. 24.04 raises the glibc floor, reducing compatibility. Stick with 22.04 for widest user reach. |
+| `Swatinem/rust-cache@v2` | `actions/cache` (generic) | Never for Rust. rust-cache understands Cargo.lock, target directory structure, and registry cache layout. Generic cache requires manual key configuration and misses optimizations. |
+| Dependabot | Renovate | For monorepo organizations needing grouped PRs, automerge rules, and custom merge strategies. Dependabot is simpler and built into GitHub with zero setup beyond the YAML file. Sufficient for this project. |
+| Draft release (manual publish) | Auto-publish | If you trust the pipeline fully and want zero manual steps. Starting with draft releases lets you review artifacts and changelog before they go public. Can switch to auto-publish later. |
 
----
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `actions-rs/toolchain` | Archived October 2023, known bugs, unmaintained | `dtolnay/rust-toolchain@stable` |
+| `actions-rs/cargo` | Same: archived, unmaintained | Direct `cargo` commands via `run:` steps |
+| `tauri-apps/tauri-action@v1` | Dev branch only, not stable-released. Using it risks breaking changes. | `tauri-apps/tauri-action@v0` (v0.6.2 stable) |
+| MSI bundle target | WiX Toolset requires Windows host. Cannot cross-compile. Limits CI flexibility. | NSIS -- builds on all platforms |
+| `actions/setup-node` | Project uses Bun. tauri-action detects `bun.lock` and calls Bun. Installing Node creates confusion and doesn't help. | `oven-sh/setup-bun@v2` |
+| `semantic-release` (Node) | Overkill for a personal desktop app. Adds Node runtime, complex plugin config, assumes npm publishing. | `git-cliff` for changelog + `tauri-action` for release -- two simple tools covering the same flow |
+| `cargo-release` | Designed for publishing Rust libraries to crates.io. This is a desktop app. Version lives in `tauri.conf.json`. | Manual version bump in 3 files before tagging |
+| `release-please` (Google) | Designed for monorepos publishing multiple packages. Over-automated for a single-app desktop project. | Manual tag push to trigger release |
+| CrabNebula Cloud | Paid SaaS for Tauri distribution with auto-updates. Out of scope (auto-updates deferred to v1.0). | GitHub Releases for now |
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| Svelte 5 self-import recursion | Svelte 5.x | Replaces deprecated `<svelte:self>`. Import component from itself. |
-| `tauri-plugin-store` 2.4.2 | Tauri 2.x | Already used. `open_tabs` array replaces `open_repo` single object. |
-| `@humanspeak/svelte-virtual-list` ^0.4.2 | Svelte 5.x | Not needed for tree view (files are few). Already used for commit graph only. |
-
----
+| Component A | Compatible With | Notes |
+|-------------|-----------------|-------|
+| `tauri-apps/tauri-action@v0` | Tauri 2.x | Reads version from `tauri.conf.json`. Supports `bun.lock` detection (tauri-cli PR #12998, March 2025). |
+| `tauri-apps/tauri-action@v0` | `oven-sh/setup-bun@v2` | tauri-action auto-detects Bun from lock file. Bun must be installed first via setup-bun. |
+| `orhun/git-cliff-action@v4` | `actions/checkout@v4` | Requires `fetch-depth: 0` on checkout. Without full history, git-cliff produces empty or errored changelogs. |
+| `Swatinem/rust-cache@v2` | `dtolnay/rust-toolchain@stable` | rust-cache MUST come after toolchain setup. Cache keys incorporate toolchain version + Cargo.lock hash. |
+| `git2 = "0.19"` (vendored-libgit2) | `ubuntu-22.04` runner | Vendored libgit2 compiles from source. Slow first build (~3-5 min), fast with cache (<30s). Runner needs `libwebkit2gtk-4.1-dev` for Tauri bundling, not for git2. |
+| NSIS bundle | All runner platforms | NSIS cross-compiles on macOS/Linux/Windows. MSI does NOT cross-compile. |
+| AppImage bundle | `ubuntu-22.04` only | Requires `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `patchelf` system packages. |
+| DMG bundle | `macos-latest` only | Both `aarch64-apple-darwin` and `x86_64-apple-darwin` targets build on the same Apple Silicon runner via cross-compilation. |
+| Dependabot `npm` ecosystem | `bun.lock` | Dependabot reads `package.json` for version info. It does not need to understand the lock file format -- it creates PRs that update `package.json` ranges. |
 
 ## Sources
 
-- [Tauri 2 State Management docs](https://v2.tauri.app/develop/state-management/) -- State wraps in Arc automatically, Mutex for interior mutability (HIGH confidence)
-- [Tauri multi-webview discussion #2975](https://github.com/tauri-apps/tauri/issues/2975) -- Multiple webviews now implemented but experimental (HIGH confidence)
-- [Tauri splittable tab discussion #6464](https://github.com/tauri-apps/tauri/discussions/6464) -- Spacedrive example, FabianLars confirms tabs should be HTML/JS (HIGH confidence)
-- [Tauri multi-window discussion #9423](https://github.com/tauri-apps/tauri/discussions/9423) -- No shared JS context across windows, state must go through Rust (HIGH confidence)
-- [Recursive Svelte 5 components](https://scriptraccoon.dev/blog/recursive-svelte-components) -- Self-import pattern replaces svelte:self (HIGH confidence)
-- [@keenmate/svelte-treeview GitHub](https://github.com/KeenMate/svelte-treeview) -- Svelte 5 compatible but overengineered, FlexSearch dependency (MEDIUM confidence)
-- [GitKraken/Fork/SourceTree comparison](https://www.kaels-kabbage.com/posts/gitkraken-vs-fork-facts-vs-feelings/) -- All use single-window tab-based UI (HIGH confidence)
-- Existing codebase: `state.rs` (RepoState/CommitCache/WatcherState HashMaps), `watcher.rs` (per-path watchers), `repo.rs` (open_repo/close_repo), `App.svelte` (repo-changed listener filters by path), `store.ts` (LazyStore patterns) (HIGH confidence)
+- [Tauri 2 GitHub Actions guide](https://v2.tauri.app/distribute/pipelines/github/) -- Official workflow examples with matrix strategy (HIGH confidence)
+- [tauri-apps/tauri-action repository](https://github.com/tauri-apps/tauri-action) -- Input/output spec, Tauri v2 support (HIGH confidence)
+- [tauri-action releases](https://github.com/tauri-apps/tauri-action/releases) -- v0.6.2 is latest stable (March 2025) (HIGH confidence)
+- [Tauri Windows Installer docs](https://v2.tauri.app/distribute/windows-installer/) -- NSIS vs MSI trade-offs (HIGH confidence)
+- [git-cliff repository](https://github.com/orhun/git-cliff) -- v2.12.0, January 2026 (HIGH confidence)
+- [git-cliff-action repository](https://github.com/orhun/git-cliff-action) -- v4.7.1, February 2026 (HIGH confidence)
+- [oven-sh/setup-bun](https://github.com/oven-sh/setup-bun) -- v2.2.0, verified on GitHub Marketplace (HIGH confidence)
+- [dtolnay/rust-toolchain](https://github.com/dtolnay/rust-toolchain) -- Stable, actively maintained, recommended by Rust community (HIGH confidence)
+- [Swatinem/rust-cache](https://github.com/Swatinem/rust-cache) -- v2.x, smart Cargo caching (HIGH confidence)
+- [GitHub Dependabot configuration docs](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates) -- v2 config format (HIGH confidence)
+- [Tauri bun.lock detection fix (issue #12914)](https://github.com/tauri-apps/tauri/issues/12914) -- PR #12998 merged March 2025, both bun.lock and bun.lockb supported (HIGH confidence)
+- [tauri-action bun issue #986](https://github.com/tauri-apps/tauri-action/issues/986) -- Workaround: install Bun via setup-bun before tauri-action (HIGH confidence)
 
 ---
-*Stack research for: Trunk v0.9 Multi-tab & Tree View*
-*Researched: 2026-03-23*
+*Stack research for: CI/CD & Cross-Platform Release Publishing (Trunk v0.10)*
+*Researched: 2026-03-25*

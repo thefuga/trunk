@@ -1,161 +1,188 @@
-# Feature Landscape: Multi-tab Repository Management & Tree View File Lists
+# Feature Research
 
-**Domain:** Desktop Git GUI multi-repo tabs and directory tree file display
-**Researched:** 2026-03-23
-**Target milestone:** v0.9
+**Domain:** CI/CD pipeline and cross-platform release publishing for a Tauri 2 desktop app
+**Researched:** 2026-03-25
+**Confidence:** HIGH
 
-## Table Stakes
+## Feature Landscape
 
-Features users expect from a Git GUI that supports multiple repositories and file tree views. Missing any of these makes the milestone feel incomplete.
+### Table Stakes (Users Expect These)
 
-### Multi-tab Repository Management
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Tab bar with repo name per tab | Every tabbed Git GUI (GitKraken, Fork, Sourcetree on Windows) shows repo name in tab. Users need to identify which repo they're looking at. | Low | Current `TabBar.svelte` shows a single tab with close button. Extend to render N tabs. Each tab shows `repoName` text + close (X) button. Active tab visually distinct (brighter text, bottom border or background). |
-| New tab button (+) | GitKraken, Fork, and browser convention. The + button at the end of the tab bar opens a new tab showing the WelcomeScreen (splash/project picker). | Low | Plus icon button after the last tab. Clicking it pushes a new tab entry with `repoPath: null` state, which renders the existing `WelcomeScreen` component. |
-| Close tab (X button) | Standard across all tabbed interfaces. Each tab needs a close button that tears down that repo's state. | Low | Already exists as single close button in `TabBar.svelte`. Extend to per-tab X buttons. Closing calls `close_repo` for that tab's path, removes tab from array. If last tab closes, show WelcomeScreen in a new empty tab. |
-| Cmd+T / Ctrl+T for new tab | GitKraken uses this exact shortcut. Browser-standard convention users already know. | Low | Add to existing `handleKeydown` in `App.svelte`. Must not conflict with existing Cmd+J/K (pane toggles). |
-| Cmd+W / Ctrl+W for close tab | GitKraken uses this exact shortcut. Universal tab close convention. | Low | Close active tab. If it's the last tab and has no repo open, close the window instead (or keep one empty tab). |
-| Cmd+1-9 / Ctrl+1-9 for tab switching | GitKraken supports this. Browser convention. Essential for keyboard-driven workflows. | Low | Map Cmd+1 to first tab, Cmd+2 to second, etc. Cmd+9 always selects the last tab (browser convention). |
-| Ctrl+Tab / Ctrl+Shift+Tab for next/prev tab | GitKraken and Fork both support this. Standard OS-level tab navigation. | Low | Cycle through tabs in order. Wrap around at ends. |
-| Independent state per tab | Each tab must have its own repo path, commit graph, staging panel state, diff state, selection state. No cross-tab pollution. | High | This is the core architectural challenge. Currently `App.svelte` holds all repo state as top-level `$state` variables. Must refactor to per-tab state objects or a tab-indexed state map. See Architecture research for approaches. |
-| Tab order persistence across restart | Users expect their tabs to be where they left them when reopening the app. | Med | Persist tab array (order + repo paths) to LazyStore. On startup, restore tabs. Replace current `getOpenRepo`/`setOpenRepo` (single repo) with `getOpenTabs`/`setOpenTabs` (array). |
-| Dirty indicator on tab | Fork shows a star/dot when a repo has uncommitted changes. Prevents users from forgetting unsaved work in a background tab. | Low | Show a small dot/circle indicator on tabs where `dirtyCounts.staged + dirtyCounts.unstaged + dirtyCounts.conflicted > 0`. Color: use accent or a subtle indicator. Poll dirty counts for background tabs on `repo-changed` events. |
-| WelcomeScreen as new-tab page | Opening a new tab should show the same project picker / recent repos screen that appears on first launch. Consistent mental model. | Low | Already implemented as `WelcomeScreen.svelte`. When a tab has `repoPath === null`, render WelcomeScreen. When user picks a repo from WelcomeScreen, that tab transitions to the repo view. |
-| Middle-click tab to close | GitKraken and browser convention. Power users expect this. | Low | `onmousedown` handler on tab element, check `event.button === 1` (middle click), call close. |
-
-### Tree View File Lists
+Features that any serious open-source Tauri 2 project must have for CI/CD and release publishing. Missing these means the project looks unfinished or untrustworthy to contributors and users downloading releases.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Toggle between flat list and tree view | GitKraken, Fork, VS Code, Lazygit, SmartGit all offer this toggle. It is the universal pattern. Users working in deeply nested repos need tree view; users in flat repos prefer the list. | Med | A toggle button (list/tree icon) in the header of each file list section (unstaged, staged, conflicted, commit detail files). Persisted to LazyStore so the preference survives restart. |
-| Directory nodes with expand/collapse | Standard tree interaction. Click chevron or directory name to expand/collapse. Chevron rotates (right = collapsed, down = expanded). | Med | Tree node: `{ name: string, path: string, children: TreeNode[], files: FileStatus[] }`. Expand/collapse state tracked per directory path. Indentation via `padding-left: depth * 16px` or similar. |
-| File status icon + name at leaf level | Existing `FileRow.svelte` already shows status icon + filename. In tree mode, the filename portion shows just the basename (not full path). | Low | Reuse existing `FileRow` component but pass `file.path.split('/').pop()` as display name in tree mode. Full path continues to be used for actions (stage, unstage, diff). |
-| Directory path segments with slash separators | When a directory has only one child directory, compress into single line: `src/lib/` instead of separate `src` > `lib` nodes. Lazygit and VS Code both do this. | Med | Path compression: if a directory node has exactly one child and that child is a directory (not a file), merge them into a single display node with combined path (`parent/child`). Reduces visual noise significantly. |
-| Stage/unstage entire directory | GitKraken allows staging entire folders in tree view. Lazygit stages directories with space key. Users expect to batch-stage related files. | Med | Hover action button on directory nodes (same +/- pattern as `FileRow`). Calls stage/unstage for all files recursively under that directory. Must handle mixed states (some files already staged). |
-| Directory status color aggregation | Lazygit convention: red = all unstaged, green = all staged, yellow = mixed. Helps users scan tree for outstanding work. | Low | Only relevant in contexts showing mixed staged/unstaged (not typical in Trunk since unstaged and staged are separate sections). For commit diffs, show the dominant diff status color. For staging panel, each section is homogeneous so directories inherit the section's color. |
-| Consistent tree view across all file lists | Tree view should work in: (1) unstaged files, (2) staged files, (3) conflicted files, (4) commit detail file list, (5) merge editor file picker if any. | Med | Build a shared `FileTree.svelte` component that accepts `FileStatus[]` or `FileDiff[]` and renders either flat or tree mode. Use in StagingPanel, CommitDetail, and any future file list. |
-| Keyboard navigation in tree view | Arrow keys to move between items, Left/Right to collapse/expand directories, Enter to select file. Standard tree keyboard nav (WAI-ARIA treeview pattern). | Med | Focus management with `aria-role="treeitem"` and `aria-expanded`. Up/Down moves between visible items (skip collapsed children). Left collapses current directory or moves to parent. Right expands or moves into first child. |
+| CI lint/check on every push and PR | Prevents regressions; standard for any Rust+TS project. Contributors expect immediate feedback on PRs. | LOW | Separate jobs for fast feedback: `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --all -- --check`, `cargo test`, `bun run check` (svelte-check), `bun run test` (vitest), prettier `--check`. Run on ubuntu-latest only (cheapest). |
+| Cross-platform release builds (macOS, Linux, Windows) | A desktop app that only ships one platform is not a real release. Users expect native installers for their OS. | MEDIUM | `tauri-apps/tauri-action@v0` handles build + bundle. Matrix: macOS (universal binary via `--target universal-apple-darwin`), Ubuntu 22.04 x64, Windows x64. Outputs: .dmg, .AppImage, .msi. |
+| Tag-triggered release workflow | Standard release mechanism for open-source projects. Push `v*` tag, get binaries. Predictable and auditable. | LOW | Trigger on `push: tags: ['v*']`. tauri-action creates GitHub Release and uploads platform artifacts. The `__VERSION__` placeholder in tagName/releaseName is auto-replaced with version from tauri.conf.json. |
+| GitHub Release with downloadable artifacts | Users expect a Releases page with clearly labeled platform-specific downloads they can grab. | LOW | Built into tauri-action. Each matrix job uploads its artifacts to the same GitHub Release. Release body includes changelog. |
+| Dependabot for automated dependency updates | Standard GitHub practice. Keeps Cargo crates, npm packages, and GitHub Actions versions current. Catches security vulnerabilities. | LOW | Single `.github/dependabot.yml` with three ecosystem entries: `cargo` (directory: `/src-tauri`), `npm` (directory: `/`), `github-actions` (directory: `/`). Weekly schedule for all three. |
+| Rust build caching in CI | Without caching, Rust compilation takes 10-15 minutes. With `swatinem/rust-cache@v2`, subsequent runs take 2-4 minutes. Uncached CI is a dealbreaker for contributor DX. | LOW | Config: `workspaces: './src-tauri -> target'`. Also cache bun dependencies via `actions/cache@v4` with `~/.bun/install/cache` keyed on `bun.lock` hash. |
+| Auto-generated changelog in release notes | Users and contributors expect release notes describing what changed. Manual notes are error-prone and tedious. | LOW | `git-cliff` (Rust-native, ~120ms for large repos) with conventional commit parsing. Generates markdown changelog between tags. Output injected into GitHub Release body. |
 
-## Differentiators
+### Differentiators (Competitive Advantage)
 
-Features that set Trunk apart. Not expected, but valued.
+Features that go beyond minimum expectations and signal a well-run, thoughtful CI/CD setup.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Drag tab to reorder | Fork supports this. Gives users control over tab organization. Not blocking but polished. | Med | HTML5 drag-and-drop on tab elements. Update tab array order. Persist new order. Visual feedback: drag ghost, insertion line. |
-| Drag tab to new window | Fork 1.0.69 added this. Power user feature for multi-monitor setups. | Very High | Requires Tauri multi-window support, state serialization, cross-window IPC. Defer to a future milestone. |
-| Tab context menu | Right-click on tab for: Close, Close Others, Close All, Close to the Right, Copy Path. Standard in editors/browsers. | Low | Use Tauri native `Menu` API (already established pattern in codebase). Straightforward to implement. |
-| Pin tab | Prevent accidental closure of frequently-used repos. Common in browsers and IDEs. | Low | Pinned tabs render as icon-only (smaller), cannot be closed without unpin. Persist pin state. |
-| File count badge on directory nodes | Show "(5 files)" or a small count next to directory names in tree view. Helps users gauge change density without expanding. | Low | Count descendant files recursively. Display as muted text after directory name. |
-| Expand All / Collapse All buttons | Fork users have requested this (issue #2072). Useful for large changesets to quickly survey or focus. | Low | Two small buttons in the file list header (next to the tree/list toggle). "Expand All" sets all directories to expanded. "Collapse All" sets all to collapsed. |
-| Remember expand/collapse state | Zed feature request mentions this. Tree state persists within a session (not across restarts). Prevents annoying re-expansion after staging a file. | Med | Store expanded paths in a `Set<string>` per file list section. Preserve across re-renders triggered by `repo-changed` events. Not persisted to disk (too volatile). |
-| Discard all files in directory | Right-click directory in unstaged tree view > "Discard All in Directory". Batch discard for focused cleanup. | Med | Iterate all files under directory, call existing discard logic for each. Show single confirmation dialog listing all files. |
+| Separate fast CI (lint+test) from slow release build | Lint failures caught in ~1-2 min instead of waiting for 8-15 min full build. Better contributor DX. Most Tauri projects combine everything into one slow workflow. | LOW | Two workflow files: `ci.yml` (lint/test on push+PR, runs on ubuntu-latest only, ~2 min) and `release.yml` (build+publish on tag push, matrix of 3 platforms, ~8-15 min). |
+| Universal macOS binary (.dmg) | Single download works on both Intel and Apple Silicon instead of forcing users to pick the right architecture. Cleaner release page. | LOW | Use `--target universal-apple-darwin` with both Rust targets (`aarch64-apple-darwin,x86_64-apple-darwin`) installed. One macOS matrix entry instead of two. |
+| Release as draft for review | Catch mistakes (wrong version, missing artifacts, bad changelog) before users see a broken release. Maintainer reviews, then publishes. | LOW | `releaseDraft: true` in tauri-action config. Workflow builds + uploads everything, but release stays draft until manually published. |
+| Cargo test running in CI | 14 Rust source files already have `#[cfg(test)]` modules with real unit tests. Running them catches backend regressions that vitest cannot. | LOW | Already written. Just add `cargo test --manifest-path src-tauri/Cargo.toml` to CI workflow. Free quality gate. |
+| Prettier formatting enforcement | Consistent frontend code style across all contributions. No style debates in PRs. | LOW | Add `prettier` as devDependency, create `.prettierrc`, run `bunx prettier --write .` once to format existing codebase, then `bunx prettier --check .` in CI. |
+| Fail-fast disabled in release matrix | If Windows build fails, macOS and Linux still complete and upload. Partial release is better than no release for the platforms that did succeed. | LOW | `fail-fast: false` in matrix strategy. Default is true (one failure cancels all). |
 
-## Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-Features to explicitly NOT build for v0.9.
+Features that seem good but create problems. Explicitly choosing NOT to build these in v0.10.
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Multi-window support | Very high complexity: Tauri multi-window requires separate webview instances, state synchronization, IPC between windows. Massive scope for v0.9. | Keep single-window with tabs. Revisit multi-window in a future milestone after tabs are solid. |
-| Workspace grouping (GitKraken-style) | GitKraken Workspaces are a team/cloud feature for organizing repos by project. Overkill for a personal-use desktop client. | Tabs + recent repos is sufficient. If grouping is ever needed, a simple folder/tag system on the WelcomeScreen would be lighter. |
-| Tab search / fuzzy finder | Tower has Ctrl+O quick-open dialog for repos. Useful at scale (50+ repos) but premature for v0.9. | Cmd+1-9 and Ctrl+Tab cover navigation. WelcomeScreen's recent repos list handles discovery. |
-| Inline rename in tree view | Double-click to rename files directly in the tree. Git GUIs don't do this -- it's a file manager feature, not a VCS feature. | File operations happen through the terminal or OS file manager. |
-| File filtering / search within tree | Text input to filter visible files in tree view. Useful but a separate feature that adds scope. | Defer to a later milestone. Flat list + tree view covers the core need. |
-| Virtual scrolling for file lists | File lists rarely exceed a few hundred items. The commit graph needed virtualization because repos have 10k+ commits. File lists don't have this problem. | Simple DOM rendering is fine. If a repo has 1000+ changed files, the user has bigger problems. Revisit only if performance is observed to be an issue. |
-| Automatic tab for submodules | Some Git GUIs auto-open submodules as child tabs. Complex to implement and niche use case. | Users can manually open submodule paths as separate tabs. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Auto-updater (tauri-plugin-updater) | "Apps should update themselves" | Requires code signing keys (prerequisite), update signature keypair, latest.json hosting, and significantly increases release complexity. Adds plugin dependency + Rust + frontend code. PROJECT.md explicitly defers to v1.0. | Ship clean GitHub Releases page. Users download new versions manually. Add auto-updater after code signing is established. |
+| macOS code signing + notarization | "Unsigned apps show scary Gatekeeper warnings" | Requires Apple Developer Program ($99/year), certificate management as CI secrets, P12 export as base64, adds 2-5 min per build for Apple notarization round-trip. Overkill for personal/early open-source project. | Unsigned builds with clear install instructions: right-click > Open to bypass Gatekeeper once. Document in README. Add signing when user base warrants the cost. |
+| Windows code signing (EV certificate) | "SmartScreen blocks unsigned installers" | Since June 2023, OV certs require HSM storage. Most accessible option is Azure Key Vault + relic signing tool. $200-400/year for cert. Complex CI setup. | Unsigned builds. SmartScreen warning disappears after enough user downloads build reputation. Document the "More info > Run anyway" click in README. |
+| Nightly / dev channel builds | "I want bleeding edge builds from main" | Doubles CI compute costs. Requires branch management and naming conventions. Confuses users about stability. No user base yet to benefit. | Release on tags only. Contributors can build from source via `bun run build`. |
+| Multi-architecture Linux builds (arm64) | "Raspberry Pi / ARM server support" | `ubuntu-22.04-arm` runners are only free for public repos. Adds another matrix entry and test surface. Tiny user base for a Git GUI on ARM Linux. | Ship x64 AppImage only. Add arm64 if demand emerges after open-source release. |
+| Homebrew tap / AUR package / Winget manifest | "I want to install via my package manager" | Each package manager has its own submission process, review cycle, update automation, and maintenance burden. Homebrew needs a tap repo; AUR needs PKGBUILD maintenance; Winget needs manifest PRs. | Defer to post v1.0. GitHub Releases with direct downloads is sufficient for initial distribution. |
+| release-please or semantic-release | "Automate version bumps and changelogs via bot PRs" | Adds significant complexity: bot-created PRs, version file sync across three files (package.json, Cargo.toml, tauri.conf.json), conventional commit enforcement as hard requirement, merge strategy constraints. | Manual version bump across the three files + `git-cliff` for changelog. Simple, predictable, human-controlled. Tag push triggers release. |
+| E2E testing in CI | "Test the actual app end-to-end" | Tauri E2E requires WebDriver (tauri-driver) + platform-specific WebKitGTK/WebView2 setup. Notoriously flaky in CI. PROJECT.md explicitly plans E2E test harness for v1.0 as a dedicated infrastructure milestone. | Unit tests (vitest + cargo test) catch most regressions. 14 TS test files + 14 Rust test modules provide good coverage. E2E is a v1.0 concern. |
+| Portable .tar.gz alongside installers | "Power users want unzip-and-run" | tauri-action's `uploadPlainBinary` is marked "ONLY ENABLE THIS IF YOU KNOW WHAT YOU'RE DOING" -- Tauri does NOT officially support portable mode. May cause issues with runtime dependencies. | Stick with official bundle formats (.dmg, .AppImage, .msi). AppImage on Linux already functions as "download and run" without install. |
 
 ## Feature Dependencies
 
 ```
-Multi-tab: Independent state per tab --> All other tab features
-  (Everything depends on the state isolation refactor)
+[Prettier config + devDependency]
+    └──required by──> [Prettier check in CI workflow]
 
-Tab bar rendering --> New tab button, Close tab, Tab indicators
-  (Visual tab bar must exist before its features work)
+[git-cliff config (cliff.toml)]
+    └──required by──> [Changelog generation in release workflow]
 
-WelcomeScreen as new-tab page --> New tab button
-  (New tab creates empty tab that renders WelcomeScreen)
+[CI lint/check workflow (ci.yml)]
+    (no dependencies -- standalone, can be built first)
 
-Tree view toggle --> Tree data structure
-  (Toggle button controls which rendering mode is active)
+[Dependabot config (.github/dependabot.yml)]
+    (no dependencies -- standalone YAML file)
 
-Tree data structure --> Directory expand/collapse
-  (Must build path -> tree transformation before expand/collapse works)
-
-Tree data structure --> Directory staging
-  (Must know which files are under a directory to batch-stage them)
-
-Directory expand/collapse --> Keyboard navigation in tree
-  (Arrow key nav depends on knowing which nodes are visible)
-
-FileTree shared component --> Consistent tree view across all file lists
-  (Build once, use in StagingPanel, CommitDetail, etc.)
+[Tag-triggered release workflow (release.yml)]
+    └──requires──> [git-cliff config] (release body includes changelog)
+    └──benefits from──> [CI workflow] (should pass checks before releasing)
+    └──uses──> [tauri-action] (builds all platforms + uploads artifacts)
+    └──uses──> [oven-sh/setup-bun] (bun must be installed before tauri-action runs)
+    └──produces──> [GitHub Release with platform artifacts]
 ```
 
-## MVP Recommendation
+### Dependency Notes
 
-### Phase 1: Multi-tab Infrastructure (do first)
+- **Release workflow benefits from CI workflow existing first:** While not a hard technical dependency (release workflow can include its own checks), having CI running on PRs means the code on main/tags has already been validated. Build the CI workflow first.
+- **Changelog generation requires cliff.toml:** A `cliff.toml` configuration file in the repo root configures how git-cliff parses commit messages into changelog sections. One-time setup.
+- **Prettier CI check requires setup first:** Need to (a) add `prettier` to devDependencies, (b) create `.prettierrc` config, (c) run initial `bunx prettier --write .` to format existing codebase, (d) commit formatted code. Only then can CI enforce `--check` without failing on pre-existing formatting inconsistencies.
+- **tauri-action requires bun to be installed:** Known issue (tauri-apps/tauri-action#986): tauri-action cannot find bun if `oven-sh/setup-bun@v2` has not run first. The `beforeBuildCommand` in tauri.conf.json runs `bun run build`, which fails without bun on PATH.
+- **Version sync is manual but critical:** Three files contain the version: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`. Before pushing a release tag, all three must match. This is a process discipline, not a technical dependency.
 
-Prioritize:
-1. **Independent state per tab** -- the architectural foundation everything else builds on
-2. **Tab bar rendering with active/inactive states** -- visual container for tabs
-3. **New tab (+) / close tab (X) / WelcomeScreen as new-tab page** -- core tab lifecycle
-4. **Cmd+T, Cmd+W, Cmd+1-9, Ctrl+Tab shortcuts** -- keyboard-driven tab management
-5. **Tab order persistence** -- survive restart
-6. **Dirty indicator on tab** -- essential feedback for background repos
+## MVP Definition
 
-Rationale: Tab infrastructure requires the biggest refactor (state isolation in App.svelte). Get this working and stable before adding tree view, which is a contained UI addition.
+### Launch With (v0.10)
 
-### Phase 2: Tree View (do second)
+The minimum viable CI/CD setup -- automated quality gates and publishable cross-platform releases.
 
-Prioritize:
-1. **Shared FileTree component with flat/tree toggle** -- the rendering foundation
-2. **Path-to-tree transformation with path compression** -- data layer
-3. **Directory expand/collapse with chevrons** -- core interaction
-4. **Integrate into StagingPanel (unstaged, staged, conflicted sections)** -- primary use case
-5. **Integrate into CommitDetail file list** -- secondary use case
-6. **Stage/unstage entire directory** -- batch operations
-7. **Keyboard navigation** -- accessibility and power users
+- [ ] **CI workflow (`ci.yml`)** -- cargo check, clippy, fmt, cargo test, bun install, bun run check, bun run test, prettier check. Triggered on push to main and PRs. Runs on ubuntu-latest. ~2 min.
+- [ ] **Release workflow (`release.yml`)** -- tag-triggered cross-platform builds. macOS universal .dmg, Linux x64 .AppImage, Windows x64 .msi. Draft GitHub Release with auto-generated changelog. ~8-15 min.
+- [ ] **Dependabot config (`dependabot.yml`)** -- weekly automated PRs for cargo, npm, and github-actions dependency updates.
+- [ ] **git-cliff config (`cliff.toml`)** -- conventional commit parsing, changelog generation between tags, injected into release body.
+- [ ] **Prettier setup** -- `.prettierrc` config, `prettier` devDependency, initial format pass on codebase, CI enforcement.
 
-Defer to post-MVP: Drag to reorder tabs, tab context menu, pin tabs, expand/collapse all, directory discard.
+### Add After Validation (v1.0)
 
-### Phase 3: Polish (do last)
+Features to add once the pipeline is running and the project has real users downloading releases.
 
-1. **Tab context menu** (Close Others, Close All, Copy Path)
-2. **Middle-click to close tab**
-3. **Expand All / Collapse All buttons**
-4. **File count badges on directories**
-5. **Remember expand/collapse state within session**
+- [ ] **macOS code signing + notarization** -- requires Apple Developer Program enrollment and CI secrets setup
+- [ ] **Windows code signing** -- requires EV cert + Azure Key Vault + relic signing tool
+- [ ] **Auto-updater (tauri-plugin-updater)** -- requires code signing to be in place first (signed updates are mandatory)
+- [ ] **E2E test harness in CI** -- already planned for v1.0 in PROJECT.md
 
-## Complexity Assessment
+### Future Consideration (v2+)
 
-| Feature Area | Estimated Complexity | Risk | Notes |
-|-------------|---------------------|------|-------|
-| Tab state isolation refactor | **High** | **High** | Currently App.svelte has ~30 `$state` variables for a single repo. Must refactor to per-tab state objects. Risk: subtle bugs from state leaking between tabs, event listener cleanup on tab switch. |
-| Tab bar UI | **Low** | Low | Straightforward Svelte component. Existing TabBar.svelte provides starting point. |
-| Tab keyboard shortcuts | **Low** | Low | Add to existing keydown handler in App.svelte. Well-defined behavior. |
-| Tab persistence | **Med** | Low | Replace `getOpenRepo`/`setOpenRepo` with tab array. Migration from old format needed. |
-| Path-to-tree transformation | **Med** | Low | Pure function, easily unit testable. Split paths by '/', build tree nodes, apply path compression. |
-| FileTree component | **Med** | Med | Must handle expand/collapse state, indentation, action buttons per node type (file vs directory), and both `FileStatus` and `FileDiff` item types. |
-| Directory staging | **Med** | Med | Must iterate all files under directory, call stage/unstage for each. Need to handle partial failures gracefully. |
-| Keyboard navigation | **Med** | Med | WAI-ARIA treeview pattern has specific requirements. Focus management across nested nodes is fiddly. |
-| Fs watcher per tab | **Med** | Med | Current watcher state assumes single repo. Must support multiple watchers, one per open tab. Cleanup on tab close. |
+Features to defer until the project has an established user base and contributor community.
+
+- [ ] **Homebrew tap / AUR / Winget manifest** -- when users request package manager distribution
+- [ ] **Nightly builds from main** -- when contributor activity warrants bleeding-edge testing
+- [ ] **Linux arm64 builds** -- when ARM desktop Linux demand is demonstrated
+- [ ] **release-please automation** -- when release frequency makes manual version bumps painful
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| CI lint/check workflow | HIGH | LOW | P1 |
+| Tag-triggered release builds | HIGH | MEDIUM | P1 |
+| GitHub Release with artifacts | HIGH | LOW (built into tauri-action) | P1 |
+| Dependabot config | MEDIUM | LOW | P1 |
+| git-cliff changelog | MEDIUM | LOW | P1 |
+| Prettier setup + CI check | MEDIUM | LOW | P1 |
+| Universal macOS binary | MEDIUM | LOW | P2 |
+| Release draft mode | MEDIUM | LOW | P2 |
+| fail-fast: false in release matrix | LOW | LOW | P2 |
+| Code signing (macOS + Windows) | HIGH | HIGH | P3 (defer to v1.0) |
+| Auto-updater | HIGH | HIGH | P3 (defer to v1.0) |
+| Package manager distribution | MEDIUM | HIGH | P3 (defer to v2+) |
+
+**Priority key:**
+- P1: Must have for v0.10 launch
+- P2: Should have, fold into P1 work since the cost is trivial
+- P3: Explicitly deferred to future milestones
+
+## Competitor Feature Analysis
+
+| Feature | GitKraken | Fork | Sublime Merge | Our Approach (Trunk v0.10) |
+|---------|-----------|------|---------------|---------------------------|
+| Release cadence | Frequent, auto-update | Regular, manual download | Stable + Dev channels | Tag-triggered GitHub Releases |
+| Platform coverage | macOS, Linux, Windows | macOS, Windows only | macOS, Linux, Windows | macOS (universal), Linux (AppImage), Windows (.msi) |
+| Code signing | Yes (commercial product) | Yes (commercial) | Yes (commercial) | Deferred -- unsigned for v0.10 |
+| Auto-update | Yes (built-in) | Yes (built-in) | Yes (built-in) | Deferred to v1.0 |
+| Changelog | Blog/release notes (manual) | Blog (manual) | Changelog page (manual) | Auto-generated via git-cliff |
+| Package managers | Homebrew, Snap, Flatpak, apt | Homebrew (macOS only) | apt, pacman, Homebrew, others | Direct download only for v0.10 |
+| CI pipeline | Private (commercial) | Private (commercial) | Private (commercial) | Public GitHub Actions (open-source advantage) |
+
+**Note:** All competitors are mature commercial products with paid teams. Trunk is a personal open-source project. The comparison shows where to invest later (signing, auto-update) vs. what to skip now (package managers, dev channels). The open-source advantage is that CI/CD is public and transparent.
+
+## Existing Project State
+
+Key facts about the current codebase that affect feature implementation.
+
+| Aspect | Current State | Implication for CI/CD |
+|--------|---------------|----------------------|
+| Package manager | bun with `bun.lock` (text format) | Use `oven-sh/setup-bun@v2` in CI. Cache `~/.bun/install/cache` keyed on `bun.lock` hash. tauri-action needs bun installed first. |
+| Frontend tests | 14 vitest test files in `src/lib/` | `bun run test` already works. Just add to CI. |
+| Backend tests | 14 Rust files with `#[cfg(test)]` modules | `cargo test --manifest-path src-tauri/Cargo.toml` works. Just add to CI. |
+| Prettier | Not installed, no config exists | Need to: add devDependency, create `.prettierrc`, run initial format pass, commit changes. |
+| Icons | Full set exists (`src-tauri/icons/`) -- .icns, .ico, .png at all required sizes | No icon work needed for bundling. tauri.conf.json already references them. |
+| Bundle config | `"targets": "all"` in tauri.conf.json | Builds all platform-appropriate formats automatically. No target restriction needed. |
+| Version files | `0.1.0` in package.json, Cargo.toml, tauri.conf.json | Three files to keep in sync on release. Manual for now. |
+| .github directory | Does not exist | Create from scratch: `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `.github/dependabot.yml`. |
+| Cargo.lock | Exists at `src-tauri/Cargo.lock` (committed) | Dependabot will create PRs updating it. `swatinem/rust-cache` uses it for cache key. |
+| git2 vendored | `features = ["vendored-libgit2"]` in Cargo.toml | CI does not need system libgit2 installed. Simplifies Linux dependency setup (only need webkit2gtk, appindicator, librsvg, patchelf). |
+| Tauri plugins | dialog, store, window-state, clipboard-manager | All bundled via Cargo. No extra CI setup needed. |
+| Rust edition | 2021 | Compatible with Dependabot's current Rust support. Rust 2024 edition has known Dependabot issues (#11691). |
 
 ## Sources
 
-- [GitKraken Keyboard Shortcuts](https://help.gitkraken.com/gitkraken-desktop/keyboard-shortcuts/) -- Tab shortcuts (Cmd+T, Cmd+W, Cmd+1-9, Ctrl+Tab), staging shortcuts, panel toggles (HIGH confidence)
-- [GitKraken Staging](https://help.gitkraken.com/gitkraken-desktop/staging/) -- Tree view toggle for staging, folder-level staging, file list sections (HIGH confidence)
-- [GitKraken Workspaces](https://www.gitkraken.com/features/workspaces) -- Multi-repo workspace concept (MEDIUM confidence)
-- [Fork Tab Indicator for Uncommitted Changes](https://github.com/fork-dev/Tracker/issues/515) -- Star/dot badge on tabs with dirty state (HIGH confidence)
-- [Fork 1.0.69 Multi-window Support](https://fork.dev/blog/posts/fork-1.0.69/) -- Tab drag to new window feature (MEDIUM confidence)
-- [Fork Expand/Collapse All Request](https://github.com/fork-dev/TrackerWin/issues/2072) -- Community request for expand/collapse all in tree views (MEDIUM confidence)
-- [GitHub Desktop Tab Request](https://github.com/desktop/desktop/issues/20026) -- Community requesting tabs instead of dropdown repo switcher (MEDIUM confidence)
-- [Sourcetree Tab Navigation](https://support.atlassian.com/sourcetree/kb/viewing-and-maneuvering-around-repository-tabs-windows/) -- Tab scrolling and management on Windows (MEDIUM confidence)
-- [Lazygit File Tree View PR #1197](https://github.com/jesseduffield/lazygit/pull/1197) -- Tree implementation: path compression, status color aggregation (red/green/yellow), directory staging, backtick toggle (HIGH confidence)
-- [Zed Tree View Feature Request](https://github.com/zed-industries/zed/discussions/40052) -- Toggle button, directory actions, state persistence, file count (MEDIUM confidence)
-- [VS Code Tree View Toggle Regression](https://github.com/microsoft/vscode/issues/295575) -- Users upset when toggle was removed; reinforces it as table stakes (MEDIUM confidence)
-- [PatternFly Tree View Design Guidelines](https://www.patternfly.org/components/tree-view/design-guidelines/) -- Caret expand/collapse, click separation from selection, icon guidance (HIGH confidence)
-- [Carbon Design System Tree View](https://carbondesignsystem.com/components/tree-view/usage/) -- Standard tree interaction patterns, accessibility requirements (HIGH confidence)
+- [Tauri 2 GitHub Actions Pipeline Documentation](https://v2.tauri.app/distribute/pipelines/github/) -- official CI/CD guide with full workflow YAML examples (HIGH confidence)
+- [tauri-apps/tauri-action](https://github.com/tauri-apps/tauri-action) -- official GitHub Action, 25+ config inputs, release creation, artifact upload (HIGH confidence)
+- [tauri-apps/tauri-action#986](https://github.com/tauri-apps/tauri-action/issues/986) -- known "bun: not found" issue, must install bun before tauri-action (HIGH confidence)
+- [Tauri 2 Configuration Reference](https://v2.tauri.app/reference/config/) -- bundle targets: deb, rpm, appimage, nsis, msi, app, dmg, or "all" (HIGH confidence)
+- [oven-sh/setup-bun](https://github.com/oven-sh/setup-bun) -- official bun setup action v2 for GitHub Actions (HIGH confidence)
+- [swatinem/rust-cache](https://github.com/Swatinem/rust-cache) -- Rust/Cargo caching, `workspaces` config for Tauri projects (HIGH confidence)
+- [git-cliff](https://git-cliff.org/) -- Rust-native changelog generator, conventional commits, ~120ms generation (HIGH confidence)
+- [Dependabot Supported Ecosystems](https://docs.github.com/en/code-security/dependabot/ecosystems-supported-by-dependabot/supported-ecosystems-and-repositories) -- cargo, npm, github-actions all supported (HIGH confidence)
+- [Dependabot Rust Toolchain Updates](https://github.blog/changelog/2025-08-19-dependabot-now-supports-rust-toolchain-updates/) -- also supports rust-toolchain.toml updates (HIGH confidence)
+- [Clippy CI Documentation](https://doc.rust-lang.org/nightly/clippy/continuous_integration/github_actions.html) -- official `cargo clippy -- -D warnings` CI pattern (HIGH confidence)
+- [Prettier CI Documentation](https://prettier.io/docs/ci) -- official `--check` flag for CI enforcement (HIGH confidence)
+- [dtolnay/rust-toolchain](https://github.com/dtolnay/rust-toolchain) -- standard Rust toolchain setup action, supports target specification (HIGH confidence)
+- [Tauri 2 macOS Code Signing](https://v2.tauri.app/distribute/sign/macos/) -- Apple Developer Program, P12 cert, notarization requirements (MEDIUM confidence -- read but deferring)
+- [Tauri 2 Windows Code Signing](https://v2.tauri.app/distribute/sign/windows/) -- HSM requirement since 2023, Azure Key Vault + relic approach (MEDIUM confidence -- read but deferring)
+- [Ship Your Tauri v2 App Like a Pro (Part 2/2)](https://dev.to/tomtomdu73/ship-your-tauri-v2-app-like-a-pro-github-actions-and-release-automation-part-22-2ef7) -- real-world Tauri v2 release pipeline walkthrough (MEDIUM confidence)
+
+---
+*Feature research for: CI/CD pipeline and cross-platform release publishing (Tauri 2 desktop app)*
+*Researched: 2026-03-25*

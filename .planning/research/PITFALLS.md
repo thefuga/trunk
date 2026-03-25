@@ -1,284 +1,320 @@
-# Pitfalls Research: Trunk v0.9 Multi-tab & Tree View
+# Pitfalls Research: Trunk v0.10 CI/CD & Cross-Platform Releases
 
-**Domain:** Adding multi-repository tab management and directory tree file views to a single-repo Tauri 2 + Svelte 5 + Rust desktop Git GUI
-**Researched:** 2026-03-23
-**Confidence:** HIGH -- based on direct codebase analysis of all Rust state structs (state.rs, watcher.rs, remote.rs), all frontend state modules (store.ts, remote-state.svelte.ts, undo-redo.svelte.ts, toast.svelte.ts), App.svelte (631 LOC orchestrator), all 24 Svelte components, all 21 Tauri commands, and the established patterns from v0.1-v0.8
+**Domain:** Adding CI/CD pipeline and cross-platform release publishing to an existing Tauri 2 + Svelte 5 + Rust desktop Git GUI
+**Researched:** 2026-03-25
+**Confidence:** HIGH -- based on official Tauri 2 distribution docs, tauri-action issue tracker, community post-mortems, and direct analysis of the project's Cargo.toml, package.json, and tauri.conf.json
 
 ---
 
-## Context: What Is Changing in v0.9
+## Context: What Is Changing in v0.10
 
-v0.8 shipped conflict resolution and interactive rebase. The codebase is ~9,300 LOC Rust, ~11,400 LOC Svelte/TS with 43 completed phases. Every piece of state -- Rust backend, frontend modules, Tauri events, LazyStore persistence, filesystem watchers -- currently assumes a single active repository.
+v0.9 shipped multi-tab and tree view. The codebase is ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust with 49 completed phases. All local development and testing has happened on macOS (darwin). No CI pipeline exists. No release binaries have been published.
 
-v0.9 adds:
-1. **Multi-tab repos:** Each tab opens a different repository with independent state
-2. **Splash screen as new-tab page:** Opening a new tab shows the project picker / recent repos
-3. **Tree view toggle:** Switch between flat file list and directory tree view in staging panel, commit diffs, and merge editor
+v0.10 adds:
+1. **CI checks** on every push/PR: cargo check, clippy, cargo test, cargo fmt, bun run check, bun run test, prettier
+2. **Cross-platform release pipeline**: macOS (.dmg), Linux (.AppImage), Windows (.msi)
+3. **Tag-triggered releases**: push `v*` tag -> build all platforms -> publish GitHub Release
+4. **Changelog generation** from commit messages
+5. **Dependabot** for Rust + npm dependency updates
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Global Singleton Frontend State Leaks Between Tabs
+### Pitfall 1: Version Mismatch Across Three Manifests Breaks Releases
 
 **What goes wrong:**
-Three frontend state modules use ES module-level `$state()` singletons: `remoteState` (remote-state.svelte.ts), `undoRedoState` (undo-redo.svelte.ts), and `showToast` (toast.svelte.ts). These are imported directly by components. When two tabs exist, both share the same `remoteState.isRunning` flag. Tab A starts a `git pull`, `remoteState.isRunning = true`. Tab B's Toolbar sees `isRunning = true` and disables all its remote buttons -- even though Tab B's repo has no running operation. Worse, when Tab A's pull completes and sets `remoteState.progressLine = ''`, Tab B loses any progress line it may have been displaying for its own operation.
+Trunk has version numbers in three places: `package.json` (currently `0.1.0`), `src-tauri/Cargo.toml` (currently `0.1.0`), and `src-tauri/tauri.conf.json` (currently `0.1.0`). The tauri-action uses `tauri.conf.json`'s version to generate the `tagName` (via `v__VERSION__` template). If you tag `v0.10.0` but `tauri.conf.json` still says `0.1.0`, the action creates a release named `v0.1.0` -- which does not match the tag. Artifacts upload to the wrong release (or fail to upload entirely). This is the single most common CI/CD failure reported by Tauri developers.
 
-The undo/redo stack (`undoRedoState.redoStack`) is even more dangerous: undoing a commit in Tab A pushes to the shared redo stack. Clicking Redo in Tab B re-commits Tab A's message to Tab B's repository -- silently creating a garbage commit in the wrong repo.
+Additionally, after bumping versions, `Cargo.lock` must be regenerated (`cargo generate-lockfile`), or the CI build uses stale dependency resolution.
 
 **Why it happens:**
-ES module singletons are the standard Svelte 5 pattern for sharing state between sibling components in a single-instance app. The pattern works perfectly when there is exactly one active context. It breaks fundamentally when multiple independent contexts coexist in the same JavaScript runtime. Tauri uses a single webview with a single JS context, so all tabs share the same module scope.
+There is no built-in version sync mechanism in Tauri. Developers bump one file and forget the others. The mismatch is invisible locally because `bun run dev` does not validate version alignment.
 
 **How to avoid:**
-Replace each singleton with a per-repo state factory. Create a `RepoContext` class or object keyed by repo path that holds `remoteState`, `undoRedoState`, and all other per-repo state. Use Svelte 5's `setContext`/`getContext` to scope state to each tab's component subtree. The tab container creates the context, and child components consume it via `getContext`. This ensures Tab A's `remoteState.isRunning` is independent from Tab B's.
-
-Concrete migration path:
-- Create `repo-context.svelte.ts` exporting a `createRepoContext(path: string)` function
-- Move `remoteState`, `undoRedoState`, per-repo selection state into this context
-- Keep truly global state (toast notifications, zoom level, pane widths) as module singletons -- these are legitimately app-wide
+1. Remove the `version` field from `tauri.conf.json` entirely. Tauri 2 falls back to `Cargo.toml`'s version when `tauri.conf.json` omits it. This reduces the sync points to two files (package.json + Cargo.toml).
+2. Create a `scripts/bump-version.sh` that updates both `package.json` and `Cargo.toml`, runs `cargo generate-lockfile`, and creates the git tag. This is the single entry point for all version changes.
+3. Add a CI check that verifies `package.json` version matches `Cargo.toml` version on every PR. Fail the build if they diverge.
 
 **Warning signs:**
-- Actions in one tab visually affect another tab's toolbar or status
-- Undo in Tab A creates commits in Tab B's repo
-- Remote progress lines appear in the wrong tab
+- Release workflow creates a release with unexpected version number
+- Artifacts appear under a different release than the tag
+- "No releaseId or tagName provided, skipping all uploads" error in CI logs
 
 **Phase to address:**
-Phase 1 (backend state scoping) or Phase 2 (frontend tab architecture) -- this must be resolved BEFORE tabs exist, because the damage from cross-tab state leaks is data corruption (wrong commits in wrong repos)
+Phase 1 (CI foundation) -- version sync validation must exist before the first release is attempted
 
 ---
 
-### Pitfall 2: RunningOp is a Global Singleton Mutex -- Only One Remote Op Across All Tabs
+### Pitfall 2: tauri-action Draft Release Race Condition Creates Duplicate Releases
 
 **What goes wrong:**
-`RunningOp(pub Mutex<Option<u32>>)` stores a single PID. When Tab A starts `git push`, RunningOp holds Tab A's subprocess PID. If Tab B tries `git fetch`, `run_git_remote` checks `running.lock().unwrap()` and finds `Some(pid)` -- it returns `op_in_progress` error. The user cannot fetch in one repo while pushing in another. Worse, `cancel_remote_op` kills whatever PID is stored -- which could be Tab A's push when the user clicked Cancel in Tab B.
+The tauri-action runs as parallel matrix jobs (macOS-arm, macOS-intel, Linux, Windows). Each job calls the GitHub API to find or create the release. When the first job creates a draft release and subsequent jobs call `updateRelease()`, the API call inadvertently strips the tag association from the draft release. Later jobs cannot find the tagged release and create duplicates. The result: some artifacts on Release A, other artifacts on Release B, and manual cleanup required.
+
+This is a known bug (tauri-apps/tauri-action#914) that has become more frequent. The root cause is in `create-release.ts` lines 142-150.
 
 **Why it happens:**
-RunningOp was designed as mutual exclusion for a single repo -- preventing concurrent push+pull on the same repo (which would corrupt the git state). The single-valued design is correct for that purpose. But multi-tab requires per-repo mutual exclusion, not global.
+GitHub's Release API has subtle behavior differences between draft and published releases. `updateRelease()` on a draft release can remove the `tag_name` association in certain race windows. Multiple parallel jobs hitting the API simultaneously create this race.
 
 **How to avoid:**
-Change `RunningOp` from `Mutex<Option<u32>>` to `Mutex<HashMap<String, u32>>` keyed by repo path (matching the existing patterns of `RepoState`, `CommitCache`, and `WatcherState`). Update `run_git_remote` to check/set by repo path. Update `cancel_remote_op` to accept a `path` parameter and kill only that repo's subprocess. Mutual exclusion remains per-repo -- you cannot push and pull the same repo simultaneously, but you can push repo A while fetching repo B.
+Create the GitHub Release in a separate job BEFORE the build matrix starts. Use a two-phase workflow:
+1. **Job 1 (create-release):** Create the draft release, output the `release_id`
+2. **Job 2 (build, needs: create-release):** Matrix build across platforms, upload artifacts to the existing release using the `release_id` from Job 1
+
+This eliminates the concurrent release creation race entirely. The build jobs only upload artifacts -- they never create or update the release metadata.
 
 **Warning signs:**
-- "Another remote operation is already running" error when operating on different repos
-- Cancel button kills the wrong repo's operation
+- Two releases appear for the same tag version
+- Some platform artifacts missing from the release
+- CI logs show "Release already exists" warnings
 
 **Phase to address:**
-Phase 1 (Rust backend state scoping) -- must be done before multi-tab is functional
+Phase 2 (release pipeline) -- the workflow structure must prevent this from the start
 
 ---
 
-### Pitfall 3: App.svelte Monolithic State -- 30+ State Variables Assume Single Repo
+### Pitfall 3: Bun Not Found on GitHub Actions Runners
 
 **What goes wrong:**
-App.svelte holds ~30 `$state()` variables that are all implicitly scoped to "the current repo": `repoPath`, `repoName`, `refreshSignal`, `dirtyCounts`, `headBranch`, `wipSubject`, `selectedFile`, `stagingDiffFiles`, `selectedCommitOid`, `commitDetail`, `commitFileDiffs`, `selectedCommitFile`, `showRebaseEditor`, `rebaseEditorCommits`, etc. The `repo-changed` event listener (line 257) checks `event.payload === repoPath` -- it only processes events for the active repo. When switching tabs, ALL of this state must be swapped atomically. If any variable is not saved/restored correctly, the new tab shows stale data from the previous tab, or worse, state from repo A (commit detail, selected file, rebase editor) bleeds into repo B's view.
+The project uses bun (evidenced by `bun.lockb` or `bun.lock`). Standard GitHub Actions runners do not have bun pre-installed. The tauri-action auto-detects the package manager by looking for lock files. When it finds `bun.lockb`, it assumes bun is available and runs `bun install` -- which fails with `sh: 1: bun: not found` (exit code 127). The entire build fails before Rust compilation even starts.
+
+On Windows specifically, bun has additional compatibility issues: `bun run --bun` may fall back to Node instead of using the Bun runtime, and `bun install` can trigger assertion failures on Windows Server 2022/2025 runners.
 
 **Why it happens:**
-App.svelte grew organically across 8 milestones as the single orchestrator. Each new feature added state variables to the same scope. This is the natural architecture for a single-repo app and it worked well. Multi-tab fundamentally requires either: (a) lifting this state into per-tab instances, or (b) save/restore the full state snapshot on tab switch.
+GitHub runners come with Node.js and npm pre-installed, but not bun. The tauri-action does not install package managers -- it only detects and uses them. Developers who use bun locally forget it needs explicit setup in CI.
 
 **How to avoid:**
-Extract the repo view into a dedicated `RepoView.svelte` component that encapsulates ALL per-repo state. App.svelte becomes a thin shell that manages the tab bar and renders one `RepoView` per tab. Each `RepoView` instance has its own `repoPath`, `refreshSignal`, `dirtyCounts`, `selectedFile`, etc.
+Add `oven-sh/setup-bun@v2` as an early step in every workflow, before any step that might trigger `beforeBuildCommand`. Pin a specific bun version to match local development. Example:
+```yaml
+- uses: oven-sh/setup-bun@v2
+  with:
+    bun-version: "1.1.39"  # match local version
+```
 
-Two architectural options:
-- **Option A (mount/unmount):** Only the active tab's `RepoView` is mounted. Tab switching destroys and recreates the component. Simple but loses scroll position, selection state, and requires re-fetching data.
-- **Option B (keep-alive):** All tabs' `RepoView` instances stay mounted but hidden (`display: none` for inactive tabs). Preserves all state and scroll positions. Uses more memory (one full component tree per tab) but provides instant tab switching. Memory cost is bounded: a tab is ~40 DOM nodes (virtual list) + cached graph data.
-
-Option B is recommended because users expect instant tab switching (like browser tabs or VS Code tabs), and the memory cost is acceptable for a desktop app with 2-10 tabs.
+Also ensure `tauri.conf.json`'s `beforeBuildCommand` uses `bun run build` (already correct in the project).
 
 **Warning signs:**
-- Switching tabs shows previous tab's commit detail or diff
-- Rebase editor from one repo appears over another repo's view
-- Selected file highlight persists when switching to a tab that has no selection
+- `bun: not found` or exit code 127 in CI logs
+- Windows builds fail with "Bun is not defined" errors
+- Lock file format mismatch warnings
 
 **Phase to address:**
-Phase 2 (frontend tab architecture) -- this is the core structural refactor
+Phase 1 (CI foundation) -- bun setup must be in the workflow from the first CI run
 
 ---
 
-### Pitfall 4: Tauri Event Bus is Global -- All Listeners Receive All Events
+### Pitfall 4: Linux Builds Missing System Dependencies
 
 **What goes wrong:**
-Tauri's event system (`app.emit("repo-changed", path)`) broadcasts to ALL listeners in the webview. Currently, App.svelte's `listen<string>('repo-changed', ...)` filters by checking `event.payload === repoPath`. With multiple `RepoView` instances, each instance registers its own listener. When repo A's watcher fires `repo-changed` with repo A's path, ALL tab listeners receive the event. Each checks `event.payload === myRepoPath` and only repo A's tab processes it. This is correct -- BUT the filtering relies on string equality of the path payload. If the same repo is opened in two tabs (which should probably be prevented), both process the event, leading to duplicate refreshes.
+Tauri 2 on Linux requires system libraries that are not pre-installed on GitHub's Ubuntu runners: `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, and `patchelf`. Without them, the Rust build fails during the Tauri framework compilation. Additionally, this project uses `git2` with `vendored-libgit2` which needs `cmake` and a C compiler to build libgit2 from source -- these are typically present on runners but worth verifying.
 
-The `remote-progress` event in Toolbar.svelte (line 23) also filters by `event.payload.path === path`. This works correctly per-tab only if each Toolbar receives its own `repoPath` prop.
+A subtler issue: Tauri v1 required `libwebkit2gtk-4.0-dev` while Tauri v2 requires `libwebkit2gtk-4.1-dev`. Copy-pasting a v1 workflow causes a confusing compilation failure.
 
 **Why it happens:**
-Tauri v2's event system has no built-in scoping -- it is a flat global bus. This is fine for single-window apps but requires discipline in multi-context setups.
+GitHub's Ubuntu runners have a base set of packages but not GTK/WebKit development headers. These are specific to building desktop GUI applications, which is not a common CI use case. Developers on macOS or Windows never encounter this because those platforms bundle their webview runtimes.
 
 **How to avoid:**
-1. Keep the current filtering pattern -- it works correctly as long as each tab knows its own `repoPath` and checks `event.payload === myRepoPath`.
-2. Prevent opening the same repo in two tabs simultaneously. On `open_repo`, check if the path is already in the tab list and switch to that tab instead of opening a duplicate. This prevents duplicate event processing and duplicate watchers.
-3. Ensure cleanup: when a tab closes, its event listeners must be unregistered. Svelte's `$effect` cleanup functions handle this if the component is properly unmounted. But with the "keep-alive" pattern (Option B above), hidden tabs still have active listeners -- this is intentional (they should still process `repo-changed` to stay fresh).
+Add a Linux-only step that installs all required system packages:
+```yaml
+- name: Install Linux dependencies
+  if: matrix.platform == 'ubuntu-22.04'
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
+
+Use `ubuntu-22.04` (not `ubuntu-latest` which may point to 24.04) to ensure maximum AppImage compatibility with older glibc versions.
 
 **Warning signs:**
-- Same repo opened in two tabs causes double refreshes
-- Closing a tab leaves orphan event listeners that process events for a closed repo
-- `remote-progress` lines appear in the wrong tab
+- `Package libwebkit2gtk-4.1-dev is not available` (wrong Ubuntu version)
+- `Package libwebkit2gtk-4.0-dev` in your config (Tauri v1 dependency, wrong for v2)
+- Linker errors about missing GTK/WebKit symbols
 
 **Phase to address:**
-Phase 2 (frontend tab architecture) -- event listener lifecycle must be designed with tab mount/unmount
+Phase 1 (CI foundation) for check/test workflows; Phase 2 (release pipeline) for build matrix
 
 ---
 
-### Pitfall 5: LazyStore Persistence is Not Repo-Scoped
+### Pitfall 5: Uncached Rust Builds Take 30-60 Minutes
 
 **What goes wrong:**
-`store.ts` uses a single `LazyStore('trunk-prefs.json')` with flat keys: `open_repo`, `column_widths`, `column_visibility`, `zoom_level`, `left_pane_width`, `right_pane_collapsed`, etc. With multi-tab:
+A fresh Tauri build from scratch (no cache) compiles the entire Rust dependency tree: tauri framework, git2 (which vendored-compiles libgit2 from C source), serde, tokio, notify, and all transitive dependencies. On GitHub Actions runners, this takes 30-60 minutes per platform. With 4 platform targets (macOS arm, macOS Intel, Linux, Windows), a single release burns 2-4 hours of runner time. Without caching, every CI run pays this full cost.
 
-- `open_repo` stores a single `RecentRepo` -- but now there are multiple open repos. Which one is persisted for restore on next launch?
-- `column_widths` is shared across all tabs. If the user resizes columns in Tab A, Tab B also gets those widths. This is probably fine (users generally want consistent column sizes). But if we later add per-repo column preferences, the flat key structure prevents it.
-- `left_pane_width` and `right_pane_width` are app-wide layout state -- these SHOULD be shared across tabs.
-
-The real danger is the `open_repo` key: on app launch, the restoration logic (App.svelte line 278-289) calls `getOpenRepo()` and opens that single repo. Multi-tab needs to restore ALL open tabs, their order, and which one was active.
+Even with caching, the CI profile matters. Debug builds generate enormous artifacts (500MB+) that bloat the cache. Incremental compilation (the default) creates larger artifacts that are slower to cache and restore than non-incremental builds.
 
 **Why it happens:**
-LazyStore was designed for a single-repo app. All keys are global because there was only one context.
+Rust is a compiled language with no pre-built binary caches (unlike npm). The `vendored-libgit2` feature adds C compilation on top of Rust compilation. GitHub's 10GB cache limit per repository can be exhausted quickly with multiple platform caches.
 
 **How to avoid:**
-1. Replace `open_repo` with `open_tabs`: an ordered array of `{ path, name, active }` objects. On launch, restore all tabs and activate the last-active one.
-2. Keep truly global keys as-is: `zoom_level`, `left_pane_width`, `right_pane_width`, `left_pane_collapsed`, `right_pane_collapsed`, `column_widths`, `column_visibility`, `recent_repos`. These are app-wide preferences that should be the same across all tabs.
-3. If per-repo state is needed later (e.g., per-repo search filters), use namespaced keys: `repo:${path}:key_name`.
-4. Save tab state on every tab open/close/switch, not just on app close. Prevents data loss if the app crashes.
+1. Use `swatinem/rust-cache@v2` with `workspaces: "src-tauri -> target"` to cache the Rust target directory. This brings subsequent builds down to 5-15 minutes.
+2. Create a CI-specific Cargo profile that disables debug info and incremental compilation to reduce cache size:
+   ```toml
+   # src-tauri/Cargo.toml
+   [profile.ci]
+   inherits = "dev"
+   debug = false
+   incremental = false
+   ```
+3. Split CI checks from release builds. CI checks (clippy, fmt, test) need debug builds and should cache separately from release builds (which use `--release`).
+4. Run `cargo fmt --check` and `cargo clippy` AFTER `cargo build` (not before). Clippy reuses build artifacts from cargo build, but not vice versa -- this saves ~5 minutes per run.
+5. Set `fail-fast: false` on the build matrix so one platform failure does not cancel the others.
 
 **Warning signs:**
-- App only restores one tab on relaunch instead of all open tabs
-- Tab order not preserved across restarts
-- Active tab reverts to first tab after relaunch
+- CI runs taking >30 minutes
+- Cache size warnings from GitHub Actions
+- Cache misses on every run (check the `swatinem/rust-cache` output logs)
 
 **Phase to address:**
-Phase 2 or 3 (tab persistence) -- after basic tab switching works, before the feature is "complete"
+Phase 1 (CI foundation) -- caching must be configured from the first workflow; retrofitting after habits form wastes weeks of accumulated runner time
 
 ---
 
-### Pitfall 6: Filesystem Watcher Accumulation -- N Repos = N Recursive Watchers
+### Pitfall 6: AppImage glibc Compatibility -- Build System Determines Minimum Target
 
 **What goes wrong:**
-Each `open_repo` call creates a new `notify` debouncer watching the repo directory recursively (`RecursiveMode::Recursive`). With 5 tabs open, 5 watchers run concurrently, each monitoring an entire repo directory tree. Large repos (monorepos, repos with `node_modules` not gitignored) can have 100k+ files. 5 such watchers can hit the OS file descriptor limit (`ulimit -n`, typically 256-10240 on macOS). The `notify` crate on macOS uses `kqueue` which requires one file descriptor per watched file in recursive mode (unlike Linux's `inotify` which uses one fd per directory).
+The AppImage format bundles dependencies but does NOT bundle glibc. The AppImage's minimum glibc requirement equals the glibc version on the build system. Building on Ubuntu 24.04 (glibc 2.39) produces an AppImage that fails on Ubuntu 22.04 (glibc 2.35) with `GLIBC_2.39 not found`. This is not fixable after the fact -- the binary must be rebuilt on an older system.
 
-Even without hitting fd limits, 5 concurrent watchers generate more debounced events, increasing CPU usage from the 300ms debouncer callbacks and the subsequent `get_dirty_counts` / `refresh_commit_graph` calls.
+This is the most common Linux distribution complaint for Tauri apps. Users download the AppImage, run it, and get a cryptic glibc error with no actionable fix.
 
 **Why it happens:**
-The current watcher design is correct for single-repo use. It watches recursively because git status changes can happen in any subdirectory. The 300ms debounce keeps event rates manageable for one repo.
+`ubuntu-latest` on GitHub Actions currently points to Ubuntu 24.04 (or may shift over time). Developers use it without realizing it determines their minimum supported Linux version. The AppImage format gives a false sense of portability -- "it bundles everything" except the one thing that matters most (glibc).
 
 **How to avoid:**
-1. Use `close_repo` diligently when tabs close -- the existing `stop_watcher` call in `close_repo` (repo.rs line 43) removes the watcher. Verify this cleanup path works when tabs are closed.
-2. Consider watching only `.git/` directory changes plus the top-level directory (non-recursive) for most repos, using `RecursiveMode::NonRecursive`. Most git operations modify `.git/` files (HEAD, index, refs), and most working tree changes happen via editors that save files (triggering a workdir-level event). This dramatically reduces fd usage but misses nested directory changes.
-3. Better approach: keep recursive watching but increase the debounce interval for background tabs. Active tab: 300ms. Background tabs: 2000ms. This reduces the event processing rate for repos the user isn't actively looking at.
-4. Set a max tab limit (e.g., 15-20) with a warning. This is reasonable UX -- even browser tab hoarders rarely work with 20 repos simultaneously.
-5. Monitor: log the watcher count and emit a warning toast if > 10 watchers are active.
+Pin the Linux runner to `ubuntu-22.04` explicitly (not `ubuntu-latest`). This ensures compatibility with Ubuntu 22.04+ and most current Linux distributions. Do NOT use `ubuntu-20.04` -- it is deprecated and missing `libwebkit2gtk-4.1-dev` needed for Tauri 2.
+
+Document the minimum Linux requirement (Ubuntu 22.04 / glibc 2.35) in the release notes.
 
 **Warning signs:**
-- "Too many open files" errors when opening multiple repos
-- High CPU usage with many tabs open
-- Sluggish UI when switching to a tab with a large repo
+- User reports "GLIBC_X.XX not found" when running the AppImage
+- `ubuntu-latest` appears in your workflow file without a pinned version
+- GitHub changes what `ubuntu-latest` points to (check their runner images changelog)
 
 **Phase to address:**
-Phase 1 (backend state scoping) -- watcher lifecycle is part of the `open_repo`/`close_repo` contract
+Phase 2 (release pipeline) -- runner version must be pinned when configuring the build matrix
 
 ---
 
-### Pitfall 7: Tree View Path Splitting Correctness Across Platforms
+### Pitfall 7: Unsigned Builds Trigger OS Security Warnings on All Platforms
 
 **What goes wrong:**
-Converting flat file paths (e.g., `src/lib/store.ts`) into a tree structure requires splitting by `/`. Git always uses forward slashes in its internal path representation (even on Windows). But the file paths returned by `git2`'s status/diff APIs use the repository-internal format (forward slashes). If the tree builder naively uses `path.split(os_separator)` instead of `path.split('/')`, it works on macOS/Linux but breaks on Windows where `os_separator` is `\`.
+Without code signing:
+- **macOS**: Gatekeeper shows "trunk is damaged and can't be opened" or "Apple cannot check it for malicious software." Users must right-click > Open (or run `xattr -cr trunk.app` from terminal) to bypass. This is a dealbreaker for non-technical users.
+- **Windows**: SmartScreen shows "Windows protected your PC" with a scary blue warning. Users must click "More info" > "Run anyway." Browser downloads may be blocked entirely.
+- **Linux**: No signing issues. AppImage runs after `chmod +x`.
 
-Additionally, paths with spaces, unicode characters, or deeply nested directories (20+ levels) can cause issues with naive tree construction.
+The v0.10 scope explicitly excludes code signing ("No code signing (unsigned builds)"). This is a valid decision for a personal/early-stage project, but the UX impact must be documented for end users.
 
 **Why it happens:**
-Developers test on their primary OS (macOS in this case) where `/` works. The bug only manifests on Windows, which is a target platform for v0.10 (CI/CD & Releases).
+Apple and Microsoft require paid developer accounts ($99/year and ~$200-400/year respectively) and per-build notarization/signing processes. For a personal learning project, this cost and complexity is premature.
 
 **How to avoid:**
-Always split on `/` for tree construction, never on `path.separator`. Git normalizes paths internally, and `git2` returns forward-slash paths regardless of OS. Validate this assumption by checking `git2::StatusEntry::path()` documentation -- it returns paths relative to the workdir with forward slashes.
-
-For the tree data structure: use a nested map/object, not an array of path segments. Each node: `{ name: string, children: Map<string, TreeNode>, files: FileStatus[] }`. Insert by walking the path segments and creating intermediate directories as needed.
+Since code signing is explicitly out of scope for v0.10:
+1. Document the bypass instructions prominently in every GitHub Release's description:
+   - macOS: "Right-click the app > Open, then click Open in the dialog"
+   - Windows: "Click 'More info' then 'Run anyway' on the SmartScreen dialog"
+2. Include these instructions in the README's installation section.
+3. Do NOT set `releaseDraft: false` -- use draft releases so you can review and add installation instructions before publishing.
+4. Plan code signing for a future milestone (v1.0 or later).
 
 **Warning signs:**
-- Tree shows single deeply-nested chain instead of proper hierarchy
-- Files appear at wrong nesting level
-- Windows build shows flat list instead of tree
+- Users file issues saying the app "doesn't work" or "is broken" on macOS
+- Download counts are high but active user count is low (people download, hit the warning, give up)
 
 **Phase to address:**
-Phase 3 or 4 (tree view implementation) -- when building the path-to-tree transformer
+Phase 2 (release pipeline) -- release notes template must include bypass instructions; Phase 3 (changelog/docs) should formalize installation docs
 
 ---
 
-### Pitfall 8: Tree View Expand/Collapse State Lost on Refresh
+### Pitfall 8: GitHub Token Permissions Block Release Creation
 
 **What goes wrong:**
-When the filesystem watcher fires `repo-changed`, the staging panel reloads `get_status`. The file list changes. If the tree view is open with several directories expanded, the entire tree is rebuilt from the new file list. All expand/collapse state is lost -- every directory collapses back to default (typically collapsed). The user was looking at `src/lib/components/deep/file.ts`, the tree refreshes, and now they have to re-expand 4 directory levels to get back to their file.
-
-This is the most common UX complaint about tree views in git GUIs. GitKraken handles it by preserving expanded paths across refreshes. VS Code's Source Control does the same.
+The default `GITHUB_TOKEN` in GitHub Actions has read-only permissions. The tauri-action needs write access to create releases and upload artifacts. Without it, the workflow fails with "Resource not accessible by integration" -- a vague error that does not mention permissions.
 
 **Why it happens:**
-The obvious implementation rebuilds the tree from scratch on each status refresh. The tree structure is derived from the file list, so when the file list changes, the tree is recomputed. Without explicit state tracking, the expand/collapse state is ephemeral.
+GitHub tightened default token permissions for security. New repositories default to read-only. The error message does not clearly state "you need write permissions" -- it says "resource not accessible" which developers misinterpret as a repository visibility issue.
 
 **How to avoid:**
-Maintain a `Set<string>` of expanded directory paths, separate from the tree data structure. When the tree is rebuilt from new file data, apply the expanded set to restore the previous state. If a previously-expanded directory no longer exists in the new data (all its files were staged/committed), silently remove it from the expanded set.
+Add explicit permissions in the workflow file:
+```yaml
+permissions:
+  contents: write
+```
 
-Default behavior for new directories: collapsed. Exception: if a directory contains only one subdirectory (common: `src/` > `lib/` > `components/`), auto-expand single-child chains ("compact folders" like VS Code).
-
-Store the expanded set in component state (not LazyStore) -- it should reset when switching repos but persist across refreshes within the same session.
+This is more reliable than changing repository settings (which can be reset) and is visible in code review.
 
 **Warning signs:**
-- User expands directories, stages a file, tree collapses completely
-- Rapid re-expansion clicks cause UI jank from repeated tree rebuilds
+- "Resource not accessible by integration" in CI logs
+- Release job succeeds (exit 0) but no release appears on GitHub
+- "403 Forbidden" errors in tauri-action output
 
 **Phase to address:**
-Phase 3 or 4 (tree view implementation) -- must be part of the initial tree view design, not added as a patch
+Phase 2 (release pipeline) -- must be in the workflow file from the first release attempt
 
 ---
 
-### Pitfall 9: Tree View in Multiple Contexts with Different Semantics
+### Pitfall 9: Changelog Generation Fails With Shallow Clone
 
 **What goes wrong:**
-The tree view must work in three distinct contexts:
-1. **Staging panel:** unstaged files, staged files, conflicted files -- each in its own section with different actions (stage/unstage/discard)
-2. **Commit detail:** files changed in a commit -- read-only list, click opens diff
-3. **Merge editor file list:** conflicted files only
-
-Each context has different file lists and different interaction behaviors. A single generic `TreeView` component that handles all three risks becoming a complex prop-driven monster with many conditional branches. Alternatively, three separate tree implementations lead to code duplication and inconsistent behavior (one gets a bug fix, the others don't).
+GitHub Actions checks out repositories with `fetch-depth: 1` by default (shallow clone). Changelog generators like git-cliff need the full commit history to generate meaningful release notes. With a shallow clone, git-cliff sees only the HEAD commit and produces an empty or single-entry changelog. The release goes out with no useful release notes.
 
 **Why it happens:**
-The current flat `FileRow` component is simple enough to reuse across contexts. A tree adds structural complexity (indentation, expand/collapse, directory nodes) that interacts differently with each context's actions.
+Shallow clones are a CI optimization -- they are faster and use less disk. Most CI tasks (build, test) do not need history. But changelog generation is specifically a history-dependent operation.
 
 **How to avoid:**
-Build a single `FileTree.svelte` component that handles ONLY the tree structure (expand/collapse, indentation, directory grouping). It accepts a generic `files: { path: string, [key: string]: any }[]` array and an `onfileclick` callback. It does NOT know about staging, committing, or conflict resolution. Each parent context (StagingPanel, CommitDetail, MergeEditor) wraps `FileTree` and provides the appropriate file list and click handler.
+Set `fetch-depth: 0` in the checkout step of any job that generates changelogs:
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
-The toggle between flat and tree mode should be a simple prop on a wrapper component (`FileListView.svelte`) that renders either `FileRow` items (flat) or `FileTree` (tree), using the same underlying data. The toggle state should be stored in LazyStore as a global preference (`file_list_mode: 'flat' | 'tree'`).
+Only do this in the release/changelog job, not in the CI checks job (where shallow clone is fine and faster).
 
 **Warning signs:**
-- Tree view works in staging panel but breaks in commit detail
-- Different expand/collapse behavior between staging and commit views
-- Action buttons (stage/unstage) appear incorrectly in commit detail tree view
+- Changelog contains only the tag commit or is empty
+- git-cliff warns about "no commits found" or "detached HEAD"
+- Release notes say "No changes" despite many commits
 
 **Phase to address:**
-Phase 3 or 4 (tree view implementation) -- design the component boundary before implementing
+Phase 3 (changelog generation) -- must be configured when adding git-cliff to the workflow
 
 ---
 
-### Pitfall 10: Directory-Level Actions in Tree View Create Ambiguity
+### Pitfall 10: Dependabot Lockfile Corruption With Bun
 
 **What goes wrong:**
-When files are shown as a tree, users expect to right-click a directory and "Stage all files in this directory" or "Discard all files in this directory." But what does "stage directory" mean when some files in the directory are new and others are modified? What about nested subdirectories? The current `stage_all` command stages everything -- there is no `stage_directory` command. Adding directory-level actions requires either: (a) calling `stage_file` in a loop for each file in the directory, or (b) adding a new backend command that stages a path prefix.
+Dependabot gained bun support in February 2025, but it has known issues: it may remove the `configVersion` line from `bun.lock` files (issue dependabot/dependabot-core#13623), and it does not support the legacy binary `bun.lockb` format. If the project uses `bun.lockb`, Dependabot's npm ecosystem handler may try to generate a `package-lock.json` instead, creating conflicting lock files.
 
-The loop approach is slow for large directories (N IPC round-trips) and has atomicity issues (what if staging fails halfway through -- some files staged, others not?). The backend command approach is cleaner but requires new Rust code.
+Additionally, Dependabot's Rust support requires a Cargo version that matches the project's Rust edition. Since this project uses Rust 2021 edition, this is not currently an issue, but upgrading to Rust 2024 edition later would require Dependabot to use cargo 1.85.0+.
 
 **Why it happens:**
-Directory-level operations are a natural expectation of tree views. Users see a directory node and want to act on it. But the backend was designed around individual file operations.
+Bun support in Dependabot is relatively new (GA February 2025). Edge cases with lockfile format versions are still being resolved. The bun lockfile format changed from binary (`bun.lockb`) to text (`bun.lock`) in bun 1.1.39+.
 
 **How to avoid:**
-For v0.9, keep directory-level actions simple:
-1. **Stage directory:** Call `stage_file` in sequence for each file in the directory (including subdirectories). Show a loading indicator on the directory node. If any file fails, show an error but continue with the rest.
-2. **Discard directory:** Show a confirmation dialog listing all files that will be discarded. Then call `discard_file` for each. This is destructive, so the explicit list is important.
-3. Do NOT add backend bulk commands in v0.9 -- the IPC overhead for <100 files is negligible (<50ms). Optimize later if profiling shows it is a bottleneck.
-4. Alternatively, defer directory-level actions entirely for v0.9 and only support them in a later milestone. The tree view itself (visual grouping + expand/collapse) provides value even without directory actions.
+1. Ensure the project uses text-based `bun.lock` (not binary `bun.lockb`). Run `bun install` with bun >= 1.1.39 to generate the text format.
+2. In `.github/dependabot.yml`, configure both ecosystems explicitly:
+   ```yaml
+   version: 2
+   updates:
+     - package-ecosystem: "cargo"
+       directory: "/src-tauri"
+       schedule:
+         interval: "weekly"
+     - package-ecosystem: "npm"
+       directory: "/"
+       schedule:
+         interval: "weekly"
+   ```
+3. Pin the Dependabot schedule to weekly (not daily) to avoid PR fatigue.
+4. Add a CI check that runs `bun install --frozen-lockfile` to catch lockfile inconsistencies from Dependabot PRs.
 
 **Warning signs:**
-- Staging a large directory freezes the UI (sequential IPC without async batching)
-- Partial stage failure leaves directory in inconsistent visual state
-- Discard directory without confirmation causes data loss
+- Dependabot PRs that change `package-lock.json` instead of `bun.lock`
+- Lockfile format version mismatch warnings after merging Dependabot PRs
+- Dependabot fails to open PRs for bun dependencies (check Dependabot logs in repository settings)
 
 **Phase to address:**
-Phase 4 or 5 (tree view polish) -- after basic tree view is working
+Phase 3 or 4 (Dependabot configuration) -- configure after CI checks are working so Dependabot PRs are validated automatically
 
 ---
 
@@ -286,97 +322,118 @@ Phase 4 or 5 (tree view polish) -- after basic tree view is working
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Keep-alive all tabs (never unmount) | Instant tab switching, preserved scroll | Memory grows linearly with tab count | Acceptable for v0.9 (desktop app, 2-10 tabs) |
-| Global event bus with path filtering | No Tauri API changes, reuses existing events | Every listener checks every event | Acceptable indefinitely (N listeners x M events is small) |
-| Flat LazyStore keys for tab state | Simple to implement | Cannot do per-repo preferences | Acceptable for v0.9; migrate to namespaced keys if per-repo prefs are needed |
-| Sequential `stage_file` for directory staging | No new Rust commands | Slow for 100+ files, non-atomic | Acceptable for v0.9; add bulk command if profiling shows need |
-| Rebuilding tree on every refresh | Simple implementation | Expand state lost without explicit tracking | Never acceptable -- must track expanded paths from day one |
+| Using `ubuntu-latest` instead of pinned version | Less maintenance when GitHub updates runners | AppImage breaks on older distros when GitHub bumps the runner OS | Never for release builds; acceptable for CI checks |
+| Skipping macOS Intel builds (arm-only) | Halves macOS build time | Excludes pre-2020 Mac users | Acceptable if targeting only Apple Silicon users |
+| No version sync check in CI | Less CI configuration | Silent version mismatch causes release failures | Never -- the check is trivial and prevents the most common failure |
+| Single workflow file for CI + releases | Simpler to maintain | CI check changes risk breaking release pipeline; harder to read | Acceptable for v0.10; split later when complexity grows |
+| No Cargo.lock in repository | Avoids lock file merge conflicts | CI builds use different dependency versions than local; non-reproducible builds | Never for applications (Cargo.lock should be committed per Rust convention) |
+| Relying on tauri-action to create releases | Less workflow code | Race condition creates duplicate releases (Pitfall 2) | Never -- create release in a separate job |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Tab close + watcher cleanup | Forgetting to call `close_repo` when a tab closes, leaving orphan watchers consuming fd's | Always call `close_repo` on tab close; verify watcher map shrinks; add an `$effect` cleanup in `RepoView` that calls `close_repo` |
-| Tab switch + stale event listeners | Old tab's `$effect` cleanup runs async, new tab's listeners register first -- brief window where both process events | Use `$effect` cleanup (Svelte guarantees synchronous cleanup before new effect runs); verify with concurrent tab switches |
-| Tree view + virtual list | Trying to virtualize the tree view when there are <200 files (staging panel rarely has >100 changed files) | Skip virtualization for tree view initially; the staging panel is not the bottleneck. Only CommitDetail with huge commits (1000+ files) needs virtual tree -- defer this |
-| Merge editor + tree view | Merge editor currently takes a single `filePath` prop. Tree view in merge context means navigating between conflicted files via the tree, requiring the merge editor to handle file switching | Keep merge editor as-is for v0.9; tree view in merge context is just a navigation aid that calls the existing `onfileselect` callback |
-| Tab restoration + repo validation | Persisted tab paths may reference repos that have been moved or deleted since last session | On restore, validate each path with `open_repo`. If it fails, show the tab with an error state ("Repository not found at /path/to/repo") and offer to close or relocate |
+| tauri-action + bun | Forgetting `oven-sh/setup-bun` before tauri-action | Add setup-bun step before any step that triggers `beforeBuildCommand` |
+| tauri-action + release | Letting parallel matrix jobs create the release | Create release in a dedicated job; matrix jobs only upload artifacts |
+| swatinem/rust-cache + matrix | Using same cache key across platforms | rust-cache auto-scopes by OS; but add `shared-key` for related jobs (e.g., "ci-check" vs "release") |
+| git-cliff + shallow clone | Default `fetch-depth: 1` produces empty changelog | Set `fetch-depth: 0` only in the release job |
+| Dependabot + bun | Dependabot generates `package-lock.json` instead of `bun.lock` | Ensure text-based `bun.lock` exists; verify Dependabot detects bun ecosystem |
+| GitHub token + release creation | Default read-only token cannot create releases | Add `permissions: contents: write` in workflow |
+| macOS targets + rust-toolchain | Missing `aarch64-apple-darwin` or `x86_64-apple-darwin` target | Install both targets via `dtolnay/rust-toolchain` with `targets` input |
+| Ubuntu version + Tauri 2 | Using `libwebkit2gtk-4.0-dev` (Tauri v1) instead of `4.1` (Tauri v2) | Use `libwebkit2gtk-4.1-dev` for Tauri 2 |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| N watchers x recursive monitoring | High fd usage, "too many open files" error | Increase debounce for background tabs; cap tab count; consider non-recursive watching | >5 tabs with large repos (100k+ files each) on macOS |
-| N cached GraphResults in memory | RSS grows by ~50-100MB per large repo (10k commits with edges/refs) | Evict graph cache for background tabs after timeout; re-walk on tab activation | >10 tabs with 50k+ commit repos |
-| Tree rebuild on every status refresh | UI jank, lost expand state | Track expanded paths separately; diff old vs new tree and update incrementally | Repos with 500+ changed files (monorepo staging) |
-| All tabs listen for all events | CPU cycles wasted checking event payloads | Negligible for <20 tabs; only optimize if profiled | Theoretical concern, not practical |
-| Commit detail tree for huge commits | 1000+ file changes in one commit, tree has thousands of nodes | Virtualize only the commit detail tree; staging panel stays non-virtualized | Merge commits in monorepos (10k+ files) |
+| No Rust compilation cache | Every CI run takes 30-60 min per platform | Use `swatinem/rust-cache@v2` with correct workspace path | First run always (cold cache); subsequent runs if cache key changes |
+| Debug info in CI builds | Cache exceeds 10GB limit, slow cache upload/download | Set `debug = false` in CI profile; or use `[profile.ci]` | ~3rd platform cache added |
+| Running clippy before cargo build | Clippy cannot reuse build artifacts from subsequent build | Run `cargo build` first, then `cargo clippy` -- clippy reuses build cache | Every CI run (wasted ~5 minutes) |
+| Full history checkout in CI checks | Slower checkout for checks that do not need history | Use `fetch-depth: 1` for CI checks, `fetch-depth: 0` only for changelog | Large repos with 10k+ commits |
+| Serial lint/test/build steps | CI takes 3x longer than needed | Parallelize: fmt+clippy in one job, tests in another, build in another | Every CI run |
+| vendored-libgit2 C compilation | ~2-3 min extra compilation for libgit2 from C source | Cache handles this after first build; no way to avoid on cold cache | Cold cache only |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Committing signing certificates or secrets to repo | Private keys exposed in git history forever | Use GitHub Secrets for all credentials; add `.p12`, `.pfx`, `*.keystore` to `.gitignore` |
+| Using `GITHUB_TOKEN` in PR workflows from forks | Token has write access in fork PRs (if misconfigured) | Use `pull_request` trigger (not `pull_request_target`) for CI checks |
+| Dependabot PRs running release workflow | Tag push from Dependabot could trigger unintended release | Release workflow should only trigger on `v*` tags, which Dependabot never creates |
+| Storing API tokens in workflow files | Tokens visible in repository history | Always use `${{ secrets.TOKEN_NAME }}`; never hardcode |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No visual indicator of background tab activity | User does not know Tab B's fetch completed while viewing Tab A | Show a dot/badge on the tab when background activity completes or status changes |
-| Tab strip becomes unreadable with many tabs | Tab names truncate to nothing beyond 5-6 tabs | Set max tab width, add horizontal scroll to tab bar, show full name on hover tooltip |
-| Tree view as default for new users | Tree adds visual complexity, new users may be overwhelmed | Default to flat list (matching current behavior); add toggle button; persist preference |
-| No keyboard navigation in tree | Power users expect arrow keys to navigate tree nodes | Support Up/Down to move between visible nodes, Left to collapse, Right to expand, Enter to select file |
-| Switching tabs resets center pane | User was viewing a diff, switches tabs, comes back -- diff is gone | With keep-alive approach, this is preserved automatically. With mount/unmount, save/restore the viewed file and diff |
-| Opening same repo in two tabs | Duplicate watchers, confusing UX (edits in one tab affect the other silently) | Detect duplicate and switch to existing tab with a toast: "Already open in Tab 2" |
+| No installation instructions in release notes | Users download unsigned binary, hit OS security warning, assume app is broken | Include platform-specific bypass instructions in every release description |
+| AppImage without execute permission note | Linux users download, double-click, nothing happens | Release notes: "Run `chmod +x trunk.AppImage` before launching" |
+| No changelog in release | Users cannot tell what changed between versions | Generate changelog with git-cliff and include in release body |
+| Releasing as non-draft without review | Broken build goes live, users download broken artifact | Always create as draft, review artifacts, then publish manually |
+| No "latest" release designation | Users on the releases page do not know which version to download | Mark the published release as "latest" in GitHub |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Tab close:** Verify `close_repo` is called (watcher stopped, cache cleared, RepoState entry removed) -- inspect WatcherState map size after close
-- [ ] **Tab restore:** Open 3 repos in tabs, quit app, relaunch -- verify all 3 tabs restore in correct order with correct active tab
-- [ ] **Background tab freshness:** Make a commit in Tab A's repo via terminal while Tab B is active -- switch to Tab A and verify the new commit appears without manual refresh
-- [ ] **Tree view refresh:** Expand 3 directories in tree view, stage a file, verify the expanded directories stay expanded after status refresh
-- [ ] **Tree view toggle persistence:** Switch to tree view, close app, relaunch -- verify tree view mode is restored
-- [ ] **Cross-tab isolation:** Run `git push` in Tab A, switch to Tab B -- verify Tab B's toolbar is not disabled and shows no progress
-- [ ] **Undo isolation:** Create commits in Tab A and Tab B. Undo in Tab A. Verify Tab B's redo stack is empty (not contaminated by Tab A's undo)
-- [ ] **Duplicate repo prevention:** Try to open the same repo path in two tabs -- verify it switches to existing tab
-- [ ] **Tree view in commit detail:** Click a commit with 50+ changed files, toggle to tree view, verify directory grouping is correct and click-to-diff still works
-- [ ] **Empty tree view:** Repo with no changes -- tree view shows empty state, not a broken tree
+- [ ] **Version sync:** All three files (package.json, Cargo.toml, tauri.conf.json) have matching versions -- or tauri.conf.json omits version to inherit from Cargo.toml
+- [ ] **CI checks pass on all platforms:** Not just "the build succeeds" but clippy, fmt, and tests pass on Linux, macOS, AND Windows
+- [ ] **Release artifacts downloadable:** After publishing, download each artifact on its target platform and verify it launches (unsigned warning is expected)
+- [ ] **macOS both architectures:** Release has both `.dmg` files -- one for Apple Silicon (aarch64), one for Intel (x86_64)
+- [ ] **Linux AppImage runs on Ubuntu 22.04:** Download the AppImage on a fresh Ubuntu 22.04 and verify it launches without glibc errors
+- [ ] **Windows .msi installs correctly:** Run the .msi installer, verify the app appears in Start Menu and launches
+- [ ] **Changelog is non-empty:** Release notes contain actual commit summaries, not "No changes" or empty body
+- [ ] **Dependabot opens PRs:** Check the Dependabot tab in repo settings -- PRs should appear within a week of configuration
+- [ ] **Cache working:** Second CI run is significantly faster than first (check swatinem/rust-cache logs for "cache hit")
+- [ ] **Concurrency control:** Push two tags rapidly -- second run cancels first (or waits), no duplicate releases created
+- [ ] **Fork PRs safe:** A PR from a fork runs CI checks but cannot trigger release workflow or access secrets
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| State leaks between tabs (Pitfall 1) | MEDIUM | Refactor singleton modules to per-repo context; requires touching all components that import these modules |
-| RunningOp global mutex (Pitfall 2) | LOW | Change from `Option<u32>` to `HashMap<String, u32>` and add `path` param to `cancel_remote_op`; localized Rust change |
-| App.svelte monolith (Pitfall 3) | HIGH | Extract `RepoView.svelte` from App.svelte; largest single refactor in v0.9; must move ~30 state variables and ~15 handler functions |
-| Event listener leaks (Pitfall 4) | LOW | Add missing cleanup in `$effect` return functions; audit each `listen()` call |
-| LazyStore not tab-aware (Pitfall 5) | LOW | Replace `open_repo` key with `open_tabs` array; add save/restore logic |
-| Watcher accumulation (Pitfall 6) | MEDIUM | Add debounce scaling for background tabs; requires watcher API changes to support dynamic debounce intervals |
-| Tree path splitting (Pitfall 7) | LOW | Fix split character; isolated change in tree builder utility function |
-| Tree expand state lost (Pitfall 8) | MEDIUM if discovered late | Retrofitting expand state tracking into an existing tree component; easier if designed in from the start |
-| Tree in multiple contexts (Pitfall 9) | HIGH if wrong abstraction chosen | May require rewriting tree component with different component boundaries |
-| Directory actions (Pitfall 10) | LOW | Sequential `stage_file` loop; can be optimized later without API changes |
+| Version mismatch broke release | LOW | Delete the incorrect release, fix versions in all files, re-tag, re-push |
+| Duplicate releases created | LOW | Delete the duplicate release, re-run the workflow (or manually upload missing artifacts) |
+| AppImage built on wrong Ubuntu | MEDIUM | Cannot fix the artifact; must rebuild on correct Ubuntu version; update workflow and re-release |
+| Unsigned build complaints | LOW | Add installation instructions to release notes; plan code signing for future milestone |
+| Cache bloated past 10GB | LOW | Delete cache entries via GitHub API (`gh cache delete`); add CI profile to reduce artifact size |
+| Dependabot corrupted lockfile | LOW | Revert the PR; regenerate lockfile locally with `bun install`; push fix |
+| Shallow clone empty changelog | LOW | Re-run with `fetch-depth: 0`; or generate changelog locally and paste into release notes |
+| Token permissions block release | LOW | Add `permissions: contents: write` to workflow; re-run |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| P1: Singleton state leaks | Backend state scoping (Phase 1) | Open 2 tabs, run operations in both, verify no cross-contamination |
-| P2: RunningOp global mutex | Backend state scoping (Phase 1) | Fetch in Tab A while pushing in Tab B -- both succeed |
-| P3: App.svelte monolith | Frontend tab architecture (Phase 2) | Switch between 3 tabs rapidly -- each preserves its own state |
-| P4: Global event bus | Frontend tab architecture (Phase 2) | Watcher fires for repo A -- only Tab A refreshes |
-| P5: LazyStore not tab-aware | Tab persistence (Phase 2 or 3) | Quit with 3 tabs, relaunch, all 3 restore correctly |
-| P6: Watcher accumulation | Backend state scoping (Phase 1) | Open 10 tabs, check fd count stays reasonable (`lsof -p <pid> \| wc -l`) |
-| P7: Tree path splitting | Tree view implementation (Phase 3-4) | Test with paths containing `/`, nested dirs, unicode characters |
-| P8: Tree expand state | Tree view implementation (Phase 3-4) | Expand dirs, stage file, verify expanded state preserved |
-| P9: Tree in multiple contexts | Tree view implementation (Phase 3-4) | Toggle tree in staging panel, commit detail, verify both work independently |
-| P10: Directory actions | Tree view polish (Phase 4-5) | Right-click directory > stage all > verify all files staged |
+| P1: Version mismatch | Phase 1 (CI foundation) | CI check validates version alignment on every PR |
+| P2: Duplicate release race | Phase 2 (release pipeline) | Push a tag, verify exactly one release with all platform artifacts |
+| P3: Bun not found | Phase 1 (CI foundation) | CI workflow includes setup-bun; first run succeeds |
+| P4: Missing Linux deps | Phase 1 (CI foundation) | Linux CI job passes cargo check + clippy |
+| P5: Uncached slow builds | Phase 1 (CI foundation) | Second CI run takes <15 minutes (check cache hit logs) |
+| P6: AppImage glibc compat | Phase 2 (release pipeline) | Download AppImage, run on Ubuntu 22.04 VM/container |
+| P7: Unsigned build warnings | Phase 2 (release pipeline) | Release notes include bypass instructions for macOS and Windows |
+| P8: Token permissions | Phase 2 (release pipeline) | Release workflow creates draft release successfully |
+| P9: Shallow clone changelog | Phase 3 (changelog) | Release notes contain grouped commit summaries |
+| P10: Dependabot lockfile | Phase 3-4 (Dependabot) | Dependabot PR passes CI checks including `bun install --frozen-lockfile` |
 
 ## Sources
 
-- Direct codebase analysis: `state.rs`, `watcher.rs`, `remote.rs`, `store.ts`, `remote-state.svelte.ts`, `undo-redo.svelte.ts`, `App.svelte`, all 21 Tauri commands, all 24 Svelte components
-- [Tauri v2 State Management docs](https://v2.tauri.app/develop/state-management/)
-- [Tauri multi-window best practices discussion](https://github.com/tauri-apps/tauri/discussions/9423)
-- [Svelte 5 shared state patterns](https://joyofcode.xyz/how-to-share-state-in-svelte-5)
-- [notify-rs crate documentation](https://docs.rs/notify)
-- [GitHub Desktop multi-window discussion](https://github.com/desktop/desktop/issues/3606)
-- [GitButler tree view feature request](https://github.com/gitbutlerapp/gitbutler/issues/7036)
-- [GitHub blog: monorepo performance with FSMonitor](https://github.blog/engineering/infrastructure/improve-git-monorepo-performance-with-a-file-system-monitor/)
+- [Tauri 2 GitHub Actions Distribution Docs](https://v2.tauri.app/distribute/pipelines/github/) -- official workflow examples, Linux dependencies, runner matrix
+- [Tauri 2 AppImage Distribution Docs](https://v2.tauri.app/distribute/appimage/) -- glibc compatibility warning, bundle size, GStreamer
+- [tauri-apps/tauri-action](https://github.com/tauri-apps/tauri-action) -- action configuration, release creation, package manager detection
+- [tauri-action#914: Duplicate Releases Race Condition](https://github.com/tauri-apps/tauri-action/issues/914) -- root cause analysis, workaround (separate release job)
+- [tauri-action#986: bun: not found](https://github.com/tauri-apps/tauri-action/issues/986) -- setup-bun requirement for bun projects
+- [tauri-apps/tauri#8265: Version Sync Feature Request](https://github.com/tauri-apps/tauri/issues/8265) -- community discussion on version management
+- [tauri-apps/tauri Discussion#6347: Version Sync](https://github.com/tauri-apps/tauri/discussions/6347) -- workaround patterns, single source of truth
+- [VaultNote CI/CD Post-Mortem](https://dev.to/dev_michael/my-first-tauri-cicd-pipeline-lessons-from-building-vaultnote-with-sveltekit-17mp) -- version sync lessons, 60+ failed runs
+- [Ship Tauri v2 Like a Pro: GitHub Actions (Part 2)](https://dev.to/tomtomdu73/ship-your-tauri-v2-app-like-a-pro-github-actions-and-release-automation-part-22-2ef7) -- draft release pattern, concurrency control, fail-fast
+- [How to Make Rust CI 2-3x Faster](https://www.reillywood.com/blog/rust-faster-ci/) -- cache strategy, clippy ordering, nextest
+- [Swatinem/rust-cache](https://github.com/Swatinem/rust-cache) -- cache key strategy, workspace configuration
+- [git-cliff](https://git-cliff.org/) -- changelog generation, GitHub Actions integration
+- [orhun/git-cliff-action](https://github.com/orhun/git-cliff-action) -- fetch-depth requirement, configuration
+- [Dependabot Bun Support (GA Feb 2025)](https://github.blog/changelog/2025-02-13-dependabot-version-updates-now-support-the-bun-package-manager-ga/) -- bun.lock requirements
+- [dependabot-core#13623: Bun Lockfile configVersion Removal](https://github.com/dependabot/dependabot-core/issues/13623) -- known bun lockfile corruption
+- [dependabot-core#11691: Rust 2024 Edition Support](https://github.com/dependabot/dependabot-core/issues/11691) -- cargo version requirements
+- [Ship Tauri v2 Like a Pro: Code Signing (Part 1)](https://dev.to/tomtomdu73/ship-your-tauri-v2-app-like-a-pro-code-signing-for-macos-and-windows-part-12-3o9n) -- unsigned build UX impact
 
 ---
-*Pitfalls research for: Trunk v0.9 -- Multi-tab & Tree View*
-*Researched: 2026-03-23*
+*Pitfalls research for: Trunk v0.10 -- CI/CD & Cross-Platform Releases*
+*Researched: 2026-03-25*
