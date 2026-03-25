@@ -6,6 +6,7 @@
   import Toast from './components/Toast.svelte';
   import { safeInvoke } from './lib/invoke.js';
   import { listen } from '@tauri-apps/api/event';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { getZoomLevel, setZoomLevel, getLeftPaneWidth, setLeftPaneWidth, getRightPaneWidth, setRightPaneWidth, getLeftPaneCollapsed, setLeftPaneCollapsed, getRightPaneCollapsed, setRightPaneCollapsed, getOpenRepo, setOpenRepo, getOpenTabs, setOpenTabs, getActiveTabId, setActiveTabId } from './lib/store.js';
   import type { TabInfo } from './lib/tab-types.js';
   import { createTabId } from './lib/tab-types.js';
@@ -18,6 +19,7 @@
   let leftPaneCollapsed = $state(false);
   let rightPaneWidth = $state(240);
   let rightPaneCollapsed = $state(false);
+  let isFullscreen = $state(false);
 
   // Tab state
   let tabs = $state<TabInfo[]>([]);
@@ -275,6 +277,19 @@
     getRightPaneCollapsed().then((c) => { rightPaneCollapsed = c; });
   });
 
+  // Track fullscreen state (hide traffic-light padding when fullscreen)
+  $effect(() => {
+    const appWindow = getCurrentWindow();
+    appWindow.isFullscreen().then((fs) => { isFullscreen = fs; });
+
+    let unlisten: (() => void) | undefined;
+    appWindow.onResized(async () => {
+      isFullscreen = await appWindow.isFullscreen();
+    }).then((fn) => { unlisten = fn; });
+
+    return () => { unlisten?.(); };
+  });
+
   // Apply zoom to document
   $effect(() => {
     document.documentElement.style.zoom = String(zoomLevel);
@@ -394,7 +409,7 @@
 
 <div class="flex flex-col h-screen" style="background: var(--color-bg);">
   <!-- LAYOUT-02: unified title bar + toolbar -->
-  <div data-tauri-drag-region class="flex items-center flex-shrink-0" style="height: 32px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding-left: {78 / zoomLevel}px;">
+  <div data-tauri-drag-region class="flex items-center flex-shrink-0" style="height: 32px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding-left: {isFullscreen ? 0 : 78 / zoomLevel}px;">
     <TabBar
       {tabs}
       {activeTabId}
@@ -431,7 +446,7 @@
           onrightpanewidthchange={(w) => { rightPaneWidth = w; setRightPaneWidth(w); }}
         />
       {:else}
-        <WelcomeScreen onopen={(path, name) => openRepoInTab(tab.id, path, name)} />
+        <WelcomeScreen {isFullscreen} onopen={(path, name) => openRepoInTab(tab.id, path, name)} />
       {/if}
     </div>
   {/each}
