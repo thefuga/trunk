@@ -8,9 +8,11 @@
     onactivate: (tabId: string) => void;
     onclose: (tabId: string, force: boolean) => void;
     onnew: () => void;
+    oncontextmenu: (tabId: string, event: MouseEvent) => void;
+    onauxclose: (tabId: string) => void;
   }
 
-  let { tabs, activeTabId, onactivate, onclose, onnew }: Props = $props();
+  let { tabs, activeTabId, onactivate, onclose, onnew, oncontextmenu, onauxclose }: Props = $props();
 
   let tabBarEl: HTMLDivElement;
 
@@ -29,6 +31,8 @@
       data-tab-id={tab.id}
       onclick={() => onactivate(tab.id)}
       onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onactivate(tab.id); }}
+      oncontextmenu={(e: MouseEvent) => { e.preventDefault(); oncontextmenu(tab.id, e); }}
+      onauxclick={(e: MouseEvent) => { if (e.button === 1) { e.preventDefault(); onauxclose(tab.id); } }}
       role="tab"
       tabindex="0"
       aria-selected={tab.id === activeTabId}
