@@ -419,7 +419,7 @@
         background: none;
         border: none;
         cursor: pointer;
-        color: {treeViewEnabled ? 'var(--color-accent)' : 'var(--color-text-muted)'};
+        color: var(--color-text-muted);
         display: flex;
         align-items: center;
         justify-content: center;

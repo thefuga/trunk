@@ -46,6 +46,50 @@ export function flattenTree(
 }
 
 /**
+ * Collect all directory paths from a tree.
+ */
+export function collectDirPaths(nodes: TreeNode[]): Set<string> {
+  const paths = new Set<string>();
+  for (const node of nodes) {
+    if (node.type === 'directory') {
+      paths.add(node.path);
+      for (const p of collectDirPaths(node.children)) {
+        paths.add(p);
+      }
+    }
+  }
+  return paths;
+}
+
+/**
+ * Migrate an expanded set to match a new tree's directory paths.
+ * Handles compressed directory changes: if "src" was expanded but the tree
+ * now has "src/lib" (compressed), migrates "src" → "src/lib".
+ * Returns null if no migration needed.
+ */
+export function migrateExpanded(
+  expanded: Set<string>,
+  dirPaths: Set<string>,
+): Set<string> | null {
+  const next = new Set<string>();
+  let changed = false;
+  for (const p of expanded) {
+    if (dirPaths.has(p)) {
+      next.add(p);
+    } else {
+      // Path no longer exists — find compressed successors
+      changed = true;
+      for (const dp of dirPaths) {
+        if (dp.startsWith(p + '/')) {
+          next.add(dp);
+        }
+      }
+    }
+  }
+  return changed ? next : null;
+}
+
+/**
  * Find the index of a row matching a given path, or 0 if not found.
  */
 export function findFocusIndex(rows: FlatRow[], path: string): number {

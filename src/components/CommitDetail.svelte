@@ -2,6 +2,7 @@
   import type { FileDiff, CommitDetail, DiffStatus, FileStatus, FileStatusType } from '../lib/types.js';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import TreeFileList from './TreeFileList.svelte';
+  import { List, FolderTree } from '@lucide/svelte';
 
   const STATUS_ICONS: Record<DiffStatus, { symbol: string; color: string }> = {
     Added:     { symbol: '+',  color: '#4ade80' },
@@ -21,9 +22,10 @@
     onclose: () => void;
     repoPath?: string;
     treeViewEnabled?: boolean;
+    ontreeviewtoggle?: () => void;
   }
 
-  let { commitDetail, fileDiffs, selectedFile, onfileselect, onclose, repoPath = '', treeViewEnabled = false }: Props = $props();
+  let { commitDetail, fileDiffs, selectedFile, onfileselect, onclose, repoPath = '', treeViewEnabled = false, ontreeviewtoggle }: Props = $props();
 
   const DIFF_STATUS_MAP: Record<string, FileStatusType> = {
     Added: 'New',
@@ -166,13 +168,41 @@
         padding: 0 12px;
         display: flex;
         align-items: center;
-        justify-content: center;
         border-bottom: 1px solid var(--color-border);
         flex-shrink: 0;
       ">
-        <span style="font-size: 12px; font-weight: 500; color: var(--color-text);">
+        <span style="font-size: 12px; font-weight: 500; color: var(--color-text); flex: 1;">
           {fileDiffs.length} file{fileDiffs.length === 1 ? '' : 's'} changed
         </span>
+        {#if ontreeviewtoggle}
+          <button
+            role="switch"
+            aria-checked={treeViewEnabled}
+            aria-label={treeViewEnabled ? 'Switch to list view' : 'Switch to tree view'}
+            title={treeViewEnabled ? 'List view' : 'Tree view'}
+            onclick={(e) => { e.stopPropagation(); ontreeviewtoggle?.(); }}
+            style="
+              background: none;
+              border: none;
+              cursor: pointer;
+              color: var(--color-text-muted);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 20px;
+              height: 20px;
+              border-radius: 3px;
+              flex-shrink: 0;
+              padding: 0;
+            "
+          >
+            {#if treeViewEnabled}
+              <FolderTree size={14} />
+            {:else}
+              <List size={14} />
+            {/if}
+          </button>
+        {/if}
       </div>
       <TreeFileList
         files={fileStatusList}

@@ -2,7 +2,8 @@
   import type { FileStatus } from '../lib/types.js';
   import type { FlatRow } from '../lib/flatten-tree.js';
   import { buildTree } from '../lib/build-tree.js';
-  import { flattenTree, findFocusIndex } from '../lib/flatten-tree.js';
+  import { flattenTree, findFocusIndex, collectDirPaths, migrateExpanded } from '../lib/flatten-tree.js';
+  import { untrack } from 'svelte';
   import DirectoryRow from './DirectoryRow.svelte';
   import FileRow from './FileRow.svelte';
 
@@ -34,6 +35,17 @@
   let prevTreeMode: boolean | undefined;
 
   let tree = $derived(buildTree(files));
+
+  // Migrate expanded paths when tree structure changes (e.g. directory compression)
+  $effect(() => {
+    const dirPaths = collectDirPaths(tree);
+    const current = untrack(() => expanded);
+    const migrated = migrateExpanded(current, dirPaths);
+    if (migrated) {
+      expanded = migrated;
+    }
+  });
+
   let flatRows = $derived<FlatRow[]>(
     treeMode
       ? flattenTree(tree, expanded)
@@ -124,8 +136,11 @@
         }
         break;
       case 'Enter':
+        e.preventDefault();
         if (row.type === 'file') {
           onfileclick?.(row.node.file.path);
+        } else {
+          toggleExpanded(row.node.path);
         }
         break;
     }

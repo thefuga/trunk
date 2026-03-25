@@ -512,6 +512,7 @@
           onclose={() => { rebaseFocusedCommitDetail = null; }}
           {repoPath}
           {treeViewEnabled}
+          ontreeviewtoggle={handleTreeViewToggle}
         />
       {:else}
         <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--color-text-muted); font-size: 13px;">
