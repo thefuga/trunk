@@ -8,7 +8,8 @@
   import TreeFileList from './TreeFileList.svelte';
   import CommitForm from './CommitForm.svelte';
   import OperationBanner from './OperationBanner.svelte';
-  import { ChevronDown, ChevronRight, AlertTriangle, List, FolderTree } from '@lucide/svelte';
+  import { ChevronDown, ChevronRight, AlertTriangle, List, FolderTree, ChevronsUpDown, ChevronsDownUp } from '@lucide/svelte';
+  import { buildTree, collectFilePaths } from '../lib/build-tree.js';
 
   interface Props {
     repoPath: string;
@@ -39,6 +40,9 @@
   let loadSeq = 0;
   let conflicted_expanded = $state(true);
   let operationInfo = $state<OperationInfo | null>(null);
+
+  let expandAllSignal = $state(0);
+  let collapseAllSignal = $state(0);
 
   let isMerge = $derived(operationInfo?.op_type === 'Merge');
   let isRebase = $derived(operationInfo?.op_type === 'Rebase');
@@ -97,6 +101,32 @@
     await loadStatus();
     const next = new Set(loadingFiles);
     next.delete(filePath);
+    loadingFiles = next;
+  }
+
+  async function stageDirectory(dirPath: string) {
+    const directMatches = (status?.unstaged ?? []).filter(f => f.path.startsWith(dirPath + '/') || f.path === dirPath);
+    const pathsToStage = directMatches.map(f => f.path);
+    if (pathsToStage.length === 0) return;
+
+    loadingFiles = new Set([...loadingFiles, ...pathsToStage]);
+    await Promise.all(pathsToStage.map(p => safeInvoke('stage_file', { path: repoPath, filePath: p })));
+    await loadStatus();
+    const next = new Set(loadingFiles);
+    for (const p of pathsToStage) next.delete(p);
+    loadingFiles = next;
+  }
+
+  async function unstageDirectory(dirPath: string) {
+    const directMatches = (status?.staged ?? []).filter(f => f.path.startsWith(dirPath + '/') || f.path === dirPath);
+    const pathsToUnstage = directMatches.map(f => f.path);
+    if (pathsToUnstage.length === 0) return;
+
+    loadingFiles = new Set([...loadingFiles, ...pathsToUnstage]);
+    await Promise.all(pathsToUnstage.map(p => safeInvoke('unstage_file', { path: repoPath, filePath: p })));
+    await loadStatus();
+    const next = new Set(loadingFiles);
+    for (const p of pathsToUnstage) next.delete(p);
     loadingFiles = next;
   }
 
@@ -409,6 +439,50 @@
         </span>
       {/if}
     </span>
+    {#if treeViewEnabled}
+      <button
+        aria-label="Expand all directories"
+        title="Expand All"
+        onclick={(e) => { e.stopPropagation(); expandAllSignal++; }}
+        style="
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 3px;
+          flex-shrink: 0;
+          padding: 0;
+        "
+      >
+        <ChevronsUpDown size={14} />
+      </button>
+      <button
+        aria-label="Collapse all directories"
+        title="Collapse All"
+        onclick={(e) => { e.stopPropagation(); collapseAllSignal++; }}
+        style="
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 3px;
+          flex-shrink: 0;
+          padding: 0;
+        "
+      >
+        <ChevronsDownUp size={14} />
+      </button>
+    {/if}
     <button
       role="switch"
       aria-checked={treeViewEnabled}
@@ -561,6 +635,8 @@
             onfileaction={() => {}}
             onfileclick={(path) => onfileselect?.(path, 'conflicted')}
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
+            {expandAllSignal}
+            {collapseAllSignal}
           />
         {/if}
       </div>
@@ -670,6 +746,9 @@
             onfileaction={(path) => stageFile(path)}
             onfileclick={(path) => onfileselect?.(path, 'conflicted')}
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
+            ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
+            {expandAllSignal}
+            {collapseAllSignal}
           />
         {:else}
           <TreeFileList
@@ -680,6 +759,9 @@
             onfileaction={(path) => stageFile(path)}
             onfileclick={(path) => onfileselect?.(path, 'unstaged')}
             onfilecontextmenu={(e, path, file) => showUnstagedContextMenu(e, path, file.status)}
+            ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
+            {expandAllSignal}
+            {collapseAllSignal}
           />
         {/if}
       {/if}
@@ -744,6 +826,9 @@
           onfileaction={(path) => unstageFile(path)}
           onfileclick={(path) => onfileselect?.(path, 'staged')}
           onfilecontextmenu={(e, path) => showStagedContextMenu(e, path)}
+          ondirectoryaction={(dirPath) => unstageDirectory(dirPath)}
+          {expandAllSignal}
+          {collapseAllSignal}
         />
       {/if}
     </div>
