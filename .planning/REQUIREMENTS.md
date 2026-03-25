@@ -1,0 +1,73 @@
+# Requirements: Trunk
+
+**Defined:** 2026-03-25
+**Core Value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
+
+## v0.10 Requirements
+
+Requirements for CI/CD & Releases milestone. Each maps to roadmap phases.
+
+### CI
+
+- [ ] **CI-01**: CI workflow runs cargo check, clippy (-D warnings), cargo test, and cargo fmt --check on every push and PR
+- [ ] **CI-02**: CI workflow runs bun install, bun run check (svelte-check), and bun run test (vitest) on every push and PR
+- [ ] **CI-03**: CI workflow runs prettier --check on all frontend files
+- [ ] **CI-04**: Prettier is configured as a devDependency with .prettierrc and existing code is pre-formatted
+- [ ] **CI-05**: Rust builds are cached with swatinem/rust-cache for fast CI runs
+
+### Release
+
+- [ ] **REL-01**: Tag push (v*) triggers cross-platform builds for macOS ARM, macOS Intel, Linux x64, and Windows x64
+- [ ] **REL-02**: Release workflow produces .dmg (macOS), .AppImage (Linux), and .msi (Windows) installers
+- [ ] **REL-03**: Release workflow produces portable .tar.gz archives for each platform
+- [ ] **REL-04**: Build artifacts are uploaded as workflow artifacts for later attachment to a manually created GitHub Release
+- [ ] **REL-05**: Linux builds use ubuntu-22.04 for AppImage glibc compatibility
+
+### Distribution
+
+- [ ] **DIST-01**: Homebrew cask formula published to joaofnds/homebrew-tap for macOS installation via `brew install --cask joaofnds/tap/trunk`
+
+## Future Requirements
+
+### v1.0
+
+- **SIGN-01**: macOS code signing and notarization
+- **SIGN-02**: Windows code signing (EV cert)
+- **UPD-01**: Auto-updater via tauri-plugin-updater
+- **TEST-01**: E2E test harness
+- **PERF-01**: Performance benchmarks
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Auto-generated changelog | GSD milestone summaries provide release notes context; manual with AI assistance |
+| Dependabot | Can add later trivially; keeping v0.10 focused |
+| Version bump script | Manual version management is sufficient for now |
+| Automated GitHub Release creation | Releases created manually with AI-assisted notes from GSD context |
+| Homebrew tap for Linux | macOS only for Homebrew; Linux users use .AppImage directly |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| CI-01 | — | Pending |
+| CI-02 | — | Pending |
+| CI-03 | — | Pending |
+| CI-04 | — | Pending |
+| CI-05 | — | Pending |
+| REL-01 | — | Pending |
+| REL-02 | — | Pending |
+| REL-03 | — | Pending |
+| REL-04 | — | Pending |
+| REL-05 | — | Pending |
+| DIST-01 | — | Pending |
+
+**Coverage:**
+- v0.10 requirements: 11 total
+- Mapped to phases: 0
+- Unmapped: 11
+
+---
+*Requirements defined: 2026-03-25*
+*Last updated: 2026-03-25 after initial definition*
