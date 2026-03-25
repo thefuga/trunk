@@ -7,6 +7,7 @@
 -->
 
 <script lang="ts" generics="TItem = unknown">
+    // @ts-nocheck -- vendored virtual list, not our code
     import {
         DEFAULT_SCROLL_OPTIONS,
         type SvelteVirtualListPreviousVisibleRange,

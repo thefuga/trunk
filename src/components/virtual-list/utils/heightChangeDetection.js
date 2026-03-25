@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Utility functions for detecting significant height changes in virtual list items.
  *

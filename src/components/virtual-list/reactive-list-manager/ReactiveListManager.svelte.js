@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { RecomputeScheduler } from './RecomputeScheduler.js';
 /**
  * ReactiveListManager - A standalone reactive height calculation system

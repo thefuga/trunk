@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Reactive Height Manager
  *

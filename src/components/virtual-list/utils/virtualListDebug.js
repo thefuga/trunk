@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Determines whether debug information should be displayed based on state changes in the virtual list.
  *

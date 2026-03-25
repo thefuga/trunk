@@ -12,7 +12,7 @@
   import { getVisibleOverlayElements } from '../lib/overlay-visible.js';
   import { buildRefPillData } from '../lib/ref-pill-data.js';
   import { measureTextWidth } from '../lib/text-measure.js';
-  import type { OverlayRefPill, RefLabel } from '../lib/types.js';
+  import type { OverlayRefPill, RefLabel, RefType } from '../lib/types.js';
 
   import { Menu, MenuItem, Submenu, PredefinedMenuItem, CheckMenuItem } from '@tauri-apps/api/menu';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Creates a requestAnimationFrame (RAF) scheduler for debouncing animation frame callbacks.
  *

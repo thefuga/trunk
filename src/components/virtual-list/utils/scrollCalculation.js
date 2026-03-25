@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { clampValue, getScrollOffsetForIndex } from './virtualList.js';
 /**
  * Calculates the scroll target for aligning an item to a specific edge.

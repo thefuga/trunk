@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Throttling utilities for performance optimization.
  *

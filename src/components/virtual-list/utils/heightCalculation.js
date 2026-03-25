@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { calculateAverageHeight } from './virtualList.js';
 import { BROWSER } from 'esm-env';
 /**

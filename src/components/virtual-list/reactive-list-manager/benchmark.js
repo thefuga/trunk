@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createListManager } from './index.js';
 export function benchmarkListManager(itemCount, dirtyCount, iterations = 100) {
     const manager = createListManager(itemCount);

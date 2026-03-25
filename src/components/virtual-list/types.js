@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Default options for scrolling.
  */

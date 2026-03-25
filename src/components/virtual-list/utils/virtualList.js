@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Validates a height value and returns it if valid, otherwise returns the fallback.
  *

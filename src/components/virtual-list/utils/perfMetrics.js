@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Performance metrics utility for profiling virtual list operations.
  *

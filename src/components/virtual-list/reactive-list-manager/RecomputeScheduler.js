@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Scheduler that coalesces recompute requests to the next animation frame.
  *
