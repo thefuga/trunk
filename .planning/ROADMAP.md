@@ -191,8 +191,12 @@ Plans:
   2. Svelte components have tests covering user interactions and reactive state transitions
   3. Tests for graph transformation, tree building, merge parsing, and search logic pass deterministically
   4. All tests pass in CI (vitest gate already exists)
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 4 plans
+Plans:
+- [ ] 54-01-PLAN.md -- Test infrastructure + shared helpers + utility test audit (UNIT-02)
+- [ ] 54-02-PLAN.md -- Simple/medium component tests: 13 components (UNIT-03)
+- [ ] 54-03-PLAN.md -- Complex component tests A: 7 components (UNIT-03)
+- [ ] 54-04-PLAN.md -- Complex component tests B: 6 components (UNIT-03)
 
 ### Phase 55: Integration Tests
 **Goal**: The Tauri IPC bridge, git operations against real repos, and filesystem watcher are validated as integrated systems
@@ -257,7 +261,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 53. Rust Unit Tests & Test Harness | 4/4 | Complete    | 2026-03-26 |
-| 54. Frontend Unit Tests | 0/TBD | Not started | - |
+| 54. Frontend Unit Tests | 0/4 | Planned | - |
 | 55. Integration Tests | 0/TBD | Not started | - |
 | 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
 | 57. Performance Benchmarks | 0/TBD | Not started | - |
@@ -276,8 +280,8 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
-| v1.0 Infrastructure | 53-59 | 0/4+ | In progress | - |
+| v1.0 Infrastructure | 53-59 | 4/8+ | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-26 -- Phase 53 planned (4 plans)*
+*Last updated: 2026-03-26 -- Phase 54 planned (4 plans)*
