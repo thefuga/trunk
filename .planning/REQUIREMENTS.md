@@ -18,7 +18,7 @@ Requirements for production-readiness infrastructure. Each maps to roadmap phase
 
 - [x] **UNIT-01**: All Rust backend commands have unit tests via inner-fn pattern
 - [x] **UNIT-02**: All TypeScript utilities and state management modules have unit tests
-- [ ] **UNIT-03**: All Svelte components have unit tests for behavior and state transitions
+- [x] **UNIT-03**: All Svelte components have unit tests for behavior and state transitions
 - [ ] **UNIT-04**: Test coverage metrics are measured and reported in CI
 
 ### Integration Testing
@@ -93,7 +93,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HARN-04 | Phase 53 | Complete |
 | UNIT-01 | Phase 53 | Complete |
 | UNIT-02 | Phase 54 | Complete |
-| UNIT-03 | Phase 54 | Pending |
+| UNIT-03 | Phase 54 | Complete |
 | UNIT-04 | Phase 56 | Pending |
 | INTG-01 | Phase 55 | Pending |
 | INTG-02 | Phase 55 | Pending |
