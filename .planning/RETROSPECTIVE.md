@@ -363,6 +363,39 @@
 
 ---
 
+## Milestone: v0.10 — CI/CD & Releases
+
+**Shipped:** 2026-03-26
+**Phases:** 3 | **Plans:** 4 | **Timeline:** 2 days
+
+### What Was Built
+- Biome 2.4.9 installed with full codebase formatting; 251 Rust fmt diffs, 29 clippy errors, 127 svelte-check errors fixed
+- GitHub Actions CI workflow with two-gate pipeline: biome/cargo-fmt/svelte-check gating clippy/cargo-test/vitest
+- Tag-triggered cross-platform release workflow for macOS ARM/Intel, Linux, Windows with .dmg/.AppImage/.msi + portable .tar.gz
+- 3-job release pipeline: build -> publish (auto-publish draft) -> update-tap (generate Homebrew cask with SHA256, push to homebrew-tap)
+
+### What Worked
+- **Smallest milestone yet**: 3 phases, 4 plans, 2 days — CI/CD work is well-scoped and deterministic compared to UI features
+- **Research phase value**: Phase 52 research identified exact DMG naming patterns, tauri.conf.json version vs git tag version distinction, and the on_intel/on_arm cask pattern — avoided runtime surprises
+- **Existing patterns reuse**: release.yml extended the CI workflow patterns (action versions, system deps, caching) established in Phase 50
+- **Incremental pipeline verification**: Testing with prerelease tag first (v0.10.0-test1) confirmed build+publish, then production tag (v0.10.0) confirmed the full pipeline including tap update
+
+### What Was Inefficient
+- **Prerelease tag test was incomplete**: v0.10.0-test1 skipped the most critical new code (update-tap job) by design. Should have gone straight to a non-prerelease tag to test the full pipeline, or at minimum recognized the limitation before suggesting brew install
+- **DIST-01 left unchecked in REQUIREMENTS.md**: Pipeline was verified working but the requirement wasn't marked complete — traceability gap
+
+### Patterns Established
+- **CI two-gate pipeline**: Fast format/lint checks gate heavy compilation/test jobs — established for all future CI work
+- **Release pipeline chain**: build -> publish -> update-tap with job-level `needs:` dependencies
+- **Heredoc cask template**: Shell-based template with sed placeholder replacement — simple, no extra tooling
+
+### Key Lessons
+1. **Test what you actually built**: Prerelease tags skip the tap update by design — testing with one only verifies 2/3 of the pipeline. Always test the critical path end-to-end
+2. **CI/CD milestones are fast**: Deterministic file creation (workflow YAML) with clear APIs (GitHub Actions) makes for rapid execution — no UI ambiguity, no visual edge cases
+3. **Cross-repo automation needs secrets upfront**: HOMEBREW_TAP_TOKEN had to be created manually before the pipeline could work — user setup tasks should be flagged early
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -378,6 +411,7 @@
 | v0.7 | 2 | 5 | 8 | Feature milestone — TDD backend + clean UI separation, zero gap-closure requirements |
 | v0.8 | 4 | 7 | 19 | Most complex milestone — merge editor, interactive rebase, file-based IPC, audit-driven gap closure |
 | v0.9 | 3 | 6 | 13 | Fastest per-plan pace — multi-tab + tree view, parallel execution, zero gap closures needed |
+| v0.10 | 2 | 3 | 4 | Smallest milestone — CI/CD infrastructure, zero gap closures, deterministic YAML work |
 
 ### Top Lessons (Verified Across Milestones)
 

@@ -91,25 +91,15 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ CI quality gates: cargo fmt, clippy, cargo test, svelte-check, vitest, and Biome on every push/PR — v0.10
 - ✓ Rust build caching via swatinem/rust-cache in CI — v0.10
 - ✓ Cross-platform release pipeline: tag-triggered builds for macOS ARM/Intel, Linux, Windows with .dmg/.AppImage/.msi installers and portable .tar.gz archives — v0.10
+- ✓ Homebrew cask distribution: auto-generated cask formula pushed to joaofnds/homebrew-tap on release — v0.10
 
 ### Active
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-## Current Milestone: v0.10 CI/CD & Releases
-
-**Goal:** Ship cross-platform release binaries and enforce code quality with automated CI.
-
-**Target features:**
-- CI checks on every push/PR (cargo check, clippy, cargo test, cargo fmt, bun run check, bun run test, prettier)
-- Cross-platform release pipeline: macOS (.dmg), Linux (.AppImage), Windows (.msi) + portable .tar.gz
-- Release triggered by git tag push → builds all 3 platforms → publishes GitHub Release
-- Auto-generated changelog from commit messages
-- Dependabot for automated dependency updates (Rust + npm)
-
 ### Planned
 
-- **v1.0**: Infrastructure — E2E test harness (GOOS-style), performance benchmarks
+- **v1.0**: Infrastructure — E2E test harness, performance benchmarks, code signing, auto-updates
 
 ### Out of Scope
 
@@ -120,11 +110,13 @@ A developer can open any Git repository, browse its full commit history as a vis
 - Tab drag to new OS window — requires Tauri multi-window, state serialization
 - Workspace/group management — GitKraken-style cloud team feature; overkill for personal use
 - Virtual scrolling for file tree — staging file counts rarely exceed 500
+- Auto-generated changelog — GSD milestone summaries provide release notes context
+- Homebrew tap for Linux — macOS only for Homebrew; Linux users use .AppImage directly
 
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.9 with 49 phases across 9 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. In v0.10 CI/CD & Releases — Phase 51 (Cross-Platform Release Pipeline) complete.
+- **Current state**: Shipped v0.10 with 52 phases across 10 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. CI/CD pipeline enforces quality gates on every push, tag pushes trigger cross-platform builds and auto-publish to GitHub Releases + Homebrew tap.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -212,4 +204,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after Phase 52 (Homebrew Distribution) completed*
+*Last updated: 2026-03-26 after v0.10 milestone (CI/CD & Releases)*

@@ -1,5 +1,18 @@
 # Milestones
 
+## v0.10 CI/CD & Releases (Shipped: 2026-03-26)
+
+**Phases completed:** 3 phases, 4 plans, 8 tasks
+
+**Key accomplishments:**
+
+- Fix 251 Rust fmt diffs, 29 clippy errors, 127 svelte-check errors, install Biome 2.4.9 with formatting/linting -- all 6 quality gates now pass locally
+- GitHub Actions CI workflow with two-gate pipeline: 3 fast checks (biome, cargo-fmt, svelte-check) gating 3 heavy checks (clippy, cargo-test, vitest) with Rust caching and concurrency controls
+- Tag-triggered GitHub Actions release workflow building Trunk for 4 platforms (macOS ARM/Intel, Linux, Windows) with tauri-action, portable .tar.gz archives, and artifact upload
+- 3-job release pipeline (build -> publish -> update-tap) with auto-generated Homebrew cask formula pushed to joaofnds/homebrew-tap
+
+---
+
 ## v0.9 Multi-tab & Tree View (Shipped: 2026-03-25)
 
 **Phases completed:** 6 phases, 13 plans, 22 tasks

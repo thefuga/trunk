@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.10
 milestone_name: CI/CD & Releases
-status: Milestone complete
+status: v0.10 milestone complete
 stopped_at: "52-01 Task 3 checkpoint: human-verify pipeline"
-last_updated: "2026-03-26T04:58:13.856Z"
+last_updated: "2026-03-26T05:03:29.093Z"
 last_activity: 2026-03-26
 progress:
   total_phases: 3
@@ -17,45 +17,24 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-25 after v0.10 milestone started)
+See: .planning/PROJECT.md (updated 2026-03-26 after v0.10 milestone)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 52 — homebrew-distribution
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 52
-Plan: Not started
+Milestone v0.10 complete. Ready for `/gsd:new-milestone`.
 
 ## Performance Metrics
 
-| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 | v0.6 | v0.7 | v0.8 | v0.9 |
-|--------|------|------|------|------|------|------|------|------|------|
-| Phases | 6 | 4 | 4 | 3 | 7 | 5 | 5 | 7 | 6 |
-| Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 | 19 | 13 |
-| Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 | 3 |
-| Phase 50 P01 | 20min | 2 tasks | 96 files |
-| Phase 50 P02 | 1min | 1 tasks | 1 files |
-| Phase 51 P01 | 2min | 2 tasks | 1 files |
+| Metric | v0.1 | v0.2 | v0.3 | v0.4 | v0.5 | v0.6 | v0.7 | v0.8 | v0.9 | v0.10 |
+|--------|------|------|------|------|------|------|------|------|------|-------|
+| Phases | 6 | 4 | 4 | 3 | 7 | 5 | 5 | 7 | 6 | 3 |
+| Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 | 19 | 13 | 4 |
+| Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 | 3 | 2 |
 
 ## Accumulated Context
-
-### Decisions
-
-- v0.10 scope: No automated release creation -- artifacts uploaded as workflow artifacts, release created manually
-- v0.10 scope: No changelog tooling -- release notes written manually with GSD context
-- v0.10 scope: Prettier needs initial format pass before CI can enforce it
-- Research: ubuntu-22.04 for Linux, setup-bun@v2 required, rust-cache@v2 for caching, tauri-action@v0 for builds
-- Research: Homebrew cask to joaofnds/homebrew-tap for macOS distribution
-- [Phase 50]: Biome v2 config uses assist.actions.source.organizeImports (not top-level organizeImports)
-- [Phase 50]: Biome scoped to src/ via files.includes; vendored virtual-list excluded from lint/format
-- [Phase 50]: Vendored JS uses @ts-nocheck (tsconfig exclude insufficient for imported files)
-- [Phase 50]: Clippy alone satisfies both cargo check and cargo clippy requirements (superset)
-- [Phase 50]: rust-cache save-if restricted to main branch to prevent PR cache pollution
-- [Phase 50]: Two-gate CI pipeline: fast checks (biome, fmt, svelte-check) gate heavy checks (clippy, test, vitest)
-- [Phase 51]: macos-15-intel replaces deprecated macos-13 for Intel builds
-- [Phase 51]: Build-only tauri-action (no tagName/releaseName) for artifact-only workflow
-- [Phase 51]: rust-cache save-if on tag pushes for infrequent release builds
 
 ### Pending Todos
 
