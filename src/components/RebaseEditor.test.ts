@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, render, screen } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RebaseTodoItem } from "../lib/types.js";
 import RebaseEditor from "./RebaseEditor.svelte";
 

@@ -1,6 +1,6 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/svelte";
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import MergeEditor from "./MergeEditor.svelte";
 
 // Shared Tauri mocks (event, store, dialog, path, menu, etc.)
@@ -80,9 +80,7 @@ describe("MergeEditor", () => {
 			},
 		});
 		await waitFor(() => {
-			expect(
-				screen.getByText("Save and Mark Resolved"),
-			).toBeInTheDocument();
+			expect(screen.getByText("Save and Mark Resolved")).toBeInTheDocument();
 		});
 	});
 
@@ -96,9 +94,7 @@ describe("MergeEditor", () => {
 			},
 		});
 		await waitFor(() => {
-			expect(
-				screen.getByLabelText("Close merge editor"),
-			).toBeInTheDocument();
+			expect(screen.getByLabelText("Close merge editor")).toBeInTheDocument();
 		});
 	});
 
@@ -113,9 +109,7 @@ describe("MergeEditor", () => {
 			},
 		});
 		await waitFor(() => {
-			expect(
-				screen.getByLabelText("Close merge editor"),
-			).toBeInTheDocument();
+			expect(screen.getByLabelText("Close merge editor")).toBeInTheDocument();
 		});
 		await fireEvent.click(screen.getByLabelText("Close merge editor"));
 		expect(onclose).toHaveBeenCalledOnce();

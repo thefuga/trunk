@@ -286,7 +286,7 @@ describe("migrateExpanded", () => {
 		const dirPaths = new Set(["src/lib"]);
 		const result = migrateExpanded(expanded, dirPaths);
 		expect(result).not.toBeNull();
-		expect(result!.has("src/lib")).toBe(true);
-		expect(result!.has("src")).toBe(false);
+		expect(result?.has("src/lib")).toBe(true);
+		expect(result?.has("src")).toBe(false);
 	});
 });

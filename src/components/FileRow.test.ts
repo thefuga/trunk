@@ -26,9 +26,7 @@ describe("FileRow", () => {
 			},
 		});
 		expect(screen.getByText("short.ts")).toBeInTheDocument();
-		expect(
-			screen.queryByText("src/lib/utils/short.ts"),
-		).toBeNull();
+		expect(screen.queryByText("src/lib/utils/short.ts")).toBeNull();
 	});
 
 	it("has listitem role when depth=0", () => {

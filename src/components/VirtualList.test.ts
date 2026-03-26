@@ -47,9 +47,7 @@ describe("VirtualList", () => {
 		expect(
 			container.querySelector(".virtual-list-content"),
 		).toBeInTheDocument();
-		expect(
-			container.querySelector(".virtual-list-items"),
-		).toBeInTheDocument();
+		expect(container.querySelector(".virtual-list-items")).toBeInTheDocument();
 	});
 
 	it("renders items div with transform style", () => {

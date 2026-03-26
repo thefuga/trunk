@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import { makeFile } from "../__tests__/helpers/factories";
 import TreeFileList from "./TreeFileList.svelte";

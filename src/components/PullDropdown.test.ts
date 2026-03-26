@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import PullDropdown from "./PullDropdown.svelte";
 import "../__tests__/helpers/tauri-mock";
@@ -26,9 +26,7 @@ describe("PullDropdown", () => {
 		const button = screen.getByTitle("Pull options");
 		await fireEvent.click(button);
 		expect(screen.getByText("Fetch")).toBeInTheDocument();
-		expect(
-			screen.getByText("Fast-forward if possible"),
-		).toBeInTheDocument();
+		expect(screen.getByText("Fast-forward if possible")).toBeInTheDocument();
 		expect(screen.getByText("Fast-forward only")).toBeInTheDocument();
 		expect(screen.getByText("Pull (rebase)")).toBeInTheDocument();
 	});

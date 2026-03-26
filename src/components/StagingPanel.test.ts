@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { render, screen, waitFor } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import StagingPanel from "./StagingPanel.svelte";
 
 // All Tauri module mocks — declared locally for proper vi.mock hoisting
@@ -77,9 +77,7 @@ describe("StagingPanel", () => {
 					unstaged: [
 						{ path: "README.md", status: "Modified", is_binary: false },
 					],
-					staged: [
-						{ path: "src/main.ts", status: "New", is_binary: false },
-					],
+					staged: [{ path: "src/main.ts", status: "New", is_binary: false }],
 					conflicted: [],
 				});
 			if (cmd === "get_operation_state")

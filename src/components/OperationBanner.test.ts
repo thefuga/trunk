@@ -115,8 +115,6 @@ describe("OperationBanner", () => {
 				repoPath: "/repo",
 			},
 		});
-		expect(
-			screen.getByText("Cherry-pick in progress"),
-		).toBeInTheDocument();
+		expect(screen.getByText("Cherry-pick in progress")).toBeInTheDocument();
 	});
 });

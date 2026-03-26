@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import BranchRow from "./BranchRow.svelte";
 import "../__tests__/helpers/tauri-mock";
@@ -29,9 +29,7 @@ describe("BranchRow", () => {
 
 	it("shows default error when isError=true but no errorText", () => {
 		render(BranchRow, { props: { name: "main", isError: true } });
-		expect(
-			screen.getByText(/Cannot checkout/),
-		).toBeInTheDocument();
+		expect(screen.getByText(/Cannot checkout/)).toBeInTheDocument();
 	});
 
 	it("shows ahead count", () => {

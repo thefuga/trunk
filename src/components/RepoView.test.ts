@@ -1,6 +1,6 @@
-import { render } from "@testing-library/svelte";
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { render } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemoteState } from "../lib/remote-state.svelte.js";
 import type { UndoRedoManager } from "../lib/undo-redo.svelte.js";
 import RepoView from "./RepoView.svelte";
@@ -23,7 +23,7 @@ if (typeof globalThis.OffscreenCanvas === "undefined") {
 
 // Stub Element.scrollTo for jsdom — VirtualList uses viewport.scrollTo()
 if (typeof Element.prototype.scrollTo === "undefined") {
-	Element.prototype.scrollTo = function () {};
+	Element.prototype.scrollTo = () => {};
 }
 
 // All Tauri module mocks — declared locally for proper vi.mock hoisting

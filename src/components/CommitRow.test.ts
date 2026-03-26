@@ -1,9 +1,9 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import CommitRow from "./CommitRow.svelte";
 import "../__tests__/helpers/tauri-mock";
 import { makeCommit } from "../__tests__/helpers/factories";
-import type { ColumnWidths, ColumnVisibility } from "../lib/store";
+import type { ColumnVisibility, ColumnWidths } from "../lib/store";
 
 const defaultWidths: ColumnWidths = {
 	ref: 120,
@@ -96,7 +96,7 @@ describe("CommitRow", () => {
 		});
 		const italicEl = container.querySelector(".italic");
 		expect(italicEl).not.toBeNull();
-		expect(italicEl!.textContent).toContain("Working changes");
+		expect(italicEl?.textContent).toContain("Working changes");
 	});
 
 	it("calls onselect with oid when clicked", async () => {

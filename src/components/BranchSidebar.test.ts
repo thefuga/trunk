@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { render, screen, waitFor } from "@testing-library/svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import BranchSidebar from "./BranchSidebar.svelte";
 
 // Shared Tauri mocks (event, store, dialog, path, menu, etc.)

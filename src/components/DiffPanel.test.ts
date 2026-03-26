@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { FileDiff } from "../lib/types.js";
 import DiffPanel from "./DiffPanel.svelte";
@@ -90,9 +90,7 @@ describe("DiffPanel", () => {
 			},
 		});
 		// originSymbol("Add") = "+", content follows
-		expect(
-			screen.getByText("+const x = 2;"),
-		).toBeInTheDocument();
+		expect(screen.getByText("+const x = 2;")).toBeInTheDocument();
 	});
 
 	it("renders deleted lines with - marker", () => {
@@ -103,9 +101,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
-		expect(
-			screen.getByText("-const x = 1;"),
-		).toBeInTheDocument();
+		expect(screen.getByText("-const x = 1;")).toBeInTheDocument();
 	});
 
 	it("renders context lines", () => {

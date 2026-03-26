@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { CommitDetail, FileDiff } from "../lib/types.js";
 import CommitDetailComponent from "./CommitDetail.svelte";
@@ -88,9 +88,7 @@ describe("CommitDetail", () => {
 			},
 		});
 		expect(
-			screen.getByText((_, el) =>
-				el?.textContent === "commit: abc123d",
-			),
+			screen.getByText((_, el) => el?.textContent === "commit: abc123d"),
 		).toBeInTheDocument();
 	});
 
@@ -138,9 +136,7 @@ describe("CommitDetail", () => {
 			},
 		});
 		expect(
-			screen.getByText(
-				"This fixes a null pointer issue in the parser.",
-			),
+			screen.getByText("This fixes a null pointer issue in the parser."),
 		).toBeInTheDocument();
 	});
 });

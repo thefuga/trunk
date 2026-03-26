@@ -11,8 +11,8 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 
 // jsdom does not implement Element.prototype.animate — stub for Svelte transitions (slide, fly, etc.)
 if (typeof Element.prototype.animate === "undefined") {
-	Element.prototype.animate = function () {
-		return {
+	Element.prototype.animate = () =>
+		({
 			finished: Promise.resolve(),
 			cancel() {},
 			play() {},
@@ -22,6 +22,5 @@ if (typeof Element.prototype.animate === "undefined") {
 			removeEventListener() {},
 			onfinish: null,
 			oncancel: null,
-		} as unknown as Animation;
-	};
+		}) as unknown as Animation;
 }

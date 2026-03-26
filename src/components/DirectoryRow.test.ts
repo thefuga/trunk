@@ -1,19 +1,20 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import DirectoryRow from "./DirectoryRow.svelte";
 import "../__tests__/helpers/tauri-mock";
 import type { DirectoryNode } from "../lib/build-tree";
 
 describe("DirectoryRow", () => {
-	function makeNode(
-		name: string,
-		childCount: number = 2,
-	): DirectoryNode {
+	function makeNode(name: string, childCount: number = 2): DirectoryNode {
 		const children = Array.from({ length: childCount }, (_, i) => ({
 			type: "file" as const,
 			name: `file${i}.ts`,
 			path: `${name}/file${i}.ts`,
-			file: { path: `${name}/file${i}.ts`, status: "Modified" as const, is_binary: false },
+			file: {
+				path: `${name}/file${i}.ts`,
+				status: "Modified" as const,
+				is_binary: false,
+			},
 		}));
 		return { type: "directory", name, path: name, children };
 	}

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import WelcomeScreen from "./WelcomeScreen.svelte";
 
@@ -89,10 +89,7 @@ describe("WelcomeScreen", () => {
 
 		// openPath is async (calls safeInvoke then onopen)
 		await vi.waitFor(() => {
-			expect(onopen).toHaveBeenCalledWith(
-				"/Users/test/code/trunk",
-				"trunk",
-			);
+			expect(onopen).toHaveBeenCalledWith("/Users/test/code/trunk", "trunk");
 		});
 	});
 });

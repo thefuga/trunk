@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import InputDialog from "./InputDialog.svelte";
 import "../__tests__/helpers/tauri-mock";
@@ -7,7 +7,12 @@ describe("InputDialog", () => {
 	const defaultProps = {
 		title: "Create Branch",
 		fields: [
-			{ key: "name", label: "Branch name", required: true, placeholder: "feature/..." },
+			{
+				key: "name",
+				label: "Branch name",
+				required: true,
+				placeholder: "feature/...",
+			},
 		],
 		onsubmit: vi.fn(),
 		oncancel: vi.fn(),

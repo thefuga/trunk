@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import BranchSection from "./BranchSection.svelte";
@@ -49,9 +49,7 @@ describe("BranchSection", () => {
 				children: emptySnippet,
 			},
 		});
-		expect(
-			screen.getByLabelText("Create new branch"),
-		).toBeInTheDocument();
+		expect(screen.getByLabelText("Create new branch")).toBeInTheDocument();
 	});
 
 	it("hides create button by default", () => {

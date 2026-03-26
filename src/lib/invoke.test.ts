@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "./invoke.js";
 
 vi.mock("@tauri-apps/api/core", () => ({

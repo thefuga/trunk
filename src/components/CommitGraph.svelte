@@ -1326,7 +1326,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 	// Don't intercept keys when search bar input is focused
 	const active = document.activeElement;
-	if (active && active.classList.contains("search-bar-input")) return;
+	if (active?.classList.contains("search-bar-input")) return;
 
 	e.preventDefault();
 

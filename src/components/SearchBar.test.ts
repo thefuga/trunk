@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import SearchBar from "./SearchBar.svelte";
 import "../__tests__/helpers/tauri-mock";
@@ -16,9 +16,7 @@ describe("SearchBar", () => {
 
 	it("renders input with placeholder", () => {
 		render(SearchBar, { props: defaultProps });
-		expect(
-			screen.getByPlaceholderText(/Search commits/),
-		).toBeInTheDocument();
+		expect(screen.getByPlaceholderText(/Search commits/)).toBeInTheDocument();
 	});
 
 	it("shows match count when query has matches", () => {
