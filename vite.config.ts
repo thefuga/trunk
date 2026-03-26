@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { svelteTesting } from "@testing-library/svelte/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
@@ -8,7 +9,7 @@ import { defineConfig } from "vite";
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-	plugins: [svelte(), tailwindcss()],
+	plugins: [svelte(), svelteTesting(), tailwindcss()],
 	clearScreen: false,
 	server: {
 		port: 1420,
@@ -21,6 +22,7 @@ export default defineConfig({
 	},
 	test: {
 		include: ["src/**/*.test.ts"],
-		environment: "node",
+		environment: "jsdom",
+		setupFiles: ["./vitest-setup.ts"],
 	},
 });
