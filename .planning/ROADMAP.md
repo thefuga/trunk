@@ -182,7 +182,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Running `brew install --cask joaofnds/tap/trunk` downloads and installs the macOS .dmg from the latest release
   2. The cask formula lives in the joaofnds/homebrew-tap repository and references the correct .dmg artifact URL
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 52-01-PLAN.md -- Extend release workflow with publish + update-tap jobs, update homebrew-tap README
 
 ## Progress
 
@@ -197,8 +199,8 @@ Plans:
 | v0.7 Hunk Staging & Search | 32-36 | 8/8 | Complete | 2026-03-19 |
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
-| v0.10 CI/CD & Releases | 50-52 | 2/3 | In progress | - |
+| v0.10 CI/CD & Releases | 50-52 | 3/4 | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-25 -- Phase 51 plans created*
+*Last updated: 2026-03-26 -- Phase 52 plans created*
