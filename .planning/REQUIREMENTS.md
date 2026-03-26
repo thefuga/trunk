@@ -10,13 +10,13 @@ Requirements for production-readiness infrastructure. Each maps to roadmap phase
 ### Test Harness Architecture
 
 - [x] **HARN-01**: Application Runner manages app lifecycle (start, stop, cleanup) for each test
-- [ ] **HARN-02**: Domain-level Drivers wrap raw interactions behind intention-revealing methods (e.g. `app.stageFile("README.md")`, `app.verifyCommitInHistory("fix: bug")`)
+- [x] **HARN-02**: Domain-level Drivers wrap raw interactions behind intention-revealing methods (e.g. `app.stageFile("README.md")`, `app.verifyCommitInHistory("fix: bug")`)
 - [x] **HARN-03**: Builders and fixtures provide reusable test data setup (git repos, file states, branch topologies)
 - [x] **HARN-04**: Tests read like behavior specifications, not implementation details
 
 ### Unit Testing
 
-- [ ] **UNIT-01**: All Rust backend commands have unit tests via inner-fn pattern
+- [x] **UNIT-01**: All Rust backend commands have unit tests via inner-fn pattern
 - [ ] **UNIT-02**: All TypeScript utilities and state management modules have unit tests
 - [ ] **UNIT-03**: All Svelte components have unit tests for behavior and state transitions
 - [ ] **UNIT-04**: Test coverage metrics are measured and reported in CI
@@ -88,10 +88,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | HARN-01 | Phase 53 | Complete |
-| HARN-02 | Phase 53 | Pending |
+| HARN-02 | Phase 53 | Complete |
 | HARN-03 | Phase 53 | Complete |
 | HARN-04 | Phase 53 | Complete |
-| UNIT-01 | Phase 53 | Pending |
+| UNIT-01 | Phase 53 | Complete |
 | UNIT-02 | Phase 54 | Pending |
 | UNIT-03 | Phase 54 | Pending |
 | UNIT-04 | Phase 56 | Pending |
