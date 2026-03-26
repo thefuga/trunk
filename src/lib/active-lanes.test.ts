@@ -1,42 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { makeCommit, makeEdge } from "../__tests__/helpers/factories.js";
 import { buildGraphData } from "./active-lanes.js";
-import type { GraphCommit, GraphEdge } from "./types.js";
-
-/** Minimal GraphCommit factory */
-function makeCommit(
-	overrides: Partial<GraphCommit> & { oid: string },
-): GraphCommit {
-	return {
-		oid: overrides.oid,
-		short_oid: overrides.oid.slice(0, 7),
-		summary: "test commit",
-		body: null,
-		author_name: "Test",
-		author_email: "test@test.com",
-		author_timestamp: 0,
-		parent_oids: overrides.parent_oids ?? [],
-		column: overrides.column ?? 0,
-		color_index: overrides.color_index ?? 0,
-		edges: overrides.edges ?? [],
-		refs: overrides.refs ?? [],
-		is_head: overrides.is_head ?? false,
-		is_merge: overrides.is_merge ?? false,
-		is_branch_tip: overrides.is_branch_tip ?? false,
-		is_stash: overrides.is_stash ?? false,
-	};
-}
-
-function makeEdge(
-	overrides: Partial<GraphEdge> & { edge_type: GraphEdge["edge_type"] },
-): GraphEdge {
-	return {
-		from_column: overrides.from_column ?? 0,
-		to_column: overrides.to_column ?? 0,
-		edge_type: overrides.edge_type,
-		color_index: overrides.color_index ?? 0,
-		dashed: overrides.dashed ?? false,
-	};
-}
 
 describe("buildGraphData", () => {
 	describe("basic structure", () => {

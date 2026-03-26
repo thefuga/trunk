@@ -1,15 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { makeFile } from "../__tests__/helpers/factories.js";
 import type { DirectoryNode, FileNode, TreeNode } from "./build-tree.js";
 import { buildTree } from "./build-tree.js";
 import type { FileStatus } from "./types.js";
-
-/** Factory: minimal FileStatus with defaults */
-function makeFile(
-	path: string,
-	status: FileStatus["status"] = "Modified",
-): FileStatus {
-	return { path, status, is_binary: false };
-}
 
 /** Extract names from a TreeNode[] for concise assertions */
 function getNames(nodes: TreeNode[]): string[] {
