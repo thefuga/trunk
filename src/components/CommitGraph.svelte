@@ -182,6 +182,7 @@ const SHA_CONTENT_FONT = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
 
 // Minimum column widths = header label text width + column padding (border-box) + breathing room
 const HEADER_PAD = 4 * COLUMN_PADDING_X; // 2× for CSS padding + 2× for breathing room
+const headerMinRef = measureTextWidth("Branch/Tag", HEADER_FONT) + HEADER_PAD;
 const headerMinGraph = measureTextWidth("Graph", HEADER_FONT) + HEADER_PAD;
 const headerMinAuthor = measureTextWidth("Author", HEADER_FONT) + HEADER_PAD;
 const headerMinDate = measureTextWidth("Date", HEADER_FONT) + HEADER_PAD;
@@ -319,7 +320,7 @@ function startColumnResize(
 	const startX = e.clientX;
 	const startWidth = columnWidths[column];
 	const minWidths: Record<keyof ColumnWidths, number> = {
-		ref: 60,
+		ref: headerMinRef,
 		graph: headerMinGraph,
 		author: headerMinAuthor,
 		date: headerMinDate,

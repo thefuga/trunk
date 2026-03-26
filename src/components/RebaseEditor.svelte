@@ -1,6 +1,7 @@
 <script lang="ts">
 import Sortable from "sortablejs";
 import { COLUMN_PADDING_X, ROW_HEIGHT } from "../lib/graph-constants.js";
+import { measureTextWidth } from "../lib/text-measure.js";
 import { safeInvoke } from "../lib/invoke.js";
 import { validateRebasePlan } from "../lib/rebase-validation.js";
 import type {
@@ -148,6 +149,12 @@ function errorForIndex(idx: number): string | null {
 
 // --- Column resize ---
 
+const HEADER_FONT = "11px ui-sans-serif, system-ui, sans-serif";
+const HEADER_PAD = 4 * COLUMN_PADDING_X;
+const headerMinSha = measureTextWidth("SHA", HEADER_FONT) + HEADER_PAD;
+const headerMinAuthor = measureTextWidth("Author", HEADER_FONT) + HEADER_PAD;
+const headerMinDate = measureTextWidth("Date", HEADER_FONT) + HEADER_PAD;
+
 function startColumnResize(
 	column: keyof RebaseColumnWidths,
 	e: MouseEvent,
@@ -157,9 +164,9 @@ function startColumnResize(
 	const startX = e.clientX;
 	const startWidth = columnWidths[column];
 	const minWidths: Record<keyof RebaseColumnWidths, number> = {
-		sha: 50,
-		author: 60,
-		date: 60,
+		sha: headerMinSha,
+		author: headerMinAuthor,
+		date: headerMinDate,
 	};
 	const maxWidths: Record<keyof RebaseColumnWidths, number> = {
 		sha: 120,
