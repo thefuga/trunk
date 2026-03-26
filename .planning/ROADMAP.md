@@ -207,7 +207,11 @@ Plans:
   2. Git operation sequences (init, commit, branch, merge, rebase) work end-to-end against real temporary repositories
   3. Filesystem watcher fires events within expected debounce window when files change in a watched repo
   4. Integration tests run in CI without flakiness (deterministic fixtures, no timing races)
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 55-01-PLAN.md -- Serde round-trip tests for all IPC return types (INTG-01)
+- [ ] 55-02-PLAN.md -- Multi-step workflow and state transition integration tests (INTG-02)
+- [ ] 55-03-PLAN.md -- Filesystem watcher integration tests with real notify events (INTG-03)
 
 ### Phase 56: Test Coverage & CI Reporting
 **Goal**: Test coverage is measured for both Rust and TypeScript and reported in CI
@@ -262,7 +266,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 |-------|----------------|--------|-----------|
 | 53. Rust Unit Tests & Test Harness | 4/4 | Complete    | 2026-03-26 |
 | 54. Frontend Unit Tests | 4/4 | Complete    | 2026-03-26 |
-| 55. Integration Tests | 0/TBD | Not started | - |
+| 55. Integration Tests | 0/3 | Not started | - |
 | 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
 | 57. Performance Benchmarks | 0/TBD | Not started | - |
 | 58. E2E Test Harness | 0/TBD | Not started | - |
@@ -280,8 +284,8 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
-| v1.0 Infrastructure | 53-59 | 4/8+ | In progress | - |
+| v1.0 Infrastructure | 53-59 | 8/11+ | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-26 -- Phase 54 planned (4 plans)*
+*Last updated: 2026-03-26 -- Phase 55 planned (3 plans)*
