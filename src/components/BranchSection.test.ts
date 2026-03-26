@@ -1,11 +1,12 @@
 import { render, screen, fireEvent } from "@testing-library/svelte";
+import { createRawSnippet } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import BranchSection from "./BranchSection.svelte";
 import "../__tests__/helpers/tauri-mock";
 
-// Note: BranchSection uses Svelte 5 Snippet children. Since @testing-library/svelte
-// doesn't easily support passing Snippets, we test with expanded=false (children not
-// rendered) to verify header rendering, toggle, and create button behavior.
+const emptySnippet = createRawSnippet(() => ({
+	render: () => "",
+}));
 
 describe("BranchSection", () => {
 	it("renders label with count", () => {
@@ -15,6 +16,7 @@ describe("BranchSection", () => {
 				count: 5,
 				expanded: false,
 				ontoggle: vi.fn(),
+				children: emptySnippet,
 			},
 		});
 		expect(screen.getByText("Branches (5)")).toBeInTheDocument();
@@ -28,6 +30,7 @@ describe("BranchSection", () => {
 				count: 3,
 				expanded: false,
 				ontoggle,
+				children: emptySnippet,
 			},
 		});
 		await fireEvent.click(screen.getByRole("button"));
@@ -43,6 +46,7 @@ describe("BranchSection", () => {
 				ontoggle: vi.fn(),
 				showCreateButton: true,
 				oncreate: vi.fn(),
+				children: emptySnippet,
 			},
 		});
 		expect(
@@ -57,6 +61,7 @@ describe("BranchSection", () => {
 				count: 3,
 				expanded: false,
 				ontoggle: vi.fn(),
+				children: emptySnippet,
 			},
 		});
 		expect(screen.queryByLabelText("Create new branch")).toBeNull();
@@ -72,6 +77,7 @@ describe("BranchSection", () => {
 				ontoggle: vi.fn(),
 				showCreateButton: true,
 				oncreate,
+				children: emptySnippet,
 			},
 		});
 		await fireEvent.click(screen.getByLabelText("Create new branch"));

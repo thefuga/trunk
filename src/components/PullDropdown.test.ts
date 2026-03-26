@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import PullDropdown from "./PullDropdown.svelte";
 import "../__tests__/helpers/tauri-mock";
 import { createRemoteState } from "../lib/remote-state.svelte";

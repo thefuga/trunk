@@ -80,7 +80,7 @@ describe("TreeFileList", () => {
 
 	it("renders list role in flat mode and tree role in tree mode", () => {
 		const files = [makeFile("a.ts")];
-		const { container, rerender } = render(TreeFileList, {
+		const { rerender } = render(TreeFileList, {
 			props: {
 				files,
 				treeMode: false,

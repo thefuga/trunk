@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import CommitForm from "./CommitForm.svelte";
 import "../__tests__/helpers/tauri-mock";
