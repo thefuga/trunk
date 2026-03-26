@@ -96,6 +96,7 @@ let listRef = $state<{
   scroll: (opts: { index: number; smoothScroll?: boolean; align?: string }) => Promise<void>;
 } | null>(null);
 let scrolledToHead = false;
+let containerRef = $state<HTMLDivElement | null>(null);
 
 let columnWidths = $state<ColumnWidths>({ ref: 120, graph: 24, author: 60, date: 40, sha: 50 });
 let columnVisibility = $state<ColumnVisibility>({
@@ -1201,9 +1202,63 @@ function handleSearchClose() {
     searchDebounceTimer = null;
   }
 }
+
+// Keyboard arrow navigation for commit selection
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+
+  // Don't intercept keys when search bar input is focused
+  const active = document.activeElement;
+  if (active && active.classList.contains("search-bar-input")) return;
+
+  e.preventDefault();
+
+  const items = displayItems;
+  if (items.length === 0) return;
+
+  const currentIdx = items.findIndex((c) => c.oid === selectedCommitOid);
+
+  let nextIdx: number;
+  if (e.key === "ArrowDown") {
+    nextIdx = currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1);
+  } else {
+    nextIdx = currentIdx === -1 ? items.length - 1 : Math.max(currentIdx - 1, 0);
+  }
+
+  const commit = items[nextIdx];
+  if (commit.oid === "__wip__") {
+    onWipClick?.();
+  } else {
+    oncommitselect?.(commit.oid);
+  }
+
+  listRef?.scroll({ index: nextIdx, smoothScroll: false, align: "auto" });
+}
+
+// Auto-focus the container on mount so keyboard nav works immediately
+$effect(() => {
+  if (containerRef) {
+    tick().then(() => {
+      if (
+        document.activeElement === document.body ||
+        document.activeElement === null
+      ) {
+        containerRef?.focus();
+      }
+    });
+  }
+});
 </script>
 
-<div class="h-full overflow-hidden flex flex-col" style="background: var(--color-bg);">
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<div
+  class="h-full overflow-hidden flex flex-col"
+  style="background: var(--color-bg); outline: none;"
+  tabindex="0"
+  role="listbox"
+  bind:this={containerRef}
+  onkeydown={handleKeydown}
+>
   <!-- Header row (always visible) -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
