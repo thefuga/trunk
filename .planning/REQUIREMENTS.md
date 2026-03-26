@@ -9,10 +9,10 @@ Requirements for production-readiness infrastructure. Each maps to roadmap phase
 
 ### Test Harness Architecture
 
-- [ ] **HARN-01**: Application Runner manages app lifecycle (start, stop, cleanup) for each test
+- [x] **HARN-01**: Application Runner manages app lifecycle (start, stop, cleanup) for each test
 - [ ] **HARN-02**: Domain-level Drivers wrap raw interactions behind intention-revealing methods (e.g. `app.stageFile("README.md")`, `app.verifyCommitInHistory("fix: bug")`)
-- [ ] **HARN-03**: Builders and fixtures provide reusable test data setup (git repos, file states, branch topologies)
-- [ ] **HARN-04**: Tests read like behavior specifications, not implementation details
+- [x] **HARN-03**: Builders and fixtures provide reusable test data setup (git repos, file states, branch topologies)
+- [x] **HARN-04**: Tests read like behavior specifications, not implementation details
 
 ### Unit Testing
 
@@ -87,10 +87,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HARN-01 | Phase 53 | Pending |
+| HARN-01 | Phase 53 | Complete |
 | HARN-02 | Phase 53 | Pending |
-| HARN-03 | Phase 53 | Pending |
-| HARN-04 | Phase 53 | Pending |
+| HARN-03 | Phase 53 | Complete |
+| HARN-04 | Phase 53 | Complete |
 | UNIT-01 | Phase 53 | Pending |
 | UNIT-02 | Phase 54 | Pending |
 | UNIT-03 | Phase 54 | Pending |
