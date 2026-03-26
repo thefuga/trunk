@@ -85,4 +85,21 @@ describe("validateRebasePlan", () => {
 			errors.some((e) => e.message === "Cannot squash the first commit"),
 		).toBe(true);
 	});
+
+	it("treats empty items array as all-dropped", () => {
+		// Array.every() on empty array returns true, triggering the "drop all" rule
+		const errors = validateRebasePlan([]);
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toEqual({ index: 0, message: "Cannot drop all commits" });
+	});
+
+	it("returns no errors for single pick item", () => {
+		const errors = validateRebasePlan([{ action: "pick" }]);
+		expect(errors).toEqual([]);
+	});
+
+	it("returns no errors for single reword item", () => {
+		const errors = validateRebasePlan([{ action: "reword" }]);
+		expect(errors).toEqual([]);
+	});
 });

@@ -62,6 +62,25 @@ describe("parseConflictRegions", () => {
 		expect(regions[0].oursLines).toEqual(["A", "B"]);
 		expect(regions[0].theirsLines).toEqual(["A", "B"]);
 	});
+
+	it("returns empty array when all three inputs are empty strings", () => {
+		const regions = parseConflictRegions("", "", "");
+		expect(regions).toEqual([]);
+	});
+
+	it("returns context for empty base when ours and theirs are identical", () => {
+		const regions = parseConflictRegions("", "A\nB", "A\nB");
+		expect(regions).toHaveLength(1);
+		expect(regions[0].type).toBe("context");
+		expect(regions[0].oursLines).toEqual(["A", "B"]);
+	});
+
+	it("handles input with only whitespace lines", () => {
+		const regions = parseConflictRegions(" ", " ", " ");
+		expect(regions).toHaveLength(1);
+		expect(regions[0].type).toBe("context");
+		expect(regions[0].baseLines).toEqual([" "]);
+	});
 });
 
 describe("computeOutput", () => {

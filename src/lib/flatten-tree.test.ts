@@ -1,17 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { makeFile } from "../__tests__/helpers/factories.js";
 import type { DirectoryNode, FileNode } from "./build-tree.js";
 import { buildTree } from "./build-tree.js";
 import type { FlatDirRow, FlatFileRow, FlatRow } from "./flatten-tree.js";
-import { findFocusIndex, flattenTree } from "./flatten-tree.js";
-import type { FileStatus } from "./types.js";
-
-/** Factory: minimal FileStatus with defaults */
-function makeFile(
-	path: string,
-	status: FileStatus["status"] = "Modified",
-): FileStatus {
-	return { path, status, is_binary: false };
-}
+import {
+	collectDirPaths,
+	findFocusIndex,
+	flattenTree,
+	migrateExpanded,
+} from "./flatten-tree.js";
 
 describe("flattenTree", () => {
 	describe("empty input", () => {
@@ -241,5 +238,55 @@ describe("findFocusIndex", () => {
 			{ type: "file", depth: 0, node: fileA, parentPath: null },
 		];
 		expect(findFocusIndex(rows, "nonexistent.ts")).toBe(0);
+	});
+});
+
+describe("collectDirPaths", () => {
+	it("returns empty set for empty input", () => {
+		expect(collectDirPaths([])).toEqual(new Set());
+	});
+
+	it("returns all directory paths from a tree", () => {
+		const tree = buildTree([
+			makeFile("src/lib/a.ts"),
+			makeFile("src/lib/b.ts"),
+			makeFile("docs/readme.md"),
+		]);
+		const paths = collectDirPaths(tree);
+		expect(paths.has("src/lib")).toBe(true);
+		expect(paths.has("docs")).toBe(true);
+	});
+
+	it("does not include file paths", () => {
+		const tree = buildTree([makeFile("a.ts")]);
+		const paths = collectDirPaths(tree);
+		expect(paths.size).toBe(0);
+	});
+});
+
+describe("migrateExpanded", () => {
+	it("returns null when no migration needed", () => {
+		const expanded = new Set(["src"]);
+		const dirPaths = new Set(["src", "docs"]);
+		const result = migrateExpanded(expanded, dirPaths);
+		expect(result).toBeNull();
+	});
+
+	it("returns empty set for empty old set", () => {
+		const expanded = new Set<string>();
+		const dirPaths = new Set(["src", "docs"]);
+		const result = migrateExpanded(expanded, dirPaths);
+		// Empty set has nothing to migrate, so no change needed
+		expect(result).toBeNull();
+	});
+
+	it("migrates compressed directory path", () => {
+		// Old tree had "src", new tree compressed to "src/lib"
+		const expanded = new Set(["src"]);
+		const dirPaths = new Set(["src/lib"]);
+		const result = migrateExpanded(expanded, dirPaths);
+		expect(result).not.toBeNull();
+		expect(result!.has("src/lib")).toBe(true);
+		expect(result!.has("src")).toBe(false);
 	});
 });

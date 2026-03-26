@@ -31,6 +31,29 @@ describe("measureTextWidth", () => {
 		expect(first).toBe(second);
 		expect(callCount).toBe(1);
 	});
+
+	it("returns different results for different fonts", () => {
+		const fontAwareMeasure = (text: string, font: string): number =>
+			text.length * (font === "big" ? 14 : 7);
+		const small = measureTextWidth("abc", "small", fontAwareMeasure);
+		const big = measureTextWidth("abc", "big", fontAwareMeasure);
+		expect(small).not.toBe(big);
+		expect(big).toBe(small * 2);
+	});
+
+	it("resetCache clears cached measurements", () => {
+		let callCount = 0;
+		const countingMeasure = (text: string, _font: string): number => {
+			callCount++;
+			return text.length * 7;
+		};
+
+		measureTextWidth("test", "font", countingMeasure);
+		expect(callCount).toBe(1);
+		resetCache();
+		measureTextWidth("test", "font", countingMeasure);
+		expect(callCount).toBe(2);
+	});
 });
 
 describe("truncateWithEllipsis", () => {
@@ -58,5 +81,17 @@ describe("truncateWithEllipsis", () => {
 		const result = truncateWithEllipsis("", 100, "test-font", mockMeasure);
 		expect(result.text).toBe("");
 		expect(result.width).toBe(0);
+	});
+
+	it("handles single-character input that fits", () => {
+		const result = truncateWithEllipsis("a", 100, "test-font", mockMeasure);
+		expect(result.text).toBe("a");
+		expect(result.width).toBe(7);
+	});
+
+	it("handles maxWidth of zero", () => {
+		// Nothing fits at width 0 — should return just ellipsis
+		const result = truncateWithEllipsis("abc", 0, "test-font", mockMeasure);
+		expect(result.text).toBe("\u2026");
 	});
 });

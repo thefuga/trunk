@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeFile } from "../__tests__/helpers/factories.js";
 import type { DirectoryNode, FileNode, TreeNode } from "./build-tree.js";
-import { buildTree } from "./build-tree.js";
+import { buildTree, collectFilePaths, countFiles } from "./build-tree.js";
 import type { FileStatus } from "./types.js";
 
 /** Extract names from a TreeNode[] for concise assertions */
@@ -239,5 +239,40 @@ describe("buildTree", () => {
 			expect((result[1] as FileNode).file.status).toBe("Modified");
 			expect((result[2] as FileNode).file.status).toBe("Deleted");
 		});
+	});
+});
+
+describe("countFiles", () => {
+	it("returns 0 for empty array", () => {
+		expect(countFiles([])).toBe(0);
+	});
+
+	it("counts files in deeply nested tree", () => {
+		const tree = buildTree([
+			makeFile("src/lib/utils/a.ts"),
+			makeFile("src/lib/utils/b.ts"),
+			makeFile("src/index.ts"),
+			makeFile("README.md"),
+		]);
+		expect(countFiles(tree)).toBe(4);
+	});
+});
+
+describe("collectFilePaths", () => {
+	it("returns empty array for empty input", () => {
+		expect(collectFilePaths([])).toEqual([]);
+	});
+
+	it("collects all file paths from tree with mixed dir/file at root", () => {
+		const tree = buildTree([
+			makeFile("src/a.ts"),
+			makeFile("README.md"),
+			makeFile("package.json"),
+		]);
+		const paths = collectFilePaths(tree);
+		expect(paths).toHaveLength(3);
+		expect(paths).toContain("src/a.ts");
+		expect(paths).toContain("README.md");
+		expect(paths).toContain("package.json");
 	});
 });
