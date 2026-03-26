@@ -1220,9 +1220,12 @@ function handleKeydown(e: KeyboardEvent) {
 
   let nextIdx: number;
   if (e.key === "ArrowDown") {
-    nextIdx = currentIdx === -1 ? 0 : Math.min(currentIdx + 1, items.length - 1);
+    if (currentIdx === -1) nextIdx = 0;
+    else if (currentIdx >= items.length - 1) return;
+    else nextIdx = currentIdx + 1;
   } else {
-    nextIdx = currentIdx === -1 ? items.length - 1 : Math.max(currentIdx - 1, 0);
+    if (currentIdx <= 0) return;
+    nextIdx = currentIdx - 1;
   }
 
   const commit = items[nextIdx];
@@ -1232,7 +1235,10 @@ function handleKeydown(e: KeyboardEvent) {
     oncommitselect?.(commit.oid);
   }
 
-  listRef?.scroll({ index: nextIdx, smoothScroll: false, align: "auto" });
+  tick().then(() => {
+    const row = containerRef?.querySelector(`[data-original-index="${nextIdx}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  });
 }
 
 // Auto-focus the container on mount so keyboard nav works immediately
