@@ -152,7 +152,7 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 
 **Milestone Goal:** Production-readiness infrastructure -- automated testing at all levels, performance benchmarks with regression detection, and macOS code signing with notarization.
 
-- [ ] **Phase 53: Rust Unit Tests & Test Harness** - GOOS-style test harness architecture + unit tests for all Rust backend commands
+- [x] **Phase 53: Rust Unit Tests & Test Harness** - GOOS-style test harness architecture + unit tests for all Rust backend commands (completed 2026-03-26)
 - [ ] **Phase 54: Frontend Unit Tests** - Unit tests for TypeScript utilities and Svelte components
 - [ ] **Phase 55: Integration Tests** - End-to-end validation of Tauri IPC bridge, git operations, and filesystem watcher
 - [ ] **Phase 56: Test Coverage & CI Reporting** - Coverage measurement and reporting integrated into CI pipeline
@@ -175,12 +175,12 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
   6. Tests use real git2 repositories (tempdir fixtures), not mocks
   7. Edge cases are covered: empty repos, merge commits, binary files, conflict states
   8. All tests pass in CI (cargo test gate already exists)
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 - [x] 53-01-PLAN.md -- Test harness foundation (TestContext, builder, assertions, visibility)
 - [x] 53-02-PLAN.md -- Drivers + migration for staging, diff, commit, stash
 - [x] 53-03-PLAN.md -- Drivers + migration for branches, history, commit_actions, repo
-- [ ] 53-04-PLAN.md -- Drivers + migration for operation_state, merge_editor, interactive_rebase, remote, graph, repository
+- [x] 53-04-PLAN.md -- Drivers + migration for operation_state, merge_editor, interactive_rebase, remote, graph, repository
 
 ### Phase 54: Frontend Unit Tests
 **Goal**: TypeScript utilities and Svelte components have unit tests verifying behavior and state transitions
@@ -256,7 +256,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 53. Rust Unit Tests & Test Harness | 3/4 | In Progress|  |
+| 53. Rust Unit Tests & Test Harness | 4/4 | Complete   | 2026-03-26 |
 | 54. Frontend Unit Tests | 0/TBD | Not started | - |
 | 55. Integration Tests | 0/TBD | Not started | - |
 | 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
