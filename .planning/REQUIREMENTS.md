@@ -7,6 +7,13 @@
 
 Requirements for production-readiness infrastructure. Each maps to roadmap phases.
 
+### Test Harness Architecture
+
+- [ ] **HARN-01**: Application Runner manages app lifecycle (start, stop, cleanup) for each test
+- [ ] **HARN-02**: Domain-level Drivers wrap raw interactions behind intention-revealing methods (e.g. `app.stageFile("README.md")`, `app.verifyCommitInHistory("fix: bug")`)
+- [ ] **HARN-03**: Builders and fixtures provide reusable test data setup (git repos, file states, branch topologies)
+- [ ] **HARN-04**: Tests read like behavior specifications, not implementation details
+
 ### Unit Testing
 
 - [ ] **UNIT-01**: All Rust backend commands have unit tests via inner-fn pattern
@@ -80,6 +87,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| HARN-01 | Phase 53 | Pending |
+| HARN-02 | Phase 53 | Pending |
+| HARN-03 | Phase 53 | Pending |
+| HARN-04 | Phase 53 | Pending |
 | UNIT-01 | Phase 53 | Pending |
 | UNIT-02 | Phase 54 | Pending |
 | UNIT-03 | Phase 54 | Pending |
@@ -101,10 +112,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SIGN-02 | Phase 59 | Pending |
 
 **Coverage:**
-- v1.0 requirements: 19 total
-- Mapped to phases: 19
+- v1.0 requirements: 23 total
+- Mapped to phases: 23
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after roadmap creation (all 19 requirements mapped)*
+*Last updated: 2026-03-26 after adding GOOS-style test harness requirements (HARN-01..04)*

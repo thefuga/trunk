@@ -152,7 +152,7 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 
 **Milestone Goal:** Production-readiness infrastructure -- automated testing at all levels, performance benchmarks with regression detection, and macOS code signing with notarization.
 
-- [ ] **Phase 53: Rust Unit Tests** - Unit test coverage for all Rust backend commands via inner-fn pattern
+- [ ] **Phase 53: Rust Unit Tests & Test Harness** - GOOS-style test harness architecture + unit tests for all Rust backend commands
 - [ ] **Phase 54: Frontend Unit Tests** - Unit tests for TypeScript utilities and Svelte components
 - [ ] **Phase 55: Integration Tests** - End-to-end validation of Tauri IPC bridge, git operations, and filesystem watcher
 - [ ] **Phase 56: Test Coverage & CI Reporting** - Coverage measurement and reporting integrated into CI pipeline
@@ -162,15 +162,19 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 
 ## Phase Details
 
-### Phase 53: Rust Unit Tests
-**Goal**: Every Rust backend command has unit test coverage validating its core logic
+### Phase 53: Rust Unit Tests & Test Harness
+**Goal**: Establish GOOS-style test harness architecture and unit test coverage for all Rust backend commands
 **Depends on**: Nothing (first phase of v1.0)
-**Requirements**: UNIT-01
+**Requirements**: HARN-01, HARN-02, HARN-03, HARN-04, UNIT-01
 **Success Criteria** (what must be TRUE):
-  1. Running `cargo test` exercises tests for every `_inner` function in `src-tauri/src/commands/`
-  2. Tests use real git2 repositories (tempdir fixtures), not mocks
-  3. Edge cases are covered: empty repos, merge commits, binary files, conflict states
-  4. All tests pass in CI (cargo test gate already exists)
+  1. Application Runner manages app lifecycle (start, stop, cleanup) for each test
+  2. Domain-level Drivers wrap raw interactions behind intention-revealing methods
+  3. Builders and fixtures provide reusable git repo setup (branch topologies, file states, conflict scenarios)
+  4. Tests read like behavior specifications, not implementation details
+  5. Running `cargo test` exercises tests for every `_inner` function in `src-tauri/src/commands/`
+  6. Tests use real git2 repositories (tempdir fixtures), not mocks
+  7. Edge cases are covered: empty repos, merge commits, binary files, conflict states
+  8. All tests pass in CI (cargo test gate already exists)
 **Plans**: TBD
 
 ### Phase 54: Frontend Unit Tests
@@ -247,7 +251,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 53. Rust Unit Tests | 0/TBD | Not started | - |
+| 53. Rust Unit Tests & Test Harness | 0/TBD | Not started | - |
 | 54. Frontend Unit Tests | 0/TBD | Not started | - |
 | 55. Integration Tests | 0/TBD | Not started | - |
 | 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
