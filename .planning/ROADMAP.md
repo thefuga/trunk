@@ -148,7 +148,112 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 
 </details>
 
+### v1.0 Infrastructure (In Progress)
+
+**Milestone Goal:** Production-readiness infrastructure -- automated testing at all levels, performance benchmarks with regression detection, and macOS code signing with notarization.
+
+- [ ] **Phase 53: Rust Unit Tests** - Unit test coverage for all Rust backend commands via inner-fn pattern
+- [ ] **Phase 54: Frontend Unit Tests** - Unit tests for TypeScript utilities and Svelte components
+- [ ] **Phase 55: Integration Tests** - End-to-end validation of Tauri IPC bridge, git operations, and filesystem watcher
+- [ ] **Phase 56: Test Coverage & CI Reporting** - Coverage measurement and reporting integrated into CI pipeline
+- [ ] **Phase 57: Performance Benchmarks** - Criterion benchmarks for critical Rust operations with CI regression detection
+- [ ] **Phase 58: E2E Test Harness** - WebdriverIO + tauri-driver E2E tests covering core workflows on Linux CI
+- [ ] **Phase 59: Code Signing** - macOS code signing and notarization in release pipeline
+
+## Phase Details
+
+### Phase 53: Rust Unit Tests
+**Goal**: Every Rust backend command has unit test coverage validating its core logic
+**Depends on**: Nothing (first phase of v1.0)
+**Requirements**: UNIT-01
+**Success Criteria** (what must be TRUE):
+  1. Running `cargo test` exercises tests for every `_inner` function in `src-tauri/src/commands/`
+  2. Tests use real git2 repositories (tempdir fixtures), not mocks
+  3. Edge cases are covered: empty repos, merge commits, binary files, conflict states
+  4. All tests pass in CI (cargo test gate already exists)
+**Plans**: TBD
+
+### Phase 54: Frontend Unit Tests
+**Goal**: TypeScript utilities and Svelte components have unit tests verifying behavior and state transitions
+**Depends on**: Phase 53 (establishes testing patterns; frontend tests can reference backend test fixtures)
+**Requirements**: UNIT-02, UNIT-03
+**Success Criteria** (what must be TRUE):
+  1. Running `bun run test` exercises tests for all TypeScript utility modules in `src/lib/`
+  2. Svelte components have tests covering user interactions and reactive state transitions
+  3. Tests for graph transformation, tree building, merge parsing, and search logic pass deterministically
+  4. All tests pass in CI (vitest gate already exists)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 55: Integration Tests
+**Goal**: The Tauri IPC bridge, git operations against real repos, and filesystem watcher are validated as integrated systems
+**Depends on**: Phase 54 (unit tests provide foundation; integration tests layer on top)
+**Requirements**: INTG-01, INTG-02, INTG-03
+**Success Criteria** (what must be TRUE):
+  1. IPC round-trip tests verify that `invoke("command", args)` returns correct typed responses for key commands
+  2. Git operation sequences (init, commit, branch, merge, rebase) work end-to-end against real temporary repositories
+  3. Filesystem watcher fires events within expected debounce window when files change in a watched repo
+  4. Integration tests run in CI without flakiness (deterministic fixtures, no timing races)
+**Plans**: TBD
+
+### Phase 56: Test Coverage & CI Reporting
+**Goal**: Test coverage is measured for both Rust and TypeScript and reported in CI
+**Depends on**: Phase 55 (needs tests to exist before measuring coverage)
+**Requirements**: UNIT-04
+**Success Criteria** (what must be TRUE):
+  1. Rust code coverage is measured (via cargo-tarpaulin or cargo-llvm-cov) and reported per CI run
+  2. TypeScript/Svelte coverage is measured via vitest --coverage and reported per CI run
+  3. Coverage reports are accessible as CI artifacts or PR comments
+**Plans**: TBD
+
+### Phase 57: Performance Benchmarks
+**Goal**: Critical Rust operations have reproducible benchmarks with regression detection in CI
+**Depends on**: Phase 53 (benchmark harness reuses test fixture patterns from Rust unit tests)
+**Requirements**: BENCH-01, BENCH-02, BENCH-03, BENCH-04, BENCH-05
+**Success Criteria** (what must be TRUE):
+  1. `cargo bench` runs Criterion benchmarks for `walk_commits_inner` at 100, 1k, and 10k commit scales
+  2. Criterion benchmarks exist for `list_refs_inner`, `diff_unstaged_inner`, and `stage_hunk_inner`
+  3. Frontend IPC round-trip timing is measured for `get_graph`, `get_diff`, and `list_refs` commands
+  4. Application startup time (launch to first meaningful paint) is measured and baselined
+  5. CI pipeline flags benchmark regressions exceeding a configured threshold
+**Plans**: TBD
+
+### Phase 58: E2E Test Harness
+**Goal**: Core user workflows are validated end-to-end through the real application UI on Linux CI
+**Depends on**: Phase 55 (integration test patterns inform E2E fixture design)
+**Requirements**: E2E-01, E2E-02, E2E-03, E2E-04, E2E-05
+**Success Criteria** (what must be TRUE):
+  1. WebdriverIO + tauri-driver runs E2E tests against a debug build on Linux CI
+  2. E2E test opens a fixture repo, browses commit history, and verifies graph renders with correct commit count
+  3. E2E test stages a file, enters a commit message, creates a commit, and verifies it appears in history
+  4. E2E test checks out a branch, creates a new branch, deletes a branch, and verifies sidebar updates
+  5. macOS E2E tests run via experimental WebDriver plugin (or documented as manual pre-release validation)
+**Plans**: TBD
+
+### Phase 59: Code Signing
+**Goal**: macOS builds are signed and notarized so users can install without Gatekeeper warnings
+**Depends on**: Phase 57 (benchmarks establish performance baselines before signing adds build overhead)
+**Requirements**: SIGN-01, SIGN-02
+**Success Criteria** (what must be TRUE):
+  1. Release pipeline signs macOS .dmg with Apple Developer ID certificate
+  2. Release pipeline notarizes macOS builds via App Store Connect API keys
+  3. A fresh macOS install from the signed .dmg opens without any Gatekeeper security warning
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 53. Rust Unit Tests | 0/TBD | Not started | - |
+| 54. Frontend Unit Tests | 0/TBD | Not started | - |
+| 55. Integration Tests | 0/TBD | Not started | - |
+| 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
+| 57. Performance Benchmarks | 0/TBD | Not started | - |
+| 58. E2E Test Harness | 0/TBD | Not started | - |
+| 59. Code Signing | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
@@ -162,7 +267,8 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
+| v1.0 Infrastructure | 53-59 | 0/TBD | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-26 — v0.10 milestone completed*
+*Last updated: 2026-03-26 — v1.0 milestone roadmap created*

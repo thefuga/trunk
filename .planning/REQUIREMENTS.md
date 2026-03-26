@@ -80,31 +80,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UNIT-01 | — | Pending |
-| UNIT-02 | — | Pending |
-| UNIT-03 | — | Pending |
-| UNIT-04 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| E2E-01 | — | Pending |
-| E2E-02 | — | Pending |
-| E2E-03 | — | Pending |
-| E2E-04 | — | Pending |
-| E2E-05 | — | Pending |
-| BENCH-01 | — | Pending |
-| BENCH-02 | — | Pending |
-| BENCH-03 | — | Pending |
-| BENCH-04 | — | Pending |
-| BENCH-05 | — | Pending |
-| SIGN-01 | — | Pending |
-| SIGN-02 | — | Pending |
+| UNIT-01 | Phase 53 | Pending |
+| UNIT-02 | Phase 54 | Pending |
+| UNIT-03 | Phase 54 | Pending |
+| UNIT-04 | Phase 56 | Pending |
+| INTG-01 | Phase 55 | Pending |
+| INTG-02 | Phase 55 | Pending |
+| INTG-03 | Phase 55 | Pending |
+| E2E-01 | Phase 58 | Pending |
+| E2E-02 | Phase 58 | Pending |
+| E2E-03 | Phase 58 | Pending |
+| E2E-04 | Phase 58 | Pending |
+| E2E-05 | Phase 58 | Pending |
+| BENCH-01 | Phase 57 | Pending |
+| BENCH-02 | Phase 57 | Pending |
+| BENCH-03 | Phase 57 | Pending |
+| BENCH-04 | Phase 57 | Pending |
+| BENCH-05 | Phase 57 | Pending |
+| SIGN-01 | Phase 59 | Pending |
+| SIGN-02 | Phase 59 | Pending |
 
 **Coverage:**
 - v1.0 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-26 after roadmap creation (all 19 requirements mapped)*
