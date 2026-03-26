@@ -97,9 +97,17 @@ A developer can open any Git repository, browse its full commit history as a vis
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-### Planned
+## Current Milestone: v1.0 Infrastructure
 
-- **v1.0**: Infrastructure — E2E test harness, performance benchmarks, code signing, auto-updates
+**Goal:** Production-readiness infrastructure — automated testing, performance validation, code signing, and auto-updates.
+
+**Target features:**
+- E2E test harness
+- Performance benchmarks
+- Code signing
+- Auto-updates
+
+### Planned
 
 ### Out of Scope
 
@@ -204,4 +212,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after v0.10 milestone (CI/CD & Releases)*
+*Last updated: 2026-03-26 after v1.0 milestone start (Infrastructure)*

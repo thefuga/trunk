@@ -1,30 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.10
-milestone_name: CI/CD & Releases
-status: v0.10 milestone complete
-stopped_at: "52-01 Task 3 checkpoint: human-verify pipeline"
-last_updated: "2026-03-26T05:03:29.093Z"
+milestone: v1.0
+milestone_name: Infrastructure
+status: Defining requirements
+stopped_at: ""
+last_updated: "2026-03-26"
 last_activity: 2026-03-26
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-26 after v0.10 milestone)
+See: .planning/PROJECT.md (updated 2026-03-26 after v1.0 milestone start)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v1.0 Infrastructure
 
 ## Current Position
 
-Milestone v0.10 complete. Ready for `/gsd:new-milestone`.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-26 — Milestone v1.0 started
 
 ## Performance Metrics
 
