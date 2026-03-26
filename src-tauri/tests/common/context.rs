@@ -4,9 +4,9 @@ use trunk_lib::git::types::GraphResult;
 
 pub struct TestContext {
     _dir: tempfile::TempDir,
-    path: String,
-    state_map: HashMap<String, PathBuf>,
-    cache_map: HashMap<String, GraphResult>,
+    pub(crate) path: String,
+    pub(crate) state_map: HashMap<String, PathBuf>,
+    pub(crate) cache_map: HashMap<String, GraphResult>,
 }
 
 impl TestContext {
