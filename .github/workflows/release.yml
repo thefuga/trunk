@@ -167,6 +167,11 @@ jobs:
 
             app "trunk.app"
 
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-cr", "#{appdir}/trunk.app"]
+            end
+
             zap trash: [
               "~/Library/Application Support/com.joaofnds.trunk",
               "~/Library/Caches/com.joaofnds.trunk",
