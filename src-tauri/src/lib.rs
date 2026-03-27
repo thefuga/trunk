@@ -2,7 +2,7 @@ pub mod commands;
 pub mod error;
 pub mod git;
 pub mod state;
-mod watcher;
+pub mod watcher;
 
 use state::{CommitCache, RepoState, RunningOp};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
 pub type WatcherMap = HashMap<String, Debouncer<RecommendedWatcher>>;
 pub struct WatcherState(pub Mutex<WatcherMap>);
@@ -15,7 +15,7 @@ impl Default for WatcherState {
     }
 }
 
-pub fn start_watcher(path: PathBuf, app: AppHandle, state: &WatcherState) {
+pub fn start_watcher<R: Runtime>(path: PathBuf, app: AppHandle<R>, state: &WatcherState) {
     let path_clone = path.clone();
     let mut debouncer = new_debouncer(
         Duration::from_millis(300),
