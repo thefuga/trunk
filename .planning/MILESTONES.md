@@ -1,5 +1,30 @@
 # Milestones
 
+## v0.11 Infrastructure (Shipped: 2026-03-27)
+
+**Phases completed:** 6 phases, 16 plans, 34 tasks
+
+**Key accomplishments:**
+
+- GOOS-style test harness with TestContext, fluent builder (11 build steps), 11 assertion helpers, and 7 passing smoke tests
+- 25 driver methods and 47 migrated integration tests for staging (13 fns), diff (4 fns), commit (3 fns), and stash (5 fns) commands using GOOS harness
+- 18 driver methods wrapping branches/history/commit_actions/repo _inner functions, with 46 tests migrated to integration crate using builder fixtures and &mut self cache_map pattern
+- 12 driver methods, 56 tests migrated across 6 modules, zero #[cfg(test)] modules remaining, make_test_repo removed
+- Vitest jsdom+svelteTesting environment, shared factories/Tauri mock, and 32 new tests bringing total from 170 to 202
+- 13 collocated component test files with 82 tests covering render, props, events, keyboard interactions, and conditional rendering using @testing-library/svelte
+- 45 tests across 7 complex components covering rendering, interactions, and conditional UI with Tauri mock isolation
+- 35 tests across 6 largest Svelte components (764-1826 lines each) with local Tauri mocks, class-based LazyStore, and jsdom polyfills for OffscreenCanvas/scrollTo
+- 17 serde round-trip integration tests validating JSON serialization for all non-trivial IPC return types with 111 field-level shape assertions
+- 14 integration tests validating multi-step git workflows (commit, merge, stash, cherry-pick, undo/redo, diff, search) and state transition chains (merge/rebase conflict resolution and abort) against real repos
+- Generic watcher functions with `R: Runtime` parameter + 4 integration tests validating event emission, stop behavior, multi-repo independence, and debounce resilience using real notify events and tauri MockRuntime
+- Rust coverage via cargo-llvm-cov and TypeScript coverage via @vitest/coverage-v8, with HTML artifact uploads and per-language PR comment summaries
+- Criterion benchmarks for walk_commits at 100/1k/10k scales and 4 command inner functions (list_refs, diff_unstaged, get_status, stage_hunk) with OnceLock-cached git2 fixtures
+- Benchmark CI workflow with regression detection via benchmark-action at 130% threshold, plus compile-check in existing CI pipeline
+- WebdriverIO v9 test harness with tauri-driver lifecycle, git fixture builders, and data-testid attributes on 7 Svelte components
+- 3 E2E test specs (10 tests total) covering commit history, staging workflow, and branch operations with Linux CI workflow and macOS manual checklist
+
+---
+
 ## v0.10 CI/CD & Releases (Shipped: 2026-03-26)
 
 **Phases completed:** 3 phases, 4 plans, 8 tasks

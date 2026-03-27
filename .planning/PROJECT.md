@@ -92,20 +92,19 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ Rust build caching via swatinem/rust-cache in CI — v0.10
 - ✓ Cross-platform release pipeline: tag-triggered builds for macOS ARM/Intel, Linux, Windows with .dmg/.AppImage/.msi installers and portable .tar.gz archives — v0.10
 - ✓ Homebrew cask distribution: auto-generated cask formula pushed to joaofnds/homebrew-tap on release — v0.10
+- ✓ GOOS-style Rust test harness with 156 integration tests covering all backend commands — v0.11
+- ✓ Frontend unit test suite with 364 tests across 41 files (utilities + 26 components) — v0.11
+- ✓ Serde round-trip integration tests, multi-step workflow tests, filesystem watcher tests — v0.11
+- ✓ Test coverage reporting in CI (cargo-llvm-cov + @vitest/coverage-v8) with PR comments — v0.11
+- ✓ Criterion benchmarks with CI regression detection (130% threshold, fail-on-alert) — v0.11
+- ✓ IPC round-trip and startup time benchmarks for key commands — v0.11
+- ✓ WebdriverIO + tauri-driver E2E tests (10 tests, 3 specs) with Linux CI workflow — v0.11
 
 ### Active
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-## Current Milestone: v1.0 Infrastructure
-
-**Goal:** Production-readiness infrastructure — automated testing and performance validation.
-
-**Target features:**
-- E2E test harness
-- Performance benchmarks
-
-### Planned
+## Current Milestone: Planning next milestone
 
 ### Out of Scope
 
@@ -123,7 +122,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.10 with 52 phases across 10 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. CI/CD pipeline enforces quality gates on every push, tag pushes trigger cross-platform builds and auto-publish to GitHub Releases + Homebrew tap. Phase 53 complete — GOOS-style test harness with 156 integration tests covering all Rust backend commands. Phase 54 complete — frontend unit test suite with 364 tests across 41 files covering all TypeScript utilities and 26 Svelte components. Phase 57 complete — Criterion benchmarks for walk_commits (100/1k/10k scales), list_refs_inner, diff_unstaged_inner, stage_hunk_inner, get_status_inner with CI regression detection (130% threshold, fail-on-alert). Phase 58 complete — WebdriverIO + tauri-driver E2E test harness with 10 tests across 3 spec files covering history browsing, staging workflow, and branch operations; separate e2e.yml CI workflow with Xvfb on Linux; macOS manual validation checklist.
+- **Current state**: Shipped v0.11 with 58 phases across 11 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. Full testing infrastructure: 156 Rust integration tests (GOOS harness), 364 frontend unit tests (vitest), 17 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -192,6 +191,11 @@ A developer can open any Git repository, browse its full commit history as a vis
 | Trie-based flat-to-tree algorithm | O(n) conversion with path compression; compression guard checks child type === directory | ✓ Good — 19 TDD tests, clean separation of data/UI layers |
 | SortableJS for drag reorder | Same library already used in RebaseEditor; forceFallback:true for cross-platform | ✓ Good — {#key} wrapper caused bug (orphaned Sortable), fixed by removing it |
 | Dynamic imports for Tauri menu/dialog | @tauri-apps/api/menu and plugin-dialog loaded on demand, not at module level | ✓ Good — reduces initial bundle, matches existing pattern |
+| GOOS-style test harness with inner-fn pattern | TestContext builder + driver methods wrap _inner functions; real git repos, no mocks | ✓ Good — 156 tests, every _inner function covered |
+| Vitest jsdom + @testing-library/svelte | Component tests with Tauri invoke mocking via vi.mock; factories for test data | ✓ Good — 364 tests across 41 files |
+| Criterion 0.8 with OnceLock fixtures | Cached test repos avoid re-creation; BatchSize::SmallInput for mutating ops | ✓ Good — reproducible benchmarks, CI regression gate at 130% |
+| WebdriverIO + tauri-driver for E2E | Separate e2e.yml workflow with Xvfb on Linux; macOS manual checklist | ✓ Good — 10 tests covering core workflows |
+| Drop macOS code signing | Apple Developer $99/yr not justified for personal project; ad-hoc + xattr -cr sufficient | ✓ Good — removed scope without user impact |
 
 ## Evolution
 
@@ -211,4 +215,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 58 complete (E2E Test Harness — WebdriverIO + tauri-driver E2E tests with CI workflow)*
+*Last updated: 2026-03-27 after v0.11 Infrastructure milestone shipped*

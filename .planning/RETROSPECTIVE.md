@@ -396,6 +396,46 @@
 
 ---
 
+## Milestone: v0.11 — Infrastructure
+
+**Shipped:** 2026-03-27
+**Phases:** 6 | **Plans:** 16 | **Timeline:** 2 days
+
+### What Was Built
+- GOOS-style Rust test harness with TestContext builder, 55 driver methods, 156 integration tests across 12 modules
+- Frontend unit test suite: 364 vitest tests across 41 files covering all TypeScript utilities and 26 Svelte components
+- Integration tests: 17 serde round-trip tests, 14 multi-step git workflow tests, 4 filesystem watcher tests with real notify events
+- Test coverage reporting: cargo-llvm-cov (Rust) + @vitest/coverage-v8 (TS) with CI artifact uploads and PR comments
+- Criterion benchmarks: 7 command functions at varying scales + IPC round-trip + startup sequence, with CI regression detection at 130% threshold
+- WebdriverIO + tauri-driver E2E harness: 10 tests across 3 specs (history, staging, branches) with separate Linux CI workflow
+
+### What Worked
+- **Inner-fn pattern payoff**: The pattern established in v0.1 made every backend command directly testable — 156 integration tests without the Tauri runtime
+- **Phase execution speed**: 16 plans in 2 days — testing/infrastructure work is deterministic compared to UI features
+- **Test data builders**: Fluent TestContext builder with 11 build steps made test setup composable and readable
+- **Component testing with @testing-library/svelte**: Tauri invoke mocking via vi.mock allowed testing real user interactions
+- **OnceLock fixtures for benchmarks**: Cached git2 repos across iterations avoided setup overhead in hot loops
+- **Separate E2E CI workflow**: e2e.yml runs independently of main CI — long-running E2E tests don't block fast checks
+
+### What Was Inefficient
+- **BENCH-03/BENCH-04 deferred then forgotten**: Phase 57 plan noted these as "deferred to Phase 58" but Phase 58 was E2E-focused — requirements slipped through until milestone completion
+- **Code signing phase removed**: Phase 59 was planned but Apple Developer fee made it infeasible — could have been caught during initial requirements gathering
+- **Phase naming mismatch**: Milestone was labeled "v1.0 Infrastructure" in planning but shipped as v0.11 — version naming should be decided upfront
+
+### Patterns Established
+- **TestContext builder pattern**: Fluent builder for test repos with commit, branch, merge, stash, conflict, unstaged change setup
+- **vi.mock('@tauri-apps/api/core')**: Standard Tauri mock pattern for frontend component tests
+- **Criterion + OnceLock**: Cached read-only fixtures for non-mutating benchmarks, BatchSize::SmallInput for mutating ops
+- **data-testid attributes**: Standard pattern for E2E element selection without coupling to CSS/structure
+
+### Key Lessons
+1. **Requirements tracking needs a completeness check**: BENCH-03/BENCH-04 were noted as deferred but never picked back up — a "pending requirements" scan before milestone close would have caught this
+2. **Scope decisions should happen before roadmap creation**: Dropping Phase 59 at discuss-time was the right call but the phase shouldn't have been planned without confirming Apple Developer account availability
+3. **Testing infrastructure milestones are fast**: 16 plans in 2 days — deterministic work with clear pass/fail criteria executes quickly
+4. **Frontend test mocking is fragile**: Several components required custom mocks for LazyStore, OffscreenCanvas, scrollTo — each mock is a maintenance burden but necessary for jsdom environment
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -412,6 +452,7 @@
 | v0.8 | 4 | 7 | 19 | Most complex milestone — merge editor, interactive rebase, file-based IPC, audit-driven gap closure |
 | v0.9 | 3 | 6 | 13 | Fastest per-plan pace — multi-tab + tree view, parallel execution, zero gap closures needed |
 | v0.10 | 2 | 3 | 4 | Smallest milestone — CI/CD infrastructure, zero gap closures, deterministic YAML work |
+| v0.11 | 2 | 6 | 16 | Testing infrastructure — GOOS harness, 520+ tests, benchmarks, E2E, coverage reporting |
 
 ### Top Lessons (Verified Across Milestones)
 

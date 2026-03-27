@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v0.11
 milestone_name: Infrastructure
-status: verifying
-stopped_at: Phase 59 removed — code signing dropped from milestone
-last_updated: "2026-03-27T14:39:12.907Z"
+status: complete
+stopped_at: v0.11 milestone shipped
+last_updated: "2026-03-27T15:03:49.539Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 16
   completed_plans: 16
-  percent: 25
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-26 after v1.0 milestone start)
+See: .planning/PROJECT.md (updated 2026-03-27 after v0.11 milestone shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 58 — e2e-test-harness
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 59
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: None — milestone complete
+Plan: None
+Status: v0.11 Infrastructure shipped
 Last activity: 2026-03-27
 
 Progress: [███░░░░░░░] 25%
