@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   # ── Gate 1: Fast checks (~10-30s each) ──
 
@@ -89,11 +93,32 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Run tests with coverage
+        run: cargo llvm-cov --manifest-path src-tauri/Cargo.toml --lcov --output-path rust-lcov.info
+      - name: Generate HTML coverage report
+        run: cargo llvm-cov report --manifest-path src-tauri/Cargo.toml --html --output-dir rust-coverage-html
+      - name: Upload Rust coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage-report
+          path: rust-coverage-html/
+      - name: Report Rust coverage
+        if: github.event_name == 'pull_request'
+        uses: zgosalvez/github-actions-report-lcov@v4
+        with:
+          coverage-files: rust-lcov.info
+          artifact-name: rust-coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title-prefix: Rust
+          update-comment: true
 
   vitest:
     name: Vitest
@@ -103,4 +128,19 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run test
+      - name: Run tests with coverage
+        run: bun run test -- --coverage.enabled
+      - name: Upload TypeScript coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-coverage-report
+          path: coverage/
+      - name: Report TypeScript coverage
+        if: github.event_name == 'pull_request'
+        uses: zgosalvez/github-actions-report-lcov@v4
+        with:
+          coverage-files: coverage/lcov.info
+          artifact-name: typescript-coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title-prefix: TypeScript
+          update-comment: true
