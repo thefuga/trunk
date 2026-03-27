@@ -250,7 +250,10 @@ Plans:
   3. E2E test stages a file, enters a commit message, creates a commit, and verifies it appears in history
   4. E2E test checks out a branch, creates a new branch, deletes a branch, and verifies sidebar updates
   5. macOS E2E tests run via experimental WebDriver plugin (or documented as manual pre-release validation)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 58-01-PLAN.md -- E2E infrastructure: WDIO config, helpers, data-testid attributes (E2E-01)
+- [ ] 58-02-PLAN.md -- E2E test specs + CI workflow + macOS validation checklist (E2E-02, E2E-03, E2E-04, E2E-05)
 
 ### Phase 59: Code Signing
 **Goal**: macOS builds are signed and notarized so users can install without Gatekeeper warnings
@@ -274,7 +277,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | 55. Integration Tests | 3/3 | Complete    | 2026-03-27 |
 | 56. Test Coverage & CI Reporting | 1/1 | Complete    | 2026-03-27 |
 | 57. Performance Benchmarks | 2/2 | Complete    | 2026-03-27 |
-| 58. E2E Test Harness | 0/TBD | Not started | - |
+| 58. E2E Test Harness | 0/2 | Not started | - |
 | 59. Code Signing | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
@@ -289,8 +292,8 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
-| v1.0 Infrastructure | 53-59 | 12/14+ | In progress | - |
+| v1.0 Infrastructure | 53-59 | 14/16+ | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-27 -- Phase 57 planned (2 plans)*
+*Last updated: 2026-03-27 -- Phase 58 planned (2 plans)*
