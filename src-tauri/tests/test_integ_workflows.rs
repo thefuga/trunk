@@ -282,3 +282,254 @@ fn workflow_search_commit_history() {
         "should find 3 commits matching author 'Test User'"
     );
 }
+
+// -- State transition tests --
+
+#[test]
+fn state_transition_merge_conflict_resolve_commit() {
+    // Use with_conflict builder to reliably set up merge state (avoids
+    // merge_branch_inner stdout/stderr issue documented in test_operation_state.rs)
+    let ctx = TestContext::builder()
+        .with_file("shared.txt", "original content")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .checkout("feature")
+        .with_file("shared.txt", "feature change")
+        .with_commit("Feature change")
+        .checkout("main")
+        .with_file("shared.txt", "main change")
+        .with_commit("Main change")
+        .with_conflict("feature")
+        .build();
+
+    // Write MERGE_MSG manually (libgit2 merge does not create it; git CLI does)
+    let repo = ctx.repo();
+    std::fs::write(repo.path().join("MERGE_MSG"), "Merge branch 'feature'\n").unwrap();
+    drop(repo);
+
+    // State: Merge in progress
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::Merge),
+        "expected Merge, got {:?}",
+        info.op_type
+    );
+
+    // Resolve the conflict
+    std::fs::write(ctx.repo_path().join("shared.txt"), "resolved content").unwrap();
+    ctx.stage_file("shared.txt").unwrap();
+
+    // Continue the merge
+    ctx.merge_continue(Some("Merge commit")).unwrap();
+
+    // State: back to None
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None after merge continue, got {:?}",
+        info.op_type
+    );
+    ctx.assert_status_clean();
+}
+
+#[test]
+fn state_transition_merge_conflict_abort() {
+    let ctx = TestContext::builder()
+        .with_file("shared.txt", "original content")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .checkout("feature")
+        .with_file("shared.txt", "feature change")
+        .with_commit("Feature change")
+        .checkout("main")
+        .with_file("shared.txt", "main change")
+        .with_commit("Main change")
+        .with_conflict("feature")
+        .build();
+
+    // State: Merge in progress
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::Merge),
+        "expected Merge, got {:?}",
+        info.op_type
+    );
+
+    // Abort the merge
+    ctx.merge_abort().unwrap();
+
+    // State: back to None
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None after merge abort, got {:?}",
+        info.op_type
+    );
+
+    // HEAD is still at main, working tree reflects main's content
+    ctx.assert_head_at("main");
+    ctx.assert_file_content("shared.txt", "main change");
+}
+
+#[test]
+fn state_transition_rebase_conflict_skip() {
+    // Build divergent fixture with feature checked out for rebase
+    let ctx = TestContext::builder()
+        .with_file("shared.txt", "original content")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .checkout("feature")
+        .with_file("shared.txt", "feature change")
+        .with_commit("Feature change")
+        .checkout("main")
+        .with_file("shared.txt", "main change")
+        .with_commit("Main change")
+        .checkout("feature")
+        .build();
+
+    // Initial state: no operation
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None, got {:?}",
+        info.op_type
+    );
+
+    // Rebase feature onto main -> conflicts
+    let result = ctx.rebase_branch("main");
+    assert!(
+        result.is_ok(),
+        "rebase_branch should return Ok even on conflict"
+    );
+
+    // State: Rebase in progress
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::Rebase),
+        "expected Rebase, got {:?}",
+        info.op_type
+    );
+
+    // Skip the conflicting commit
+    ctx.rebase_skip().unwrap();
+
+    // State: back to None (rebase complete after skip)
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None after rebase skip, got {:?}",
+        info.op_type
+    );
+}
+
+#[test]
+fn state_transition_rebase_conflict_abort() {
+    let ctx = TestContext::builder()
+        .with_file("shared.txt", "original content")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .checkout("feature")
+        .with_file("shared.txt", "feature change")
+        .with_commit("Feature change")
+        .checkout("main")
+        .with_file("shared.txt", "main change")
+        .with_commit("Main change")
+        .checkout("feature")
+        .build();
+
+    // Rebase feature onto main -> conflicts
+    ctx.rebase_branch("main").unwrap();
+
+    // State: Rebase in progress
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::Rebase),
+        "expected Rebase, got {:?}",
+        info.op_type
+    );
+
+    // Abort the rebase
+    ctx.rebase_abort().unwrap();
+
+    // State: back to None
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None after rebase abort, got {:?}",
+        info.op_type
+    );
+}
+
+#[test]
+fn state_transition_cherry_pick_conflict() {
+    let ctx = TestContext::builder()
+        .with_file("shared.txt", "original content")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .checkout("feature")
+        .with_file("shared.txt", "feature change")
+        .with_commit("Feature change")
+        .checkout("main")
+        .with_file("shared.txt", "main change")
+        .with_commit("Main change")
+        .build();
+
+    // Get the feature commit OID (the one that modifies shared.txt)
+    let oid = ctx.resolve_ref("feature").unwrap();
+
+    // Cherry-pick the conflicting commit onto main
+    let result = ctx.cherry_pick(&oid);
+    // Cherry-pick with conflict may return error or Ok depending on implementation
+    // The key is checking the operation state
+    let _ = result;
+
+    // State: CherryPick in progress
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::CherryPick),
+        "expected CherryPick, got {:?}",
+        info.op_type
+    );
+}
+
+#[test]
+fn state_transition_fast_forward_merge() {
+    let mut ctx = TestContext::builder()
+        .with_file("README.md", "hello")
+        .with_commit("Initial commit")
+        .with_branch("feature")
+        .build();
+
+    // Add commits only on feature (main stays behind)
+    ctx.checkout_branch("feature").unwrap();
+    std::fs::write(ctx.repo_path().join("feature.txt"), "feature work").unwrap();
+    ctx.stage_file("feature.txt").unwrap();
+    ctx.create_commit("Feature commit", None).unwrap();
+
+    // Switch back to main
+    ctx.checkout_branch("main").unwrap();
+
+    // State before merge: None
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None before ff merge, got {:?}",
+        info.op_type
+    );
+
+    // Fast-forward merge (no divergence)
+    let result = ctx.merge_branch("feature");
+    assert!(result.is_ok(), "fast-forward merge should succeed");
+
+    // State after merge: still None (no merge state for ff)
+    let info = ctx.get_operation_state().unwrap();
+    assert!(
+        matches!(info.op_type, OperationType::None),
+        "expected None after ff merge, got {:?}",
+        info.op_type
+    );
+
+    // Verify main has the feature commits
+    ctx.assert_file_content("feature.txt", "feature work");
+    ctx.assert_commit_count(2);
+}
