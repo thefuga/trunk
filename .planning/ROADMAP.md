@@ -156,7 +156,7 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 - [x] **Phase 54: Frontend Unit Tests** - Unit tests for TypeScript utilities and Svelte components (completed 2026-03-26)
 - [x] **Phase 55: Integration Tests** - End-to-end validation of Tauri IPC bridge, git operations, and filesystem watcher (completed 2026-03-27)
 - [x] **Phase 56: Test Coverage & CI Reporting** - Coverage measurement and reporting integrated into CI pipeline (completed 2026-03-27)
-- [ ] **Phase 57: Performance Benchmarks** - Criterion benchmarks for critical Rust operations with CI regression detection
+- [x] **Phase 57: Performance Benchmarks** - Criterion benchmarks for critical Rust operations with CI regression detection (completed 2026-03-27)
 - [ ] **Phase 58: E2E Test Harness** - WebdriverIO + tauri-driver E2E tests covering core workflows on Linux CI
 - [ ] **Phase 59: Code Signing** - macOS code signing and notarization in release pipeline
 
@@ -235,10 +235,10 @@ Plans:
   3. Frontend IPC round-trip timing is measured for `get_graph`, `get_diff`, and `list_refs` commands
   4. Application startup time (launch to first meaningful paint) is measured and baselined
   5. CI pipeline flags benchmark regressions exceeding a configured threshold
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 57-01-PLAN.md -- Criterion benchmark suites for walk_commits (BENCH-01) and command inner functions (BENCH-02)
-- [ ] 57-02-PLAN.md -- CI benchmark workflow with regression detection (BENCH-05), BENCH-03/BENCH-04 deferred to Phase 58
+- [x] 57-02-PLAN.md -- CI benchmark workflow with regression detection (BENCH-05), BENCH-03/BENCH-04 deferred to Phase 58
 
 ### Phase 58: E2E Test Harness
 **Goal**: Core user workflows are validated end-to-end through the real application UI on Linux CI
@@ -273,7 +273,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | 54. Frontend Unit Tests | 4/4 | Complete    | 2026-03-26 |
 | 55. Integration Tests | 3/3 | Complete    | 2026-03-27 |
 | 56. Test Coverage & CI Reporting | 1/1 | Complete    | 2026-03-27 |
-| 57. Performance Benchmarks | 1/2 | In Progress|  |
+| 57. Performance Benchmarks | 2/2 | Complete   | 2026-03-27 |
 | 58. E2E Test Harness | 0/TBD | Not started | - |
 | 59. Code Signing | 0/TBD | Not started | - |
 

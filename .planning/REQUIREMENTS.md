@@ -41,7 +41,7 @@ Requirements for production-readiness infrastructure. Each maps to roadmap phase
 - [x] **BENCH-02**: Criterion benchmarks for ref listing, diff computation, and hunk staging
 - [ ] **BENCH-03**: Frontend IPC round-trip benchmarks for key commands (get_graph, get_diff, list_refs)
 - [ ] **BENCH-04**: Application startup time measurement (launch to first meaningful paint)
-- [ ] **BENCH-05**: CI pipeline detects performance regressions with threshold-based gates
+- [x] **BENCH-05**: CI pipeline detects performance regressions with threshold-based gates
 
 ### Code Signing
 
@@ -107,7 +107,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BENCH-02 | Phase 57 | Complete |
 | BENCH-03 | Phase 57 | Pending |
 | BENCH-04 | Phase 57 | Pending |
-| BENCH-05 | Phase 57 | Pending |
+| BENCH-05 | Phase 57 | Complete |
 | SIGN-01 | Phase 59 | Pending |
 | SIGN-02 | Phase 59 | Pending |
 
