@@ -218,10 +218,12 @@ Plans:
 **Depends on**: Phase 55 (needs tests to exist before measuring coverage)
 **Requirements**: UNIT-04
 **Success Criteria** (what must be TRUE):
-  1. Rust code coverage is measured (via cargo-tarpaulin or cargo-llvm-cov) and reported per CI run
+  1. Rust code coverage is measured via cargo-llvm-cov and reported per CI run
   2. TypeScript/Svelte coverage is measured via vitest --coverage and reported per CI run
-  3. Coverage reports are accessible as CI artifacts or PR comments
-**Plans**: TBD
+  3. Coverage reports are accessible as CI artifacts and PR comments
+**Plans:** 1 plan
+Plans:
+- [ ] 56-01-PLAN.md -- Coverage measurement, CI artifact upload, and PR comments (UNIT-04)
 
 ### Phase 57: Performance Benchmarks
 **Goal**: Critical Rust operations have reproducible benchmarks with regression detection in CI
@@ -267,7 +269,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | 53. Rust Unit Tests & Test Harness | 4/4 | Complete    | 2026-03-26 |
 | 54. Frontend Unit Tests | 4/4 | Complete    | 2026-03-26 |
 | 55. Integration Tests | 3/3 | Complete    | 2026-03-27 |
-| 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
+| 56. Test Coverage & CI Reporting | 0/1 | Planned | - |
 | 57. Performance Benchmarks | 0/TBD | Not started | - |
 | 58. E2E Test Harness | 0/TBD | Not started | - |
 | 59. Code Signing | 0/TBD | Not started | - |
@@ -284,8 +286,8 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
-| v1.0 Infrastructure | 53-59 | 8/11+ | In progress | - |
+| v1.0 Infrastructure | 53-59 | 12/12+ | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-26 -- Phase 55 planned (3 plans)*
+*Last updated: 2026-03-27 -- Phase 56 planned (1 plan)*
