@@ -124,7 +124,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Shipped v0.10 with 52 phases across 10 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. CI/CD pipeline enforces quality gates on every push, tag pushes trigger cross-platform builds and auto-publish to GitHub Releases + Homebrew tap. Phase 53 complete — GOOS-style test harness with 156 integration tests covering all Rust backend commands. Phase 54 complete — frontend unit test suite with 364 tests across 41 files covering all TypeScript utilities and 26 Svelte components.
+- **Current state**: Shipped v0.10 with 52 phases across 10 milestones. ~13,400 LOC TypeScript/Svelte, ~9,400 LOC Rust. CI/CD pipeline enforces quality gates on every push, tag pushes trigger cross-platform builds and auto-publish to GitHub Releases + Homebrew tap. Phase 53 complete — GOOS-style test harness with 156 integration tests covering all Rust backend commands. Phase 54 complete — frontend unit test suite with 364 tests across 41 files covering all TypeScript utilities and 26 Svelte components. Phase 57 complete — Criterion benchmarks for walk_commits (100/1k/10k scales), list_refs_inner, diff_unstaged_inner, stage_hunk_inner, get_status_inner with CI regression detection (130% threshold, fail-on-alert).
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -212,4 +212,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 56 complete (Test Coverage & CI Reporting — cargo-llvm-cov + vitest coverage in CI)*
+*Last updated: 2026-03-27 after Phase 57 complete (Performance Benchmarks — Criterion benchmarks with CI regression detection)*
