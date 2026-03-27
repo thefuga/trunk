@@ -59,9 +59,7 @@ Progress: [███░░░░░░░] 25%
 
 ### Pending Todos
 
-1 pending todo.
-
-- Fix merge commit line bend direction (ui)
+None.
 
 ### Known Limitations
 
