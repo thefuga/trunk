@@ -39,7 +39,7 @@ jobs:
           save-if: true
 
       - name: Run benchmarks
-        run: cd src-tauri && cargo bench --benches -- --output-format bencher | tee output.txt
+        run: cd src-tauri && cargo bench --bench bench_graph --bench bench_commands --bench bench_ipc -- --output-format bencher | tee output.txt
 
       - name: Download previous benchmark data
         uses: actions/cache@v4
