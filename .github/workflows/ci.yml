@@ -110,6 +110,8 @@ jobs:
         with:
           name: rust-coverage-report
           path: rust-coverage-html/
+      - name: Compile-check benchmarks
+        run: cargo test --benches --no-run --manifest-path src-tauri/Cargo.toml
       - name: Report Rust coverage
         if: github.event_name == 'pull_request'
         uses: zgosalvez/github-actions-report-lcov@v4
