@@ -30,10 +30,10 @@ Requirements for production-readiness infrastructure. Each maps to roadmap phase
 ### End-to-End Testing
 
 - [x] **E2E-01**: E2E test harness using WebdriverIO + tauri-driver runs on Linux CI
-- [ ] **E2E-02**: E2E tests cover core workflow: open repo, browse commit history, view diffs
-- [ ] **E2E-03**: E2E tests cover staging workflow: stage/unstage files, create commits
-- [ ] **E2E-04**: E2E tests cover branch operations: checkout, create, delete
-- [ ] **E2E-05**: macOS E2E tests via experimental WebDriver plugin
+- [x] **E2E-02**: E2E tests cover core workflow: open repo, browse commit history, view diffs
+- [x] **E2E-03**: E2E tests cover staging workflow: stage/unstage files, create commits
+- [x] **E2E-04**: E2E tests cover branch operations: checkout, create, delete
+- [x] **E2E-05**: macOS E2E tests via experimental WebDriver plugin
 
 ### Performance Benchmarks
 
@@ -99,10 +99,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-02 | Phase 55 | Complete |
 | INTG-03 | Phase 55 | Complete |
 | E2E-01 | Phase 58 | Complete |
-| E2E-02 | Phase 58 | Pending |
-| E2E-03 | Phase 58 | Pending |
-| E2E-04 | Phase 58 | Pending |
-| E2E-05 | Phase 58 | Pending |
+| E2E-02 | Phase 58 | Complete |
+| E2E-03 | Phase 58 | Complete |
+| E2E-04 | Phase 58 | Complete |
+| E2E-05 | Phase 58 | Complete |
 | BENCH-01 | Phase 57 | Complete |
 | BENCH-02 | Phase 57 | Complete |
 | BENCH-03 | Phase 57 | Pending |

@@ -157,7 +157,7 @@ Full details: [milestones/v0.10-ROADMAP.md](milestones/v0.10-ROADMAP.md)
 - [x] **Phase 55: Integration Tests** - End-to-end validation of Tauri IPC bridge, git operations, and filesystem watcher (completed 2026-03-27)
 - [x] **Phase 56: Test Coverage & CI Reporting** - Coverage measurement and reporting integrated into CI pipeline (completed 2026-03-27)
 - [x] **Phase 57: Performance Benchmarks** - Criterion benchmarks for critical Rust operations with CI regression detection (completed 2026-03-27)
-- [ ] **Phase 58: E2E Test Harness** - WebdriverIO + tauri-driver E2E tests covering core workflows on Linux CI
+- [x] **Phase 58: E2E Test Harness** - WebdriverIO + tauri-driver E2E tests covering core workflows on Linux CI (completed 2026-03-27)
 - [ ] **Phase 59: Code Signing** - macOS code signing and notarization in release pipeline
 
 ## Phase Details
@@ -250,10 +250,10 @@ Plans:
   3. E2E test stages a file, enters a commit message, creates a commit, and verifies it appears in history
   4. E2E test checks out a branch, creates a new branch, deletes a branch, and verifies sidebar updates
   5. macOS E2E tests run via experimental WebDriver plugin (or documented as manual pre-release validation)
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 58-01-PLAN.md -- E2E infrastructure: WDIO config, helpers, data-testid attributes (E2E-01)
-- [ ] 58-02-PLAN.md -- E2E test specs + CI workflow + macOS validation checklist (E2E-02, E2E-03, E2E-04, E2E-05)
+- [x] 58-02-PLAN.md -- E2E test specs + CI workflow + macOS validation checklist (E2E-02, E2E-03, E2E-04, E2E-05)
 
 ### Phase 59: Code Signing
 **Goal**: macOS builds are signed and notarized so users can install without Gatekeeper warnings
@@ -277,7 +277,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | 55. Integration Tests | 3/3 | Complete    | 2026-03-27 |
 | 56. Test Coverage & CI Reporting | 1/1 | Complete    | 2026-03-27 |
 | 57. Performance Benchmarks | 2/2 | Complete    | 2026-03-27 |
-| 58. E2E Test Harness | 1/2 | In Progress|  |
+| 58. E2E Test Harness | 2/2 | Complete   | 2026-03-27 |
 | 59. Code Signing | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
