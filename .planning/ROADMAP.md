@@ -235,7 +235,10 @@ Plans:
   3. Frontend IPC round-trip timing is measured for `get_graph`, `get_diff`, and `list_refs` commands
   4. Application startup time (launch to first meaningful paint) is measured and baselined
   5. CI pipeline flags benchmark regressions exceeding a configured threshold
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 57-01-PLAN.md -- Criterion benchmark suites for walk_commits (BENCH-01) and command inner functions (BENCH-02)
+- [ ] 57-02-PLAN.md -- CI benchmark workflow with regression detection (BENCH-05), BENCH-03/BENCH-04 deferred to Phase 58
 
 ### Phase 58: E2E Test Harness
 **Goal**: Core user workflows are validated end-to-end through the real application UI on Linux CI
@@ -270,7 +273,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | 54. Frontend Unit Tests | 4/4 | Complete    | 2026-03-26 |
 | 55. Integration Tests | 3/3 | Complete    | 2026-03-27 |
 | 56. Test Coverage & CI Reporting | 1/1 | Complete    | 2026-03-27 |
-| 57. Performance Benchmarks | 0/TBD | Not started | - |
+| 57. Performance Benchmarks | 0/2 | Not started | - |
 | 58. E2E Test Harness | 0/TBD | Not started | - |
 | 59. Code Signing | 0/TBD | Not started | - |
 
@@ -286,8 +289,8 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 | v0.8 Conflict & Rebase | 37-43 | 19/19 | Complete | 2026-03-23 |
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
-| v1.0 Infrastructure | 53-59 | 12/12+ | In progress | - |
+| v1.0 Infrastructure | 53-59 | 12/14+ | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-27 -- Phase 56 planned (1 plan)*
+*Last updated: 2026-03-27 -- Phase 57 planned (2 plans)*
