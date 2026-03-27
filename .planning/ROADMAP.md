@@ -207,9 +207,9 @@ Plans:
   2. Git operation sequences (init, commit, branch, merge, rebase) work end-to-end against real temporary repositories
   3. Filesystem watcher fires events within expected debounce window when files change in a watched repo
   4. Integration tests run in CI without flakiness (deterministic fixtures, no timing races)
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
-- [ ] 55-01-PLAN.md -- Serde round-trip tests for all IPC return types (INTG-01)
+- [x] 55-01-PLAN.md -- Serde round-trip tests for all IPC return types (INTG-01)
 - [ ] 55-02-PLAN.md -- Multi-step workflow and state transition integration tests (INTG-02)
 - [ ] 55-03-PLAN.md -- Filesystem watcher integration tests with real notify events (INTG-03)
 
@@ -266,7 +266,7 @@ Phases execute in numeric order: 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59
 |-------|----------------|--------|-----------|
 | 53. Rust Unit Tests & Test Harness | 4/4 | Complete    | 2026-03-26 |
 | 54. Frontend Unit Tests | 4/4 | Complete    | 2026-03-26 |
-| 55. Integration Tests | 0/3 | Not started | - |
+| 55. Integration Tests | 1/3 | In Progress|  |
 | 56. Test Coverage & CI Reporting | 0/TBD | Not started | - |
 | 57. Performance Benchmarks | 0/TBD | Not started | - |
 | 58. E2E Test Harness | 0/TBD | Not started | - |
