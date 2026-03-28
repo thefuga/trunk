@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.12
 milestone_name: Better Diffs
-status: in_progress
-stopped_at: Roadmap created, ready to plan Phase 59
-last_updated: "2026-03-28"
-last_activity: 2026-03-28
+status: planning
+stopped_at: Phase 59 context gathered
+last_updated: "2026-03-28T12:20:08.235Z"
+last_activity: 2026-03-28 — Roadmap created for v0.12 Better Diffs (6 phases, 18 requirements)
 progress:
   total_phases: 6
   completed_phases: 0
@@ -73,7 +73,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28
-Last session: 2026-03-28
-Stopped at: Roadmap created for v0.12 Better Diffs with 6 phases (59-64) covering 18 requirements
-Resume file: .planning/ROADMAP.md
+Last session: 2026-03-28T12:20:08.231Z
+Stopped at: Phase 59 context gathered
+Resume file: .planning/phases/59-backend-data-model-diff-options/59-CONTEXT.md
 Next action: /gsd:plan-phase 59
