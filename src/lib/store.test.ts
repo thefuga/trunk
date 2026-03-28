@@ -28,6 +28,12 @@ const {
 	removeRecentRepo,
 	getZoomLevel,
 	setZoomLevel,
+	getDiffContextLines,
+	setDiffContextLines,
+	getDiffIgnoreWhitespace,
+	setDiffIgnoreWhitespace,
+	getDiffShowFullFile,
+	setDiffShowFullFile,
 } = await import("./store.js");
 
 describe("tab types and helpers", () => {
@@ -134,6 +140,41 @@ describe("store", () => {
 			await setZoomLevel(1.5);
 			const level = await getZoomLevel();
 			expect(level).toBe(1.5);
+		});
+	});
+
+	describe("diff preferences", () => {
+		it("getDiffContextLines returns 3 when store is empty (default)", async () => {
+			const lines = await getDiffContextLines();
+			expect(lines).toBe(3);
+		});
+
+		it("setDiffContextLines persists and getDiffContextLines retrieves it", async () => {
+			await setDiffContextLines(5);
+			const lines = await getDiffContextLines();
+			expect(lines).toBe(5);
+		});
+
+		it("getDiffIgnoreWhitespace returns false when store is empty (default)", async () => {
+			const ignore = await getDiffIgnoreWhitespace();
+			expect(ignore).toBe(false);
+		});
+
+		it("setDiffIgnoreWhitespace persists and getDiffIgnoreWhitespace retrieves it", async () => {
+			await setDiffIgnoreWhitespace(true);
+			const ignore = await getDiffIgnoreWhitespace();
+			expect(ignore).toBe(true);
+		});
+
+		it("getDiffShowFullFile returns false when store is empty (default)", async () => {
+			const show = await getDiffShowFullFile();
+			expect(show).toBe(false);
+		});
+
+		it("setDiffShowFullFile persists and getDiffShowFullFile retrieves it", async () => {
+			await setDiffShowFullFile(true);
+			const show = await getDiffShowFullFile();
+			expect(show).toBe(true);
 		});
 	});
 });
