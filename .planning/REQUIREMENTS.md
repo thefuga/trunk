@@ -28,14 +28,14 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 
 ### Whitespace
 
-- [ ] **WHSP-01**: User can toggle whitespace ignore in the diff toolbar (re-fetches diff with ignore_whitespace_change)
+- [x] **WHSP-01**: User can toggle whitespace ignore in the diff toolbar (re-fetches diff with ignore_whitespace_change)
 - [ ] **WHSP-02**: Hunk/line staging is disabled with tooltip when whitespace ignore is active
 - [ ] **WHSP-03**: User can toggle display of invisible characters (spaces as dots, tabs as arrows)
 
 ### Context Lines
 
-- [ ] **CTXL-01**: User can select context line count from toolbar dropdown (3/5/10/25/All)
-- [ ] **CTXL-02**: Selecting "All" activates full file view mode
+- [x] **CTXL-01**: User can select context line count from toolbar dropdown (3/5/10/25/All)
+- [x] **CTXL-02**: Selecting "All" activates full file view mode
 
 ### Display Options
 
@@ -76,9 +76,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CTXL-01 | Phase 59 | Pending |
-| CTXL-02 | Phase 59 | Pending |
-| WHSP-01 | Phase 59 | Pending |
+| CTXL-01 | Phase 59 | Complete |
+| CTXL-02 | Phase 59 | Complete |
+| WHSP-01 | Phase 59 | Complete |
 | DISP-03 | Phase 59 | Pending |
 | WORD-01 | Phase 60 | Pending |
 | WORD-02 | Phase 60 | Pending |

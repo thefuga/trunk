@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.12
 milestone_name: Better Diffs
-status: planning
-stopped_at: Phase 59 context gathered
-last_updated: "2026-03-28T12:20:08.235Z"
-last_activity: 2026-03-28 — Roadmap created for v0.12 Better Diffs (6 phases, 18 requirements)
+status: executing
+stopped_at: Completed 59-01-PLAN.md
+last_updated: "2026-03-28T12:54:48.584Z"
+last_activity: 2026-03-28
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28 after v0.12 milestone started)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** v0.12 Better Diffs -- Phase 59 (Backend Data Model & Diff Options)
+**Current focus:** Phase 59 — Backend Data Model & Diff Options
 
 ## Current Position
 
-Phase: 59 of 64 (Backend Data Model & Diff Options)
-Plan: 0 of 0 in current phase (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-28 — Roadmap created for v0.12 Better Diffs (6 phases, 18 requirements)
+Phase: 59 (Backend Data Model & Diff Options) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-03-28
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,6 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phases | 6 | 4 | 4 | 3 | 7 | 5 | 5 | 7 | 6 | 3 | 6 |
 | Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 | 19 | 13 | 4 | 16 |
 | Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 | 3 | 2 | 2 |
+| Phase 59 P01 | 5min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -47,6 +48,8 @@ Progress: [░░░░░░░░░░] 0%
 - syntect (Rust) chosen over Shiki (JS) for syntax highlighting -- CSS custom properties compliance, no inline styles
 - similar crate chosen for word-level diff -- runs on Rust thread pool, purpose-built iter_inline_changes() API
 - Whitespace-ignored diffs disable staging (GitHub Desktop pattern) -- never attempt hunk index remapping
+- [Phase 59]: Byte offset ranges (u32 start/end) for WordSpan/SyntaxToken enrichment fields -- compact IPC, frontend slices content
+- [Phase 59]: 100,000 context_lines cap for show_full_file instead of u32::MAX -- avoids IPC payload issues
 
 ### Pending Todos
 
@@ -73,7 +76,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28
-Last session: 2026-03-28T12:20:08.231Z
-Stopped at: Phase 59 context gathered
-Resume file: .planning/phases/59-backend-data-model-diff-options/59-CONTEXT.md
+Last session: 2026-03-28T12:54:48.580Z
+Stopped at: Completed 59-01-PLAN.md
+Resume file: None
 Next action: /gsd:plan-phase 59
