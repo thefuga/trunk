@@ -169,7 +169,7 @@ Full details: [milestones/v0.11-ROADMAP.md](milestones/v0.11-ROADMAP.md)
 **Milestone Goal:** Overhaul the diff viewer with professional-grade display and interaction options matching GitHub/GitKraken — syntax highlighting, word-level diff, split view, whitespace toggle, configurable context, and display options.
 
 - [x] **Phase 59: Backend Data Model & Diff Options** - Extend DiffLine with enrichment fields and wire DiffRequestOptions through all diff commands (completed 2026-03-28)
-- [ ] **Phase 60: Word-Level Diff** - Highlight changed words/characters within modified lines using the similar crate
+- [x] **Phase 60: Word-Level Diff** - Highlight changed words/characters within modified lines using the similar crate (completed 2026-03-28)
 - [ ] **Phase 61: Syntax Highlighting** - Language-aware syntax coloring for all diff lines using syntect
 - [ ] **Phase 62: UI Refactor & Component Structure** - Extract DiffPanel monolith into composable components with view mode dispatch
 - [ ] **Phase 63: Full File View & Display Options** - Full file view, whitespace toggle, context dropdown, word wrap, show invisibles, line numbers
@@ -200,10 +200,10 @@ Plans:
   1. When a line is modified, the specific changed words/characters are highlighted with a distinct background color on both the old (deleted) and new (added) versions
   2. Word-level highlighting is skipped for lines over 500 characters or with >60% edit distance, showing only the line-level add/delete coloring instead
   3. Word-diff background colors are defined as CSS custom properties and remain readable against both add and delete line backgrounds
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 60-01-PLAN.md — Rust backend: similar crate, word-span computation, post-processing pass, integration tests
-- [ ] 60-02-PLAN.md — Frontend: DiffPanel word-span rendering, CSS custom properties, frontend tests
+- [x] 60-02-PLAN.md — Frontend: DiffPanel word-span rendering, CSS custom properties, frontend tests
 
 ### Phase 61: Syntax Highlighting
 **Goal**: Diff lines display language-aware syntax coloring that auto-detects language from the file extension, making code diffs as readable as an editor
@@ -261,7 +261,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 59. Backend Data Model & Diff Options | 2/2 | Complete    | 2026-03-28 |
-| 60. Word-Level Diff | 1/2 | In Progress|  |
+| 60. Word-Level Diff | 2/2 | Complete   | 2026-03-28 |
 | 61. Syntax Highlighting | 0/0 | Not started | - |
 | 62. UI Refactor & Component Structure | 0/0 | Not started | - |
 | 63. Full File View & Display Options | 0/0 | Not started | - |
