@@ -23,8 +23,8 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 
 ### Word-Level Diff
 
-- [ ] **WORD-01**: Changed words/characters within modified lines are highlighted with a distinct background
-- [ ] **WORD-02**: Word-level diff is skipped for lines over 500 chars or with >60% edit distance (performance guard)
+- [x] **WORD-01**: Changed words/characters within modified lines are highlighted with a distinct background
+- [x] **WORD-02**: Word-level diff is skipped for lines over 500 chars or with >60% edit distance (performance guard)
 
 ### Whitespace
 
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTXL-02 | Phase 59 | Complete |
 | WHSP-01 | Phase 59 | Complete |
 | DISP-03 | Phase 59 | Complete |
-| WORD-01 | Phase 60 | Pending |
-| WORD-02 | Phase 60 | Pending |
+| WORD-01 | Phase 60 | Complete |
+| WORD-02 | Phase 60 | Complete |
 | SYNT-01 | Phase 61 | Pending |
 | SYNT-02 | Phase 61 | Pending |
 | SYNT-03 | Phase 61 | Pending |

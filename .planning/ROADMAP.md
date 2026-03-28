@@ -200,9 +200,9 @@ Plans:
   1. When a line is modified, the specific changed words/characters are highlighted with a distinct background color on both the old (deleted) and new (added) versions
   2. Word-level highlighting is skipped for lines over 500 characters or with >60% edit distance, showing only the line-level add/delete coloring instead
   3. Word-diff background colors are defined as CSS custom properties and remain readable against both add and delete line backgrounds
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 60-01-PLAN.md — Rust backend: similar crate, word-span computation, post-processing pass, integration tests
+- [x] 60-01-PLAN.md — Rust backend: similar crate, word-span computation, post-processing pass, integration tests
 - [ ] 60-02-PLAN.md — Frontend: DiffPanel word-span rendering, CSS custom properties, frontend tests
 
 ### Phase 61: Syntax Highlighting
@@ -261,7 +261,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 59. Backend Data Model & Diff Options | 2/2 | Complete    | 2026-03-28 |
-| 60. Word-Level Diff | 0/2 | Not started | - |
+| 60. Word-Level Diff | 1/2 | In Progress|  |
 | 61. Syntax Highlighting | 0/0 | Not started | - |
 | 62. UI Refactor & Component Structure | 0/0 | Not started | - |
 | 63. Full File View & Display Options | 0/0 | Not started | - |
