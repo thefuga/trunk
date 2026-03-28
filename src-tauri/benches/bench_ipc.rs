@@ -170,7 +170,7 @@ fn bench_ipc_diff_unstaged(c: &mut Criterion) {
     group.bench_function("diff_unstaged", |b| {
         b.iter(|| {
             let result =
-                trunk_lib::commands::diff::diff_unstaged_inner(&path, "file0.txt", &state_map)
+                trunk_lib::commands::diff::diff_unstaged_inner(&path, "file0.txt", &state_map, &trunk_lib::git::types::DiffRequestOptions::default())
                     .unwrap();
             serde_json::to_string(&result).unwrap()
         });

@@ -1,7 +1,9 @@
 // Diff commands — Phase 6 implementation
 
 use crate::error::TrunkError;
-use crate::git::types::{CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffStatus, FileDiff};
+use crate::git::types::{
+    CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus, FileDiff,
+};
 use crate::state::RepoState;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,6 +24,16 @@ fn is_head_unborn(repo: &git2::Repository) -> bool {
         Err(e) => e.code() == git2::ErrorCode::UnbornBranch,
         Ok(_) => false,
     }
+}
+
+fn apply_request_options(opts: &mut git2::DiffOptions, req: &DiffRequestOptions) {
+    let context = if req.show_full_file {
+        100_000 // practical cap for full-file view
+    } else {
+        req.context_lines
+    };
+    opts.context_lines(context);
+    opts.ignore_whitespace_change(req.ignore_whitespace);
 }
 
 fn walk_diff_into_file_diffs(diff: git2::Diff<'_>) -> Result<Vec<FileDiff>, TrunkError> {
@@ -84,6 +96,8 @@ fn walk_diff_into_file_diffs(diff: git2::Diff<'_>) -> Result<Vec<FileDiff>, Trun
                         content,
                         old_lineno: line.old_lineno(),
                         new_lineno: line.new_lineno(),
+                        word_spans: vec![],
+                        syntax_tokens: vec![],
                     });
                 }
             }
@@ -99,6 +113,7 @@ pub fn diff_unstaged_inner(
     path: &str,
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
@@ -106,6 +121,7 @@ pub fn diff_unstaged_inner(
     opts.include_untracked(true);
     opts.recurse_untracked_dirs(true);
     opts.show_untracked_content(true);
+    apply_request_options(&mut opts, options);
     let diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
     walk_diff_into_file_diffs(diff)
 }
@@ -114,10 +130,12 @@ pub fn diff_staged_inner(
     path: &str,
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
+    apply_request_options(&mut opts, options);
     let diff = if is_head_unborn(&repo) {
         repo.diff_tree_to_index(None, None, Some(&mut opts))?
     } else {
@@ -131,17 +149,20 @@ pub fn diff_commit_inner(
     path: &str,
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
     let oid =
         git2::Oid::from_str(oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
     let commit = repo.find_commit(oid)?;
     let commit_tree = commit.tree()?;
+    let mut opts = git2::DiffOptions::new();
+    apply_request_options(&mut opts, options);
     let diff = if commit.parent_count() == 0 {
-        repo.diff_tree_to_tree(None, Some(&commit_tree), None)?
+        repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
     } else {
         let parent_tree = commit.parent(0)?.tree()?;
-        repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), None)?
+        repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut opts))?
     };
     walk_diff_into_file_diffs(diff)
 }
@@ -176,45 +197,54 @@ pub fn get_commit_detail_inner(
 pub async fn diff_unstaged(
     path: String,
     file_path: String,
+    options: DiffRequestOptions,
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || diff_unstaged_inner(&path, &file_path, &state_map))
-        .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+    tauri::async_runtime::spawn_blocking(move || {
+        diff_unstaged_inner(&path, &file_path, &state_map, &options)
+    })
+    .await
+    .map_err(|e| {
+        serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+    })?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
 #[tauri::command]
 pub async fn diff_staged(
     path: String,
     file_path: String,
+    options: DiffRequestOptions,
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || diff_staged_inner(&path, &file_path, &state_map))
-        .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+    tauri::async_runtime::spawn_blocking(move || {
+        diff_staged_inner(&path, &file_path, &state_map, &options)
+    })
+    .await
+    .map_err(|e| {
+        serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+    })?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
 #[tauri::command]
 pub async fn diff_commit(
     path: String,
     oid: String,
+    options: DiffRequestOptions,
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || diff_commit_inner(&path, &oid, &state_map))
-        .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+    tauri::async_runtime::spawn_blocking(move || {
+        diff_commit_inner(&path, &oid, &state_map, &options)
+    })
+    .await
+    .map_err(|e| {
+        serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+    })?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
 #[tauri::command]
