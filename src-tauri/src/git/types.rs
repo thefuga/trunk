@@ -137,12 +137,53 @@ pub enum DiffOrigin {
     Delete,
 }
 
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct WordSpan {
+    pub start: u32,
+    pub end: u32,
+    pub emphasized: bool,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct SyntaxToken {
+    pub start: u32,
+    pub end: u32,
+    pub scope: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffRequestOptions {
+    #[serde(default = "default_context_lines")]
+    pub context_lines: u32,
+    #[serde(default)]
+    pub ignore_whitespace: bool,
+    #[serde(default)]
+    pub show_full_file: bool,
+}
+
+fn default_context_lines() -> u32 {
+    3
+}
+
+impl Default for DiffRequestOptions {
+    fn default() -> Self {
+        Self {
+            context_lines: 3,
+            ignore_whitespace: false,
+            show_full_file: false,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 pub struct DiffLine {
     pub origin: DiffOrigin,
     pub content: String,
     pub old_lineno: Option<u32>,
     pub new_lineno: Option<u32>,
+    pub word_spans: Vec<WordSpan>,
+    pub syntax_tokens: Vec<SyntaxToken>,
 }
 
 #[derive(Debug, Serialize, Clone)]
