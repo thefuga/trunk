@@ -3,6 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
 import type { RemoteState } from "../lib/remote-state.svelte.js";
 import {
+	getDiffContextLines,
+	getDiffIgnoreWhitespace,
+	getDiffShowFullFile,
 	getTreeViewEnabled,
 	setLeftPaneCollapsed,
 	setLeftPaneWidth,
@@ -13,6 +16,7 @@ import {
 import { showToast } from "../lib/toast.svelte.js";
 import type {
 	CommitDetail as CommitDetailType,
+	DiffRequestOptions,
 	FileDiff,
 	RebaseTodoItem,
 	RefsResponse,
@@ -162,6 +166,15 @@ function clearCommit() {
 	selectedCommitFile = null;
 }
 
+async function buildDiffOptions(): Promise<DiffRequestOptions> {
+	const [contextLines, ignoreWhitespace, showFullFile] = await Promise.all([
+		getDiffContextLines(),
+		getDiffIgnoreWhitespace(),
+		getDiffShowFullFile(),
+	]);
+	return { contextLines, ignoreWhitespace, showFullFile };
+}
+
 /** WIP row clicked -- switch to staging view and auto-open right pane if collapsed. */
 function handleWipClick() {
 	clearCommit();
@@ -215,9 +228,11 @@ async function handleFileSelect(
 	stagingDiffLoading = true;
 	try {
 		const command = kind === "unstaged" ? "diff_unstaged" : "diff_staged";
+		const options = await buildDiffOptions();
 		stagingDiffFiles = await safeInvoke<FileDiff[]>(command, {
 			path: repoPath,
 			filePath: path,
+			options,
 		});
 	} catch (e) {
 		const err = e as TrunkError;
@@ -245,8 +260,9 @@ async function handleCommitSelect(oid: string) {
 	selectedCommitOid = oid;
 	if (!repoPath) return;
 	try {
+		const commitDiffOptions = await buildDiffOptions();
 		const [files, detail] = await Promise.all([
-			safeInvoke<FileDiff[]>("diff_commit", { path: repoPath, oid }),
+			safeInvoke<FileDiff[]>("diff_commit", { path: repoPath, oid, options: commitDiffOptions }),
 			safeInvoke<CommitDetailType>("get_commit_detail", {
 				path: repoPath,
 				oid,
@@ -304,9 +320,11 @@ async function refetchFileDiff(
 	if (kind === "conflicted") return; // MergeEditor handles its own data loading
 	try {
 		const command = kind === "unstaged" ? "diff_unstaged" : "diff_staged";
+		const reloadOptions = await buildDiffOptions();
 		stagingDiffFiles = await safeInvoke<FileDiff[]>(command, {
 			path: repoPath,
 			filePath: path,
+			options: reloadOptions,
 		});
 	} catch {
 		stagingDiffFiles = [];
@@ -439,12 +457,13 @@ async function handleRebaseFocusChange(oid: string) {
 	rebaseFocusedFileSelected = null;
 	rebaseDiffFile = null;
 	try {
+		const rebaseDiffOptions = await buildDiffOptions();
 		const [detail, files] = await Promise.all([
 			safeInvoke<CommitDetailType>("get_commit_detail", {
 				path: repoPath,
 				oid,
 			}),
-			safeInvoke<FileDiff[]>("diff_commit", { path: repoPath, oid }),
+			safeInvoke<FileDiff[]>("diff_commit", { path: repoPath, oid, options: rebaseDiffOptions }),
 		]);
 		rebaseFocusedCommitDetail = detail;
 		rebaseFocusedFileDiffs = files;
