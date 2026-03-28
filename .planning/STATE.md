@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.12
 milestone_name: Better Diffs
 status: verifying
-stopped_at: Completed 59-02-PLAN.md
-last_updated: "2026-03-28T13:07:51.703Z"
+stopped_at: Phase 60 context gathered
+last_updated: "2026-03-28T22:40:09.822Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 6
@@ -79,7 +79,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28
-Last session: 2026-03-28T13:02:31.979Z
-Stopped at: Completed 59-02-PLAN.md
-Resume file: None
+Last session: 2026-03-28T22:40:09.817Z
+Stopped at: Phase 60 context gathered
+Resume file: .planning/phases/60-word-level-diff/60-CONTEXT.md
 Next action: /gsd:plan-phase 59
