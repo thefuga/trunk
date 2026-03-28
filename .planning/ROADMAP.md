@@ -168,7 +168,7 @@ Full details: [milestones/v0.11-ROADMAP.md](milestones/v0.11-ROADMAP.md)
 
 **Milestone Goal:** Overhaul the diff viewer with professional-grade display and interaction options matching GitHub/GitKraken — syntax highlighting, word-level diff, split view, whitespace toggle, configurable context, and display options.
 
-- [ ] **Phase 59: Backend Data Model & Diff Options** - Extend DiffLine with enrichment fields and wire DiffRequestOptions through all diff commands
+- [x] **Phase 59: Backend Data Model & Diff Options** - Extend DiffLine with enrichment fields and wire DiffRequestOptions through all diff commands (completed 2026-03-28)
 - [ ] **Phase 60: Word-Level Diff** - Highlight changed words/characters within modified lines using the similar crate
 - [ ] **Phase 61: Syntax Highlighting** - Language-aware syntax coloring for all diff lines using syntect
 - [ ] **Phase 62: UI Refactor & Component Structure** - Extract DiffPanel monolith into composable components with view mode dispatch
@@ -187,10 +187,10 @@ Full details: [milestones/v0.11-ROADMAP.md](milestones/v0.11-ROADMAP.md)
   3. Selecting "All" context lines returns a diff containing the entire file contents with changed lines highlighted
   4. DiffLine type includes word_spans and syntax_tokens fields (empty vecs for now) that serialize cleanly over IPC
   5. All diff display preferences (context lines, whitespace ignore) round-trip through LazyStore persistence
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 59-01-PLAN.md — Rust backend: types, DiffRequestOptions, thread through commands, tests
-- [ ] 59-02-PLAN.md — Frontend: TS type mirrors, LazyStore persistence, wire RepoView call sites
+- [x] 59-02-PLAN.md — Frontend: TS type mirrors, LazyStore persistence, wire RepoView call sites
 
 ### Phase 60: Word-Level Diff
 **Goal**: Changed words and characters within modified lines are visually distinguished with background highlighting, so users can instantly see what changed within a line
@@ -257,7 +257,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 59. Backend Data Model & Diff Options | 1/2 | In Progress|  |
+| 59. Backend Data Model & Diff Options | 2/2 | Complete   | 2026-03-28 |
 | 60. Word-Level Diff | 0/0 | Not started | - |
 | 61. Syntax Highlighting | 0/0 | Not started | - |
 | 62. UI Refactor & Component Structure | 0/0 | Not started | - |

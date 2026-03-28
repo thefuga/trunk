@@ -41,7 +41,7 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 
 - [ ] **DISP-01**: Line numbers shown in diff gutter (old lineno + new lineno)
 - [ ] **DISP-02**: User can toggle word wrap in the diff viewer
-- [ ] **DISP-03**: All diff display preferences persist across sessions via LazyStore
+- [x] **DISP-03**: All diff display preferences persist across sessions via LazyStore
 
 ## Future Requirements
 
@@ -79,7 +79,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTXL-01 | Phase 59 | Complete |
 | CTXL-02 | Phase 59 | Complete |
 | WHSP-01 | Phase 59 | Complete |
-| DISP-03 | Phase 59 | Pending |
+| DISP-03 | Phase 59 | Complete |
 | WORD-01 | Phase 60 | Pending |
 | WORD-02 | Phase 60 | Pending |
 | SYNT-01 | Phase 61 | Pending |

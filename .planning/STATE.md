@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.12
 milestone_name: Better Diffs
-status: executing
-stopped_at: Completed 59-01-PLAN.md
-last_updated: "2026-03-28T12:54:48.584Z"
+status: verifying
+stopped_at: Completed 59-02-PLAN.md
+last_updated: "2026-03-28T13:02:31.984Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-28 after v0.12 milestone started)
 
 Phase: 59 (Backend Data Model & Diff Options) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-28
 
 Progress: [░░░░░░░░░░] 0%
@@ -40,6 +40,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plans | 27 | 9 | 14 | 5 | 12 | 16 | 8 | 19 | 13 | 4 | 16 |
 | Days | 7 | 2 | 3 | 1 | 2 | 2 | 2 | 4 | 3 | 2 | 2 |
 | Phase 59 P01 | 5min | 3 tasks | 7 files |
+| Phase 59 P02 | 5min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -50,6 +51,8 @@ Progress: [░░░░░░░░░░] 0%
 - Whitespace-ignored diffs disable staging (GitHub Desktop pattern) -- never attempt hunk index remapping
 - [Phase 59]: Byte offset ranges (u32 start/end) for WordSpan/SyntaxToken enrichment fields -- compact IPC, frontend slices content
 - [Phase 59]: 100,000 context_lines cap for show_full_file instead of u32::MAX -- avoids IPC payload issues
+- [Phase 59]: DiffLine enrichment fields use snake_case matching Rust Serialize default; DiffRequestOptions uses camelCase matching serde rename_all
+- [Phase 59]: Default diff preferences: contextLines=3, ignoreWhitespace=false, showFullFile=false matching Rust defaults
 
 ### Pending Todos
 
@@ -76,7 +79,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-03-28
-Last session: 2026-03-28T12:54:48.580Z
-Stopped at: Completed 59-01-PLAN.md
+Last session: 2026-03-28T13:02:31.979Z
+Stopped at: Completed 59-02-PLAN.md
 Resume file: None
 Next action: /gsd:plan-phase 59
