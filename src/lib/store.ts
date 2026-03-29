@@ -298,3 +298,25 @@ export async function setDiffViewMode(mode: ViewMode): Promise<void> {
 	await store.set(DIFF_VIEW_MODE_KEY, mode);
 	await store.save();
 }
+
+const DIFF_SHOW_INVISIBLES_KEY = "diff_show_invisibles";
+
+export async function getDiffShowInvisibles(): Promise<boolean> {
+	return (await store.get<boolean>(DIFF_SHOW_INVISIBLES_KEY)) ?? false;
+}
+
+export async function setDiffShowInvisibles(show: boolean): Promise<void> {
+	await store.set(DIFF_SHOW_INVISIBLES_KEY, show);
+	await store.save();
+}
+
+const DIFF_WORD_WRAP_KEY = "diff_word_wrap";
+
+export async function getDiffWordWrap(): Promise<boolean> {
+	return (await store.get<boolean>(DIFF_WORD_WRAP_KEY)) ?? false;
+}
+
+export async function setDiffWordWrap(wrap: boolean): Promise<void> {
+	await store.set(DIFF_WORD_WRAP_KEY, wrap);
+	await store.save();
+}

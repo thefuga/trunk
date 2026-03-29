@@ -70,6 +70,12 @@
 	/* Hunk highlight flash */
 	--color-hunk-flash: rgba(96, 165, 250, 0.3);
 
+	/* Invisible character markers (Phase 63 -- WHSP-03) */
+	--color-invisible: rgba(139, 148, 158, 0.5);
+
+	/* Trailing whitespace warning (Phase 63 -- D-12) */
+	--color-trailing-ws-bg: rgba(248, 113, 113, 0.12);
+
 	/* Utility */
 	--opacity-dimmed: 0.4;
 

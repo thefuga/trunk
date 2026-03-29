@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ViewMode } from "../../lib/types.js";
+import { Space, Pilcrow, TextWrap } from "@lucide/svelte";
 
 interface Props {
   viewMode: ViewMode;
@@ -7,6 +8,12 @@ interface Props {
   selectedPath: string | null;
   diffKind: "unstaged" | "staged" | "commit";
   hunkOperationInFlight: boolean;
+  ignoreWhitespace: boolean;
+  showInvisibles: boolean;
+  wordWrap: boolean;
+  onignorewhitespacechange: (value: boolean) => void;
+  onshowinvisibleschange: (value: boolean) => void;
+  onwordwrapchange: (value: boolean) => void;
   onstagefile: () => void;
   onunstagefile: () => void;
   onclose: () => void;
@@ -18,6 +25,12 @@ let {
   selectedPath,
   diffKind,
   hunkOperationInFlight,
+  ignoreWhitespace,
+  showInvisibles,
+  wordWrap,
+  onignorewhitespacechange,
+  onshowinvisibleschange,
+  onwordwrapchange,
   onstagefile,
   onunstagefile,
   onclose,
@@ -43,6 +56,32 @@ const modes: { label: string; value: ViewMode }[] = [
     {/each}
   </div>
 
+  <div class="toolbar-divider"></div>
+  <button
+    class="toggle-btn"
+    class:active={ignoreWhitespace}
+    title="Ignore whitespace changes"
+    onclick={() => onignorewhitespacechange(!ignoreWhitespace)}
+  >
+    <Space size={14} />
+  </button>
+  <button
+    class="toggle-btn"
+    class:active={showInvisibles}
+    title="Show invisible characters"
+    onclick={() => onshowinvisibleschange(!showInvisibles)}
+  >
+    <Pilcrow size={14} />
+  </button>
+  <button
+    class="toggle-btn"
+    class:active={wordWrap}
+    title="Toggle word wrap"
+    onclick={() => onwordwrapchange(!wordWrap)}
+  >
+    <TextWrap size={14} />
+  </button>
+
   <span class="filename">
     {#if selectedPath}{selectedPath}{/if}
   </span>
@@ -50,10 +89,11 @@ const modes: { label: string; value: ViewMode }[] = [
   {#if diffKind === 'unstaged'}
     <button
       class="action-btn stage-btn"
-      disabled={hunkOperationInFlight}
+      disabled={hunkOperationInFlight || ignoreWhitespace}
+      title={ignoreWhitespace ? "Staging is disabled while whitespace changes are ignored" : undefined}
       style="
-        cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
-        opacity: {hunkOperationInFlight ? 0.4 : 1};
+        cursor: {(hunkOperationInFlight || ignoreWhitespace) ? 'not-allowed' : 'pointer'};
+        opacity: {(hunkOperationInFlight || ignoreWhitespace) ? 0.4 : 1};
       "
       onclick={onstagefile}
     >
@@ -62,10 +102,11 @@ const modes: { label: string; value: ViewMode }[] = [
   {:else if diffKind === 'staged'}
     <button
       class="action-btn unstage-btn"
-      disabled={hunkOperationInFlight}
+      disabled={hunkOperationInFlight || ignoreWhitespace}
+      title={ignoreWhitespace ? "Staging is disabled while whitespace changes are ignored" : undefined}
       style="
-        cursor: {hunkOperationInFlight ? 'not-allowed' : 'pointer'};
-        opacity: {hunkOperationInFlight ? 0.4 : 1};
+        cursor: {(hunkOperationInFlight || ignoreWhitespace) ? 'not-allowed' : 'pointer'};
+        opacity: {(hunkOperationInFlight || ignoreWhitespace) ? 0.4 : 1};
       "
       onclick={onunstagefile}
     >
@@ -158,5 +199,29 @@ const modes: { label: string; value: ViewMode }[] = [
     padding: 2px 4px;
     border-radius: 3px;
     flex-shrink: 0;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .toggle-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    padding: 2px 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .toggle-btn.active {
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+    border-color: var(--color-border);
   }
 </style>
