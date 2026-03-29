@@ -151,6 +151,14 @@ pub struct SyntaxToken {
     pub scope: String,
 }
 
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct MergedSpan {
+    pub start: u32,
+    pub end: u32,
+    pub syntax_class: String,
+    pub emphasized: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffRequestOptions {
