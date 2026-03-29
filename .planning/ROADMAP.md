@@ -172,7 +172,7 @@ Full details: [milestones/v0.11-ROADMAP.md](milestones/v0.11-ROADMAP.md)
 - [x] **Phase 60: Word-Level Diff** - Highlight changed words/characters within modified lines using the similar crate (completed 2026-03-28)
 - [x] **Phase 61: Syntax Highlighting** - Language-aware syntax coloring for all diff lines using syntect (completed 2026-03-29)
 - [x] **Phase 62: UI Refactor & Component Structure** - Extract DiffPanel monolith into composable components with view mode dispatch (completed 2026-03-29)
-- [ ] **Phase 63: Full File View & Display Options** - Full file view, whitespace toggle, context dropdown, word wrap, show invisibles, line numbers
+- [x] **Phase 63: Full File View & Display Options** - Full file view, whitespace toggle, context dropdown, word wrap, show invisibles, line numbers (completed 2026-03-29)
 - [ ] **Phase 64: Split View** - Side-by-side diff with aligned phantom rows and synchronized scrolling
 
 ## Phase Details
@@ -244,10 +244,10 @@ Plans:
   3. User can toggle display of invisible characters (spaces as dots, tabs as arrows) in the diff viewer
   4. User can toggle word wrap on and off in the diff viewer
   5. All display preferences (word wrap, show invisibles, whitespace ignore, context lines, view mode) persist across sessions
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 63-01-PLAN.md — Store preferences, CSS vars, DiffToolbar toggles, staging guard, word wrap, re-fetch wiring
-- [ ] 63-02-PLAN.md — FullFileView continuous document, invisible character utility, HunkView invisibles integration, tests
+- [x] 63-02-PLAN.md — FullFileView continuous document, invisible character utility, HunkView invisibles integration, tests
 **UI hint**: yes
 
 ### Phase 64: Split View
@@ -273,7 +273,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | 60. Word-Level Diff | 2/2 | Complete    | 2026-03-28 |
 | 61. Syntax Highlighting | 2/2 | Complete    | 2026-03-29 |
 | 62. UI Refactor & Component Structure | 2/2 | Complete    | 2026-03-29 |
-| 63. Full File View & Display Options | 1/2 | In Progress|  |
+| 63. Full File View & Display Options | 2/2 | Complete   | 2026-03-29 |
 | 64. Split View | 0/0 | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |

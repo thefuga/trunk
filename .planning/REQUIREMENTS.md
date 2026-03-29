@@ -12,7 +12,7 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 - [x] **VIEW-01**: User can toggle diff between hunk view, full file view, and split (side-by-side) view
 - [ ] **VIEW-02**: Split view shows old content on left, new on right, with phantom/spacer rows for alignment
 - [ ] **VIEW-03**: Split view panels scroll in sync (locked)
-- [ ] **VIEW-04**: Full file view shows entire file with changed lines highlighted (via context_lines=MAX)
+- [x] **VIEW-04**: Full file view shows entire file with changed lines highlighted (via context_lines=MAX)
 - [ ] **VIEW-05**: User can stage/unstage/discard hunks and lines in all view modes (disabled when whitespace ignore is active)
 
 ### Syntax Highlighting
@@ -30,7 +30,7 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 
 - [x] **WHSP-01**: User can toggle whitespace ignore in the diff toolbar (re-fetches diff with ignore_whitespace_change)
 - [x] **WHSP-02**: Hunk/line staging is disabled with tooltip when whitespace ignore is active
-- [ ] **WHSP-03**: User can toggle display of invisible characters (spaces as dots, tabs as arrows)
+- [x] **WHSP-03**: User can toggle display of invisible characters (spaces as dots, tabs as arrows)
 
 ### Context Lines
 
@@ -87,9 +87,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNT-03 | Phase 61 | Complete |
 | DISP-01 | Phase 62 | Complete |
 | VIEW-01 | Phase 62 | Complete |
-| VIEW-04 | Phase 63 | Pending |
+| VIEW-04 | Phase 63 | Complete |
 | WHSP-02 | Phase 63 | Complete |
-| WHSP-03 | Phase 63 | Pending |
+| WHSP-03 | Phase 63 | Complete |
 | DISP-02 | Phase 63 | Complete |
 | VIEW-02 | Phase 64 | Pending |
 | VIEW-03 | Phase 64 | Pending |
