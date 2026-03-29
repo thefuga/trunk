@@ -32,40 +32,35 @@ const testDiff: FileDiff = {
 					content: "import { foo } from 'bar';",
 					old_lineno: 1,
 					new_lineno: 1,
-					word_spans: [],
-					syntax_tokens: [],
+					spans: [],
 				},
 				{
 					origin: "Delete",
 					content: "const x = 1;",
 					old_lineno: 2,
 					new_lineno: null,
-					word_spans: [],
-					syntax_tokens: [],
+					spans: [],
 				},
 				{
 					origin: "Add",
 					content: "const x = 2;",
 					old_lineno: null,
 					new_lineno: 2,
-					word_spans: [],
-					syntax_tokens: [],
+					spans: [],
 				},
 				{
 					origin: "Add",
 					content: "const y = 3;",
 					old_lineno: null,
 					new_lineno: 3,
-					word_spans: [],
-					syntax_tokens: [],
+					spans: [],
 				},
 				{
 					origin: "Context",
 					content: "export { x };",
 					old_lineno: 3,
 					new_lineno: 4,
-					word_spans: [],
-					syntax_tokens: [],
+					spans: [],
 				},
 			],
 		},
@@ -79,8 +74,8 @@ const binaryDiff: FileDiff = {
 	hunks: [],
 };
 
-const testDiffWithWordSpans: FileDiff = {
-	path: "src/main.ts",
+const testDiffWithMergedSpans: FileDiff = {
+	path: "src/main.rs",
 	status: "Modified",
 	is_binary: false,
 	hunks: [
@@ -96,22 +91,20 @@ const testDiffWithWordSpans: FileDiff = {
 					content: "hello world",
 					old_lineno: 1,
 					new_lineno: null,
-					word_spans: [
-						{ start: 0, end: 6, emphasized: false },
-						{ start: 6, end: 11, emphasized: true },
+					spans: [
+						{ start: 0, end: 6, syntax_class: "syn-keyword", emphasized: false },
+						{ start: 6, end: 11, syntax_class: "syn-string", emphasized: true },
 					],
-					syntax_tokens: [],
 				},
 				{
 					origin: "Add",
 					content: "hello mars",
 					old_lineno: null,
 					new_lineno: 1,
-					word_spans: [
-						{ start: 0, end: 6, emphasized: false },
-						{ start: 6, end: 10, emphasized: true },
+					spans: [
+						{ start: 0, end: 6, syntax_class: "syn-keyword", emphasized: false },
+						{ start: 6, end: 10, syntax_class: "syn-string", emphasized: true },
 					],
-					syntax_tokens: [],
 				},
 			],
 		},
@@ -253,7 +246,7 @@ describe("DiffPanel", () => {
 	it("renders word-span highlights for emphasized segments", () => {
 		const { container } = render(DiffPanel, {
 			props: {
-				fileDiffs: [testDiffWithWordSpans],
+				fileDiffs: [testDiffWithMergedSpans],
 				commitDetail: null,
 				onclose: vi.fn(),
 			},
@@ -271,7 +264,7 @@ describe("DiffPanel", () => {
 	it("renders non-emphasized spans without highlight class", () => {
 		const { container } = render(DiffPanel, {
 			props: {
-				fileDiffs: [testDiffWithWordSpans],
+				fileDiffs: [testDiffWithMergedSpans],
 				commitDetail: null,
 				onclose: vi.fn(),
 			},
@@ -291,7 +284,7 @@ describe("DiffPanel", () => {
 		expect(container.textContent).toContain("hello ");
 	});
 
-	it("falls back to plain rendering when word_spans is empty", () => {
+	it("falls back to plain rendering when spans is empty", () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -304,5 +297,50 @@ describe("DiffPanel", () => {
 		expect(container.querySelectorAll(".word-delete").length).toBe(0);
 		// Line content still renders with origin symbols
 		expect(container.textContent).toContain("+const x = 2;");
+	});
+
+	it("renders syntax class on span elements", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiffWithMergedSpans],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		const keywordSpans = container.querySelectorAll(".syn-keyword");
+		expect(keywordSpans.length).toBeGreaterThanOrEqual(1);
+		const stringSpans = container.querySelectorAll(".syn-string");
+		expect(stringSpans.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("applies opacity reduction class on add/delete lines", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiffWithMergedSpans],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		// Verify diff-line-add and diff-line-delete classes exist on line containers
+		const addLines = container.querySelectorAll(".diff-line-add");
+		const deleteLines = container.querySelectorAll(".diff-line-delete");
+		expect(addLines.length).toBeGreaterThanOrEqual(1);
+		expect(deleteLines.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("renders syntax and word-diff classes simultaneously on emphasized spans", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiffWithMergedSpans],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		// Emphasized spans on Delete lines should have both syn-string and word-delete
+		const combinedSpans = container.querySelectorAll(".syn-string.word-delete");
+		expect(combinedSpans.length).toBeGreaterThanOrEqual(1);
+		// Emphasized spans on Add lines should have both syn-string and word-add
+		const combinedAddSpans = container.querySelectorAll(".syn-string.word-add");
+		expect(combinedAddSpans.length).toBeGreaterThanOrEqual(1);
 	});
 });

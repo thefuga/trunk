@@ -594,6 +594,7 @@ function originSymbol(origin: string): string {
             {@const hunkKey = `${fd.path}-${hunkIdx}`}
             {@const isSelected = selectedHunkKey === hunkKey && selectedLineIndices.has(lineIdx)}
             <div
+              class="diff-line {line.origin === 'Add' ? 'diff-line-add' : line.origin === 'Delete' ? 'diff-line-delete' : 'diff-line-context'}"
               style="
                 font-family: monospace;
                 font-size: 12px;
@@ -609,10 +610,10 @@ function originSymbol(origin: string): string {
               "
               onmousedown={(e) => { if (isSelectable && e.shiftKey) e.preventDefault(); }}
               onclick={(e) => isSelectable && handleLineClick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, e)}
-            >{#if line.word_spans.length > 0}<span>{originSymbol(line.origin)}</span>{#each line.word_spans as span}<span
-                class={span.emphasized
-                  ? (line.origin === 'Add' ? 'word-add' : 'word-delete')
-                  : ''}
+            >{#if line.spans.length > 0}<span>{originSymbol(line.origin)}</span>{#each line.spans as span}<span
+                class="{span.syntax_class}{span.emphasized
+                  ? (line.origin === 'Add' ? ' word-add' : ' word-delete')
+                  : ''}"
               >{line.content.slice(span.start, span.end)}</span>{/each}{:else}{originSymbol(line.origin)}{line.content}{/if}</div>
           {/each}
         {/each}
@@ -639,5 +640,28 @@ function originSymbol(origin: string): string {
   .word-delete {
     background-color: var(--color-diff-word-delete-bg);
     border-radius: 2px;
+  }
+
+  /* Syntax highlighting classes -- text color from CSS custom properties (per D-03) */
+  .syn-keyword { color: var(--color-syn-keyword); }
+  .syn-string { color: var(--color-syn-string); }
+  .syn-comment { color: var(--color-syn-comment); }
+  .syn-number { color: var(--color-syn-number); }
+  .syn-type { color: var(--color-syn-type); }
+  .syn-function { color: var(--color-syn-function); }
+  .syn-variable { color: var(--color-syn-variable); }
+  .syn-constant { color: var(--color-syn-constant); }
+  .syn-operator { color: var(--color-syn-operator); }
+  .syn-punctuation { color: var(--color-syn-punctuation); }
+  .syn-attribute { color: var(--color-syn-attribute); }
+  .syn-tag { color: var(--color-syn-tag); }
+  .syn-property { color: var(--color-syn-property); }
+  .syn-regex { color: var(--color-syn-regex); }
+  .syn-escape { color: var(--color-syn-escape); }
+
+  /* Desaturate syntax colors on add/delete backgrounds (per D-04, SYNT-03) */
+  .diff-line-add [class*="syn-"],
+  .diff-line-delete [class*="syn-"] {
+    opacity: 0.7;
   }
 </style>
