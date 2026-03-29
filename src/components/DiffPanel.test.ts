@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { FileDiff } from "../lib/types.js";
 import DiffPanel from "./DiffPanel.svelte";
@@ -14,6 +15,22 @@ vi.mock("../lib/invoke.js", () => ({
 vi.mock("../lib/toast.svelte.js", () => ({
 	showToast: vi.fn(),
 }));
+
+vi.mock("../lib/store.js", () => {
+	let currentViewMode = "hunk";
+	return {
+		getDiffViewMode: vi.fn(() => Promise.resolve(currentViewMode)),
+		setDiffViewMode: vi.fn((mode: string) => {
+			currentViewMode = mode;
+			return Promise.resolve(undefined);
+		}),
+		addRecentRepo: vi.fn().mockResolvedValue(undefined),
+		getRecentRepos: vi.fn().mockResolvedValue([]),
+		removeRecentRepo: vi.fn().mockResolvedValue(undefined),
+		getPersistedTabs: vi.fn().mockResolvedValue([]),
+		setPersistedTabs: vi.fn().mockResolvedValue(undefined),
+	};
+});
 
 const testDiff: FileDiff = {
 	path: "src/main.ts",
@@ -342,5 +359,126 @@ describe("DiffPanel", () => {
 		// Emphasized spans on Add lines should have both syn-string and word-add
 		const combinedAddSpans = container.querySelectorAll(".syn-string.word-add");
 		expect(combinedAddSpans.length).toBeGreaterThanOrEqual(1);
+	});
+
+	// ---- VIEW-01: View mode toggle tests ----
+
+	it("renders view mode segmented control with three options", () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		expect(screen.getByText("Hunk")).toBeInTheDocument();
+		expect(screen.getByText("Full")).toBeInTheDocument();
+		expect(screen.getByText("Split")).toBeInTheDocument();
+	});
+
+	it("shows hunk view by default", () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		expect(screen.getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
+		expect(screen.queryByText(/Full file view/)).toBeNull();
+	});
+
+	it("shows full file stub when Full mode selected", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		// Let the initial $effect (getDiffViewMode) settle
+		await tick();
+		await fireEvent.click(screen.getByText("Full"));
+		// Flush Svelte reactivity
+		await tick();
+		expect(screen.getByText(/Full file view/)).toBeInTheDocument();
+		expect(screen.queryByText("@@ -1,3 +1,4 @@")).toBeNull();
+	});
+
+	it("shows split view stub when Split mode selected", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		// Let the initial $effect (getDiffViewMode) settle
+		await tick();
+		await fireEvent.click(screen.getByText("Split"));
+		// Flush Svelte reactivity
+		await tick();
+		expect(screen.getByText(/Split view/)).toBeInTheDocument();
+	});
+
+	// ---- DISP-01: Line number gutter tests ----
+
+	it("renders line numbers in gutter for context lines", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		// Context lines have both old_lineno and new_lineno set
+		// The first context line has old_lineno: 1, new_lineno: 1
+		// Each diff line div has two gutter spans as the first two children
+		const contextLines = container.querySelectorAll(".diff-line-context");
+		expect(contextLines.length).toBeGreaterThanOrEqual(1);
+		// First context line: old=1, new=1
+		const firstContext = contextLines[0];
+		const gutterSpans = firstContext.querySelectorAll("span");
+		// At least 2 gutter spans (old + new) per line
+		expect(gutterSpans.length).toBeGreaterThanOrEqual(2);
+		// Both gutter spans should contain "1"
+		expect(gutterSpans[0].textContent).toBe("1");
+		expect(gutterSpans[1].textContent).toBe("1");
+	});
+
+	it("shows only new line number for Add lines", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		const addLines = container.querySelectorAll(".diff-line-add");
+		expect(addLines.length).toBeGreaterThanOrEqual(1);
+		for (const addLine of addLines) {
+			const spans = addLine.querySelectorAll("span");
+			// First span is old gutter (should be empty), second is new gutter (should have number)
+			expect(spans[0].textContent).toBe("");
+			expect(spans[1].textContent?.trim()).not.toBe("");
+		}
+	});
+
+	it("shows only old line number for Delete lines", () => {
+		const { container } = render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+			},
+		});
+		const deleteLines = container.querySelectorAll(".diff-line-delete");
+		expect(deleteLines.length).toBeGreaterThanOrEqual(1);
+		for (const deleteLine of deleteLines) {
+			const spans = deleteLine.querySelectorAll("span");
+			// First span is old gutter (should have number), second is new gutter (should be empty)
+			expect(spans[0].textContent?.trim()).not.toBe("");
+			expect(spans[1].textContent).toBe("");
+		}
 	});
 });
