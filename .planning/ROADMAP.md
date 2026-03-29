@@ -214,7 +214,10 @@ Plans:
   2. Language is automatically detected from the file extension with no user action required
   3. Syntax colors are visually desaturated on add/delete line backgrounds so that the diff context (add vs delete) remains the dominant visual signal
   4. Syntax highlighting uses CSS classes mapped to custom properties, not inline styles
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 61-01-PLAN.md — Rust backend: syntect integration, syntax module, MergedSpan type, merge algorithm, diff pipeline wiring, tests
+- [ ] 61-02-PLAN.md — Frontend: TypeScript types, CSS custom properties, DiffPanel merged span rendering, opacity reduction, tests
 
 ### Phase 62: UI Refactor & Component Structure
 **Goal**: The DiffPanel monolith is decomposed into focused components (toolbar, viewer dispatcher, line renderer) that support multiple view modes and display options
@@ -262,7 +265,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 |-------|----------------|--------|-----------|
 | 59. Backend Data Model & Diff Options | 2/2 | Complete    | 2026-03-28 |
 | 60. Word-Level Diff | 2/2 | Complete    | 2026-03-28 |
-| 61. Syntax Highlighting | 0/0 | Not started | - |
+| 61. Syntax Highlighting | 0/2 | Planned | - |
 | 62. UI Refactor & Component Structure | 0/0 | Not started | - |
 | 63. Full File View & Display Options | 0/0 | Not started | - |
 | 64. Split View | 0/0 | Not started | - |
@@ -280,8 +283,8 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | v0.9 Multi-tab & Tree View | 44-49 | 13/13 | Complete | 2026-03-25 |
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
 | v0.11 Infrastructure | 53-58 | 16/16 | Complete | 2026-03-27 |
-| v0.12 Better Diffs | 59-64 | 2/4 | In progress | - |
+| v0.12 Better Diffs | 59-64 | 4/6 | In progress | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-28 — Phase 60 planned (2 plans)*
+*Last updated: 2026-03-28 — Phase 61 planned (2 plans)*
