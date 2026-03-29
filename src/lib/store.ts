@@ -1,5 +1,6 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { PersistedTab } from "./tab-types.js";
+import type { ViewMode } from "./types.js";
 
 export type { PersistedTab } from "./tab-types.js";
 
@@ -282,5 +283,18 @@ export async function getDiffShowFullFile(): Promise<boolean> {
 
 export async function setDiffShowFullFile(show: boolean): Promise<void> {
 	await store.set(DIFF_SHOW_FULL_FILE_KEY, show);
+	await store.save();
+}
+
+const DIFF_VIEW_MODE_KEY = "diff_view_mode";
+
+export async function getDiffViewMode(): Promise<ViewMode> {
+	const stored = await store.get<string>(DIFF_VIEW_MODE_KEY);
+	if (stored === "hunk" || stored === "full" || stored === "split") return stored;
+	return "hunk";
+}
+
+export async function setDiffViewMode(mode: ViewMode): Promise<void> {
+	await store.set(DIFF_VIEW_MODE_KEY, mode);
 	await store.save();
 }
