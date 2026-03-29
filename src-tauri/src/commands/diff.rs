@@ -1,6 +1,7 @@
 // Diff commands — Phase 6 implementation
 
 use crate::error::TrunkError;
+use crate::git::syntax;
 use crate::git::types::{
     CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus, FileDiff,
     WordSpan,
@@ -87,9 +88,11 @@ fn compute_word_spans_for_pair(
 }
 
 /// Compute word spans for all paired Delete/Add lines within a hunk.
+/// Returns a Vec parallel to `lines`, each entry being the word_spans for that line index.
 /// Pairs consecutive Delete runs with following Add runs positionally (D-03, D-04).
 /// Skips lines over 500 chars (WORD-02) and dissimilar pairs with ratio < 0.4 (WORD-02).
-fn compute_word_spans_for_hunk(lines: &mut [DiffLine]) {
+fn compute_word_spans_for_hunk(lines: &[DiffLine]) -> Vec<Vec<WordSpan>> {
+    let mut word_spans: Vec<Vec<WordSpan>> = vec![Vec::new(); lines.len()];
     let mut i = 0;
     while i < lines.len() {
         // Find start of a Delete run
@@ -132,11 +135,12 @@ fn compute_word_spans_for_hunk(lines: &mut [DiffLine]) {
                 continue;
             }
 
-            let (del_spans, add_spans) = compute_word_spans_for_pair(del_content, add_content);
-            lines[del_idx].word_spans = del_spans;
-            lines[add_idx].word_spans = add_spans;
+            let (del_ws, add_ws) = compute_word_spans_for_pair(del_content, add_content);
+            word_spans[del_idx] = del_ws;
+            word_spans[add_idx] = add_ws;
         }
     }
+    word_spans
 }
 
 fn walk_diff_into_file_diffs(diff: git2::Diff<'_>) -> Result<Vec<FileDiff>, TrunkError> {
@@ -199,8 +203,7 @@ fn walk_diff_into_file_diffs(diff: git2::Diff<'_>) -> Result<Vec<FileDiff>, Trun
                         content,
                         old_lineno: line.old_lineno(),
                         new_lineno: line.new_lineno(),
-                        word_spans: vec![],
-                        syntax_tokens: vec![],
+                        spans: vec![],
                     });
                 }
             }
@@ -212,9 +215,16 @@ fn walk_diff_into_file_diffs(diff: git2::Diff<'_>) -> Result<Vec<FileDiff>, Trun
     let mut file_diffs = file_diffs.into_inner();
 
     // Pass 2: word-level diff enrichment
+    // Pass 3: syntax highlighting + merge into unified spans
     for fd in &mut file_diffs {
+        let ext = syntax::extension_from_path(&fd.path);
         for hunk in &mut fd.hunks {
-            compute_word_spans_for_hunk(&mut hunk.lines);
+            let word_spans_per_line = compute_word_spans_for_hunk(&hunk.lines);
+            for (i, line) in hunk.lines.iter_mut().enumerate() {
+                let syntax_tokens = syntax::highlight_line_tokens(&line.content, ext);
+                let ws = &word_spans_per_line[i];
+                line.spans = syntax::merge_spans(&syntax_tokens, ws, line.content.len() as u32);
+            }
         }
     }
 

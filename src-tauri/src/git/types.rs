@@ -190,8 +190,7 @@ pub struct DiffLine {
     pub content: String,
     pub old_lineno: Option<u32>,
     pub new_lineno: Option<u32>,
-    pub word_spans: Vec<WordSpan>,
-    pub syntax_tokens: Vec<SyntaxToken>,
+    pub spans: Vec<MergedSpan>,
 }
 
 #[derive(Debug, Serialize, Clone)]

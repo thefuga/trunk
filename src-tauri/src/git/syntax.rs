@@ -5,11 +5,9 @@ use syntect::parsing::SyntaxSet;
 
 use super::types::{MergedSpan, SyntaxToken, WordSpan};
 
-static SYNTAX_SET: LazyLock<SyntaxSet> =
-    LazyLock::new(SyntaxSet::load_defaults_newlines);
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 
-static THEME_SET: LazyLock<ThemeSet> =
-    LazyLock::new(ThemeSet::load_defaults);
+static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
 /// Map a syntect foreground Color (from base16-ocean.dark theme) to a CSS class name.
 /// Colors discovered by running highlight_line() on sample code and observing
@@ -156,7 +154,10 @@ mod tests {
         assert!(!tokens.is_empty(), "Rust code should produce syntax tokens");
         // "fn" is a keyword
         let has_keyword = tokens.iter().any(|t| t.scope == "syn-keyword");
-        assert!(has_keyword, "Rust 'fn' should be highlighted as syn-keyword");
+        assert!(
+            has_keyword,
+            "Rust 'fn' should be highlighted as syn-keyword"
+        );
     }
 
     #[test]

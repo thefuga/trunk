@@ -397,30 +397,30 @@ fn word_span_basic_pair() {
         .find(|l| matches!(l.origin, trunk_lib::git::types::DiffOrigin::Add))
         .expect("expected an Add line");
 
-    // Both should have non-empty word_spans
+    // Both should have non-empty spans (merged spans always cover content)
     assert!(
-        !del_line.word_spans.is_empty(),
-        "Delete line should have non-empty word_spans"
+        !del_line.spans.is_empty(),
+        "Delete line should have non-empty spans"
     );
     assert!(
-        !add_line.word_spans.is_empty(),
-        "Add line should have non-empty word_spans"
+        !add_line.spans.is_empty(),
+        "Add line should have non-empty spans"
     );
 
     // At least one span on the Delete line should be emphasized (covering "world")
     assert!(
-        del_line.word_spans.iter().any(|s| s.emphasized),
+        del_line.spans.iter().any(|s| s.emphasized),
         "Delete line should have at least one emphasized span"
     );
     // At least one span on the Add line should be emphasized (covering "mars")
     assert!(
-        add_line.word_spans.iter().any(|s| s.emphasized),
+        add_line.spans.iter().any(|s| s.emphasized),
         "Add line should have at least one emphasized span"
     );
 
     // Verify the emphasized span on Delete covers "world" in content "hello world\n"
     let del_emph = del_line
-        .word_spans
+        .spans
         .iter()
         .find(|s| s.emphasized)
         .expect("no emphasized span on Delete");
@@ -433,7 +433,7 @@ fn word_span_basic_pair() {
 
     // Verify the emphasized span on Add covers "mars" in content "hello mars\n"
     let add_emph = add_line
-        .word_spans
+        .spans
         .iter()
         .find(|s| s.emphasized)
         .expect("no emphasized span on Add");
@@ -446,7 +446,7 @@ fn word_span_basic_pair() {
 }
 
 #[test]
-fn word_span_unpaired_add_has_empty_spans() {
+fn word_span_unpaired_add_has_no_emphasis() {
     let ctx = TestContext::builder()
         .with_file("lines.txt", "line1\n")
         .with_commit("Initial commit")
@@ -459,7 +459,7 @@ fn word_span_unpaired_add_has_empty_spans() {
     let hunk = &file_diffs[0].hunks[0];
 
     // This should be pure Add lines (no Deletes since "line1" is unchanged).
-    // All Add lines should have empty word_spans (no Delete to pair with).
+    // All Add lines should have spans but none emphasized (no Delete to pair with).
     let add_lines: Vec<_> = hunk
         .lines
         .iter()
@@ -469,8 +469,8 @@ fn word_span_unpaired_add_has_empty_spans() {
 
     for add_line in &add_lines {
         assert!(
-            add_line.word_spans.is_empty(),
-            "Unpaired Add line '{}' should have empty word_spans",
+            !add_line.spans.iter().any(|s| s.emphasized),
+            "Unpaired Add line '{}' should have no emphasized spans",
             add_line.content.trim()
         );
     }
@@ -492,15 +492,15 @@ fn word_span_long_line_skipped() {
     assert!(!file_diffs.is_empty(), "expected file diffs");
     let hunk = &file_diffs[0].hunks[0];
 
-    // Both Delete and Add lines should have empty word_spans (line > 500 chars)
+    // Both Delete and Add lines should have spans but none emphasized (line > 500 chars)
     for line in &hunk.lines {
         if matches!(
             line.origin,
             trunk_lib::git::types::DiffOrigin::Delete | trunk_lib::git::types::DiffOrigin::Add
         ) {
             assert!(
-                line.word_spans.is_empty(),
-                "Line over 500 chars should have empty word_spans, origin={:?}, len={}",
+                !line.spans.iter().any(|s| s.emphasized),
+                "Line over 500 chars should have no emphasized spans, origin={:?}, len={}",
                 line.origin,
                 line.content.len()
             );
@@ -521,15 +521,15 @@ fn word_span_dissimilar_skipped() {
     assert!(!file_diffs.is_empty(), "expected file diffs");
     let hunk = &file_diffs[0].hunks[0];
 
-    // Completely different content -- ratio < 0.4, so word_spans should be empty
+    // Completely different content -- ratio < 0.4, so no emphasis
     for line in &hunk.lines {
         if matches!(
             line.origin,
             trunk_lib::git::types::DiffOrigin::Delete | trunk_lib::git::types::DiffOrigin::Add
         ) {
             assert!(
-                line.word_spans.is_empty(),
-                "Dissimilar lines should have empty word_spans, origin={:?}",
+                !line.spans.iter().any(|s| s.emphasized),
+                "Dissimilar lines should have no emphasized spans, origin={:?}",
                 line.origin
             );
         }
@@ -537,7 +537,7 @@ fn word_span_dissimilar_skipped() {
 }
 
 #[test]
-fn word_span_context_lines_have_empty_spans() {
+fn word_span_context_lines_have_no_emphasis() {
     let content: String = (1..=10).map(|i| format!("line {}\n", i)).collect();
     let ctx = TestContext::builder()
         .with_file("ctx.txt", &content)
@@ -568,8 +568,8 @@ fn word_span_context_lines_have_empty_spans() {
 
     for ctx_line in &context_lines {
         assert!(
-            ctx_line.word_spans.is_empty(),
-            "Context line '{}' should have empty word_spans",
+            !ctx_line.spans.iter().any(|s| s.emphasized),
+            "Context line '{}' should have no emphasized spans",
             ctx_line.content.trim()
         );
     }
@@ -588,24 +588,17 @@ fn word_span_covers_entire_content() {
     assert!(!file_diffs.is_empty(), "expected file diffs");
     let hunk = &file_diffs[0].hunks[0];
 
-    // Find lines with non-empty word_spans
-    let lines_with_spans: Vec<_> = hunk
-        .lines
-        .iter()
-        .filter(|l| !l.word_spans.is_empty())
-        .collect();
-    assert!(
-        !lines_with_spans.is_empty(),
-        "expected at least one line with word_spans"
-    );
-
-    for line in &lines_with_spans {
-        let last_span = line
-            .word_spans
-            .last()
-            .expect("word_spans should not be empty");
-        // The last span's end should equal the content byte length
-        // (spans cover the entire content without the trailing newline from git2)
+    // All non-empty lines should have spans covering the entire content
+    for line in &hunk.lines {
+        if line.content.is_empty() {
+            continue;
+        }
+        assert!(
+            !line.spans.is_empty(),
+            "Non-empty content should have spans"
+        );
+        assert_eq!(line.spans[0].start, 0, "First span should start at 0");
+        let last_span = line.spans.last().unwrap();
         assert_eq!(
             last_span.end as usize,
             line.content.len(),
@@ -613,6 +606,152 @@ fn word_span_covers_entire_content() {
             last_span.end,
             line.content.len(),
             line.content.trim()
+        );
+        // No gaps between spans
+        for w in line.spans.windows(2) {
+            assert_eq!(
+                w[0].end, w[1].start,
+                "Spans should be contiguous: span end {} != next start {}",
+                w[0].end, w[1].start
+            );
+        }
+    }
+}
+
+// -- Syntax highlighting tests --
+
+#[test]
+fn syntax_tokens_populated_for_rust_file() {
+    let rust_content = "fn main() {\n    let x = 42;\n}\n";
+    let ctx = TestContext::builder()
+        .with_file("main.rs", rust_content)
+        .with_commit("Initial commit")
+        .build();
+
+    // Modify to create a diff
+    std::fs::write(
+        ctx.repo_path().join("main.rs"),
+        "fn main() {\n    let x = 99;\n}\n",
+    )
+    .unwrap();
+
+    let file_diffs = ctx.diff_unstaged("main.rs").expect("diff failed");
+    assert!(!file_diffs.is_empty());
+    let hunk = &file_diffs[0].hunks[0];
+
+    // At least some spans should have non-empty syntax_class for .rs files
+    let has_syntax = hunk
+        .lines
+        .iter()
+        .any(|line| line.spans.iter().any(|s| !s.syntax_class.is_empty()));
+    assert!(has_syntax, "Rust file should have syntax-highlighted spans");
+}
+
+#[test]
+fn syntax_extension_detection_unknown_ext_no_syntax() {
+    let ctx = TestContext::builder()
+        .with_file("data.xyz123", "some content\n")
+        .with_commit("Initial commit")
+        .build();
+
+    std::fs::write(ctx.repo_path().join("data.xyz123"), "different content\n").unwrap();
+
+    let file_diffs = ctx.diff_unstaged("data.xyz123").expect("diff failed");
+    assert!(!file_diffs.is_empty());
+    let hunk = &file_diffs[0].hunks[0];
+
+    // Unknown extension: spans should exist (covering content) but all with empty syntax_class
+    for line in &hunk.lines {
+        for span in &line.spans {
+            assert!(
+                span.syntax_class.is_empty(),
+                "Unknown extension should have empty syntax_class, got '{}'",
+                span.syntax_class
+            );
+        }
+    }
+}
+
+#[test]
+fn merged_spans_cover_entire_content() {
+    let ctx = TestContext::builder()
+        .with_file("test.rs", "let x = 1;\n")
+        .with_commit("Initial commit")
+        .build();
+
+    std::fs::write(ctx.repo_path().join("test.rs"), "let y = 2;\n").unwrap();
+
+    let file_diffs = ctx.diff_unstaged("test.rs").expect("diff failed");
+    assert!(!file_diffs.is_empty());
+
+    for hunk in &file_diffs[0].hunks {
+        for line in &hunk.lines {
+            if line.content.is_empty() {
+                continue;
+            }
+            assert!(
+                !line.spans.is_empty(),
+                "Non-empty content should have spans"
+            );
+            // First span starts at 0
+            assert_eq!(line.spans[0].start, 0, "First span should start at 0");
+            // Last span ends at content.len()
+            let last = line.spans.last().unwrap();
+            assert_eq!(
+                last.end as usize,
+                line.content.len(),
+                "Last span end ({}) should equal content len ({})",
+                last.end,
+                line.content.len()
+            );
+            // No gaps between spans
+            for w in line.spans.windows(2) {
+                assert_eq!(
+                    w[0].end, w[1].start,
+                    "Spans should be contiguous: span end {} != next start {}",
+                    w[0].end, w[1].start
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn syntax_and_word_diff_coexist() {
+    let ctx = TestContext::builder()
+        .with_file("combo.rs", "let x = 1;\n")
+        .with_commit("Initial commit")
+        .build();
+
+    std::fs::write(ctx.repo_path().join("combo.rs"), "let x = 99;\n").unwrap();
+
+    let file_diffs = ctx.diff_unstaged("combo.rs").expect("diff failed");
+    assert!(!file_diffs.is_empty());
+    let hunk = &file_diffs[0].hunks[0];
+
+    // Find Add or Delete lines that should have both syntax highlighting and word emphasis
+    let modified_lines: Vec<_> = hunk
+        .lines
+        .iter()
+        .filter(|l| {
+            matches!(
+                l.origin,
+                trunk_lib::git::types::DiffOrigin::Add | trunk_lib::git::types::DiffOrigin::Delete
+            )
+        })
+        .collect();
+    assert!(!modified_lines.is_empty());
+
+    for line in &modified_lines {
+        // Should have some spans with syntax_class (syntax highlighting)
+        let has_syntax = line.spans.iter().any(|s| !s.syntax_class.is_empty());
+        assert!(has_syntax, "Modified .rs line should have syntax spans");
+
+        // Should have some spans with emphasized=true (word diff)
+        let has_emphasis = line.spans.iter().any(|s| s.emphasized);
+        assert!(
+            has_emphasis,
+            "Modified line should have emphasized spans from word diff"
         );
     }
 }

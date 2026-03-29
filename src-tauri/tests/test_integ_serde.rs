@@ -837,7 +837,7 @@ fn graph_response_serializes_correctly() {
 // ── DiffLine enrichment fields ──────────────────────────────────────────────
 
 #[test]
-fn diff_line_serializes_word_spans_and_syntax_tokens_as_empty_arrays() {
+fn diff_line_serializes_spans_as_array() {
     let ctx = TestContext::builder()
         .with_file("README.md", "line1\nline2\n")
         .with_commit("Initial commit")
@@ -849,24 +849,29 @@ fn diff_line_serializes_word_spans_and_syntax_tokens_as_empty_arrays() {
     let json = serde_json::to_value(&result).expect("serialization failed");
 
     let line = &json[0]["hunks"][0]["lines"][0];
+    assert!(line["spans"].is_array(), "spans should be an array");
+    // word_spans and syntax_tokens should NOT exist on the serialized DiffLine
     assert!(
-        line["word_spans"].is_array(),
-        "word_spans should be an array"
+        line.get("word_spans").is_none(),
+        "word_spans should not exist on DiffLine (replaced by spans)"
     );
     assert!(
-        line["syntax_tokens"].is_array(),
-        "syntax_tokens should be an array"
+        line.get("syntax_tokens").is_none(),
+        "syntax_tokens should not exist on DiffLine (replaced by spans)"
     );
-    assert_eq!(
-        line["word_spans"].as_array().unwrap().len(),
-        0,
-        "word_spans should be empty"
-    );
-    assert_eq!(
-        line["syntax_tokens"].as_array().unwrap().len(),
-        0,
-        "syntax_tokens should be empty"
-    );
+    // Each span should have start, end, syntax_class, emphasized
+    if let Some(span) = line["spans"].as_array().and_then(|a| a.first()) {
+        assert!(span["start"].is_number(), "span.start should be a number");
+        assert!(span["end"].is_number(), "span.end should be a number");
+        assert!(
+            span["syntax_class"].is_string(),
+            "span.syntax_class should be a string"
+        );
+        assert!(
+            span["emphasized"].is_boolean(),
+            "span.emphasized should be a boolean"
+        );
+    }
 }
 
 // NOTE: MergeSides and Vec<RebaseTodoItem> are not tested here because they
