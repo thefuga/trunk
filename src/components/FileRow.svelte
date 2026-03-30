@@ -38,7 +38,10 @@ let {
 
 let hovered = $state(false);
 
-type StatusIconConfig = { component: Component<any>; color: string };
+type StatusIconConfig = {
+	component: Component<Record<string, unknown>>;
+	color: string;
+};
 
 const STATUS_ICON_COMPONENTS: Record<FileStatusType, StatusIconConfig> = {
 	New: { component: FilePlus, color: "#22c55e" },

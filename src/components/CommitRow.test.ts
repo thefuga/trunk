@@ -111,7 +111,9 @@ describe("CommitRow", () => {
 				onselect,
 			},
 		});
-		await fireEvent.click(container.firstElementChild!);
+		const row = container.firstElementChild;
+		expect(row).toBeTruthy();
+		await fireEvent.click(row as Element);
 		expect(onselect).toHaveBeenCalledWith("abc1234567");
 	});
 

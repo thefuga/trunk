@@ -10,8 +10,10 @@ import "../__tests__/helpers/tauri-mock";
 // TabBar imports `Sortable` as default and calls `Sortable.create()`
 vi.mock("sortablejs", () => {
 	const sortableInstance = { destroy: vi.fn() };
-	const SortableMock = vi.fn().mockImplementation(() => sortableInstance);
-	(SortableMock as any).create = vi.fn().mockReturnValue(sortableInstance);
+	const SortableMock = Object.assign(
+		vi.fn().mockImplementation(() => sortableInstance),
+		{ create: vi.fn().mockReturnValue(sortableInstance) },
+	);
 	return { default: SortableMock };
 });
 
@@ -64,7 +66,8 @@ describe("TabBar", () => {
 		});
 		// Click the inactive tab (role="tab")
 		const otherTab = screen.getByText("other").closest('[role="tab"]');
-		await fireEvent.click(otherTab!);
+		expect(otherTab).toBeTruthy();
+		await fireEvent.click(otherTab as Element);
 		expect(onactivate).toHaveBeenCalledWith("2");
 	});
 

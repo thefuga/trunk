@@ -1,4 +1,5 @@
 import { render } from "@testing-library/svelte";
+import type { Snippet } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import VirtualList from "./VirtualList.svelte";
 
@@ -23,7 +24,7 @@ describe("VirtualList", () => {
 		const { container } = render(VirtualList, {
 			props: {
 				items: [],
-				renderItem: (() => {}) as any,
+				renderItem: (() => {}) as unknown as Snippet,
 			},
 		});
 		expect(
@@ -35,7 +36,7 @@ describe("VirtualList", () => {
 		const { container } = render(VirtualList, {
 			props: {
 				items: ["a", "b", "c"],
-				renderItem: (() => {}) as any,
+				renderItem: (() => {}) as unknown as Snippet,
 			},
 		});
 		expect(
@@ -54,7 +55,7 @@ describe("VirtualList", () => {
 		const { container } = render(VirtualList, {
 			props: {
 				items: Array.from({ length: 10 }, (_, i) => `item-${i}`),
-				renderItem: (() => {}) as any,
+				renderItem: (() => {}) as unknown as Snippet,
 				defaultEstimatedItemHeight: 40,
 			},
 		});

@@ -440,14 +440,14 @@ async function handleOpenRebaseEditor(baseOid: string, inclusive = false) {
 		// Resolve base name: use short ref if possible
 		try {
 			const refs = await safeInvoke<RefsResponse>("list_refs", {
-				path: repoPath!,
+				path: repoPath,
 			});
 			const allBranches = [...refs.local, ...refs.remote];
 			let foundName: string | null = null;
 			for (const b of allBranches) {
 				try {
 					const branchOid = await safeInvoke<string>("resolve_ref", {
-						path: repoPath!,
+						path: repoPath,
 						refName: b.name,
 					});
 					if (branchOid === baseOid) {

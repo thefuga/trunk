@@ -25,7 +25,9 @@ export function measureTextWidth(
 	} else {
 		if (!_ctx) {
 			const canvas = new OffscreenCanvas(0, 0);
-			_ctx = canvas.getContext("2d")!;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) throw new Error("Failed to get OffscreenCanvas 2d context");
+			_ctx = ctx;
 		}
 		_ctx.font = font;
 		width = _ctx.measureText(text).width;

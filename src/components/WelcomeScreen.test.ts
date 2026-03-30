@@ -85,7 +85,7 @@ describe("WelcomeScreen", () => {
 		// Click the repo entry (the parent div with role="button")
 		const repoButton = screen.getByText("trunk").closest('[role="button"]');
 		expect(repoButton).toBeTruthy();
-		await fireEvent.click(repoButton!);
+		await fireEvent.click(repoButton as Element);
 
 		// openPath is async (calls safeInvoke then onopen)
 		await vi.waitFor(() => {

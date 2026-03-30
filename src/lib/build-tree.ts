@@ -82,7 +82,8 @@ function convert(dir: IntermediateDir): TreeNode[] {
 
 	// Convert files
 	for (const file of dir.files) {
-		const filename = file.path.split("/").pop()!;
+		const parts = file.path.split("/");
+		const filename = parts[parts.length - 1];
 		result.push({
 			type: "file",
 			name: filename,
