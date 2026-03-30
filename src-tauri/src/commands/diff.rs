@@ -36,7 +36,7 @@ fn apply_request_options(opts: &mut git2::DiffOptions, req: &DiffRequestOptions)
         req.context_lines
     };
     opts.context_lines(context);
-    opts.ignore_whitespace_change(req.ignore_whitespace);
+    opts.ignore_whitespace(req.ignore_whitespace);
 }
 
 /// Compute word spans for a paired delete/add line.

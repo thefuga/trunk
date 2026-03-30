@@ -339,6 +339,68 @@ fn diff_unstaged_ignores_whitespace_when_enabled() {
 }
 
 #[test]
+fn diff_unstaged_ignores_indentation_whitespace() {
+    // Create a file with unindented content
+    let ctx = TestContext::builder()
+        .with_file("indent.rs", "fn main() {\nreturn 0;\n}\n")
+        .with_commit("Initial commit")
+        .build();
+
+    // Modify to indent the body (add 4-space indentation)
+    std::fs::write(
+        ctx.repo_path().join("indent.rs"),
+        "fn main() {\n    return 0;\n}\n",
+    )
+    .unwrap();
+
+    // With ignore_whitespace: true -- indentation-only change should be invisible
+    let opts_ignore = DiffRequestOptions {
+        ignore_whitespace: true,
+        ..Default::default()
+    };
+    let result_ignore = ctx
+        .diff_unstaged_with_options("indent.rs", &opts_ignore)
+        .unwrap();
+    let ignore_add_del: usize = result_ignore
+        .iter()
+        .flat_map(|fd| fd.hunks.iter())
+        .flat_map(|h| h.lines.iter())
+        .filter(|l| {
+            matches!(
+                l.origin,
+                trunk_lib::git::types::DiffOrigin::Add | trunk_lib::git::types::DiffOrigin::Delete
+            )
+        })
+        .count();
+    assert_eq!(
+        ignore_add_del, 0,
+        "expected no add/delete lines when ignoring indentation-only whitespace change, got {}",
+        ignore_add_del
+    );
+
+    // Without ignore_whitespace (default) -- indentation change should be visible
+    let opts_normal = DiffRequestOptions::default();
+    let result_normal = ctx
+        .diff_unstaged_with_options("indent.rs", &opts_normal)
+        .unwrap();
+    let normal_add_del: usize = result_normal
+        .iter()
+        .flat_map(|fd| fd.hunks.iter())
+        .flat_map(|h| h.lines.iter())
+        .filter(|l| {
+            matches!(
+                l.origin,
+                trunk_lib::git::types::DiffOrigin::Add | trunk_lib::git::types::DiffOrigin::Delete
+            )
+        })
+        .count();
+    assert!(
+        normal_add_del > 0,
+        "expected add/delete lines in normal diff for indentation change, got 0"
+    );
+}
+
+#[test]
 fn diff_unstaged_show_full_file_returns_all_lines() {
     let content: String = (1..=50).map(|i| format!("line {}\n", i)).collect();
     let ctx = TestContext::builder()
