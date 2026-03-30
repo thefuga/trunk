@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Columns2, Pilcrow, Rows2, Space, TextWrap } from "@lucide/svelte";
+import { Columns2, FoldVertical, Pilcrow, Rows2, Space, TextWrap, UnfoldVertical } from "@lucide/svelte";
 import type { ContentMode, LayoutMode } from "../../lib/types.js";
 
 interface Props {
@@ -42,22 +42,20 @@ let {
 </script>
 
 <div class="toolbar">
-  <div class="segmented-control">
-    <button
-      class="segment"
-      class:active={contentMode === "hunk"}
-      onclick={() => oncontentmodechange("hunk")}
-    >Hunk</button>
-    <button
-      class="segment"
-      class:active={contentMode === "full"}
-      onclick={() => oncontentmodechange("full")}
-    >Full</button>
-  </div>
+  <button
+    class="toggle-btn"
+    title={contentMode === "hunk" ? "Show full file" : "Show hunks"}
+    onclick={() => oncontentmodechange(contentMode === "hunk" ? "full" : "hunk")}
+  >
+    {#if contentMode === "hunk"}
+      <UnfoldVertical size={14} />
+    {:else}
+      <FoldVertical size={14} />
+    {/if}
+  </button>
 
   <button
     class="toggle-btn"
-    class:active={layoutMode === "split"}
     title={layoutMode === "inline" ? "Side-by-side view" : "Inline view"}
     onclick={() => onlayoutmodechange(layoutMode === "inline" ? "split" : "inline")}
   >
@@ -142,32 +140,6 @@ let {
     align-items: center;
     flex-shrink: 0;
     gap: 8px;
-  }
-
-  .segmented-control {
-    display: inline-flex;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .segment {
-    background: none;
-    border: none;
-    border-right: 1px solid var(--color-border);
-    color: var(--color-text-muted);
-    font-size: 11px;
-    padding: 2px 8px;
-    cursor: pointer;
-  }
-
-  .segment:last-child {
-    border-right: none;
-  }
-
-  .segment.active {
-    background: var(--color-accent-bg);
-    color: var(--color-accent);
   }
 
   .filename {

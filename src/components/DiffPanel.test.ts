@@ -431,7 +431,7 @@ describe("DiffPanel", () => {
 
 	// ---- VIEW-01: View mode toggle tests ----
 
-	it("renders content mode and layout mode controls", async () => {
+	it("renders content mode and layout mode toggle buttons", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -440,9 +440,9 @@ describe("DiffPanel", () => {
 			},
 		});
 		await flushPrefs();
-		expect(screen.getByText("Hunk")).toBeInTheDocument();
-		expect(screen.getByText("Full")).toBeInTheDocument();
-		// Layout toggle shows "Side-by-side view" title when in inline mode (default)
+		// Content toggle shows "Show full file" in hunk mode (default)
+		expect(screen.getByTitle("Show full file")).toBeInTheDocument();
+		// Layout toggle shows "Side-by-side view" in inline mode (default)
 		expect(screen.getByTitle("Side-by-side view")).toBeInTheDocument();
 	});
 
@@ -458,7 +458,7 @@ describe("DiffPanel", () => {
 		expect(screen.getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
 	});
 
-	it("shows full file view when Full mode selected", async () => {
+	it("shows full file view when content toggle clicked", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -466,9 +466,9 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
-		// Let the initial $effect (getDiffViewMode) settle
+		// Let the initial $effect settle
 		await flushPrefs();
-		await fireEvent.click(screen.getByText("Full"));
+		await fireEvent.click(screen.getByTitle("Show full file"));
 		// Flush Svelte reactivity
 		await flushPrefs();
 		// Full file view renders diff content (no hunk headers)
@@ -658,7 +658,7 @@ describe("VIEW-04: Full file view", () => {
 			},
 		});
 		await flushPrefs();
-		await fireEvent.click(screen.getByText("Full"));
+		await fireEvent.click(screen.getByTitle("Show full file"));
 		await flushPrefs();
 		// Hunk header should not be present
 		expect(screen.queryByText("@@ -1,3 +1,4 @@")).toBeNull();
@@ -682,7 +682,7 @@ describe("VIEW-04: Full file view", () => {
 			},
 		});
 		await flushPrefs();
-		await fireEvent.click(screen.getByText("Full"));
+		await fireEvent.click(screen.getByTitle("Show full file"));
 		await flushPrefs();
 		// Context lines should have gutter numbers
 		const contextLines = container.querySelectorAll(".diff-line-context");
@@ -712,7 +712,7 @@ describe("VIEW-04: Full file view", () => {
 			},
 		});
 		await flushPrefs();
-		await fireEvent.click(screen.getByText("Full"));
+		await fireEvent.click(screen.getByTitle("Show full file"));
 		await flushPrefs();
 		expect(screen.queryByText("Stage Hunk")).toBeNull();
 		expect(screen.queryByText("Discard Hunk")).toBeNull();
