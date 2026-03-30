@@ -1144,3 +1144,164 @@ describe("VIEW-02: Split view layout", () => {
 		);
 	});
 });
+
+// ---- VIEW-05: Staging in split view ----
+
+describe("VIEW-05: Staging in split view", () => {
+	it("shows Stage Hunk button in split view for unstaged diffs", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("split"),
+		);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "unstaged",
+				repoPath: "/test/repo",
+			},
+		});
+		await flushPrefs();
+
+		expect(screen.getByText("Stage Hunk")).toBeInTheDocument();
+		expect(screen.getByText("Discard Hunk")).toBeInTheDocument();
+
+		// Reset
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("inline"),
+		);
+	});
+
+	it("shows Unstage Hunk button in split view for staged diffs", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("split"),
+		);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "staged",
+				repoPath: "/test/repo",
+			},
+		});
+		await flushPrefs();
+
+		expect(screen.getByText("Unstage Hunk")).toBeInTheDocument();
+
+		// Reset
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("inline"),
+		);
+	});
+
+	it("does not show staging buttons in split view for commit diffs", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("split"),
+		);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "commit",
+			},
+		});
+		await flushPrefs();
+
+		expect(screen.queryByText("Stage Hunk")).toBeNull();
+		expect(screen.queryByText("Discard Hunk")).toBeNull();
+		expect(screen.queryByText("Unstage Hunk")).toBeNull();
+
+		// Reset
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("inline"),
+		);
+	});
+
+	it("disables staging buttons when whitespace ignore is active in split view", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("split"),
+		);
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(true),
+		);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "unstaged",
+				repoPath: "/test/repo",
+			},
+		});
+		await flushPrefs();
+		await flushPrefs();
+
+		const stageBtn = screen.getByText("Stage Hunk").closest("button");
+		expect(stageBtn).toBeDisabled();
+		expect(stageBtn?.title).toBe(
+			"Staging is disabled while whitespace changes are ignored",
+		);
+
+		// Reset
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(false),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("inline"),
+		);
+	});
+
+	it("does not show staging buttons in split+full mode", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("full"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("split"),
+		);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "unstaged",
+				repoPath: "/test/repo",
+			},
+		});
+		await flushPrefs();
+
+		// Split+full mode has no hunk headers, so no staging buttons
+		expect(screen.queryByText("Stage Hunk")).toBeNull();
+
+		// Reset
+		vi.mocked(storeMock.getDiffContentMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
+		);
+		vi.mocked(storeMock.getDiffLayoutMode).mockImplementation(() =>
+			Promise.resolve("inline"),
+		);
+	});
+});
