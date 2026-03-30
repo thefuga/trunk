@@ -36,13 +36,23 @@ fn color_to_css_class(color: Color) -> &'static str {
     }
 }
 
+/// Map extensions that syntect doesn't bundle to a supported fallback.
+/// TypeScript → JavaScript, Svelte/Vue/JSX/TSX → JavaScript.
+fn fallback_extension(ext: &str) -> &str {
+    match ext {
+        "ts" | "mts" | "cts" | "tsx" | "jsx" | "svelte" | "vue" => "js",
+        _ => ext,
+    }
+}
+
 /// Returns true if syntect has a real syntax definition for this extension (not plain text).
 pub fn has_syntax_for_extension(ext: &str) -> bool {
     if ext.is_empty() {
         return false;
     }
+    let resolved = fallback_extension(ext);
     SYNTAX_SET
-        .find_syntax_by_extension(ext)
+        .find_syntax_by_extension(resolved)
         .is_some_and(|s| s.name != "Plain Text")
 }
 
@@ -57,7 +67,8 @@ pub fn extension_from_path(path: &str) -> &str {
 /// Create a reusable highlighter for a file extension.
 /// Returns None if the extension has no syntax definition (plain text).
 pub fn create_highlighter(extension: &str) -> Option<HighlightLines<'static>> {
-    let syntax = SYNTAX_SET.find_syntax_by_extension(extension)?;
+    let resolved = fallback_extension(extension);
+    let syntax = SYNTAX_SET.find_syntax_by_extension(resolved)?;
     if syntax.name == "Plain Text" {
         return None;
     }
@@ -318,6 +329,28 @@ mod tests {
             }),
             ""
         );
+    }
+
+    #[test]
+    fn highlight_typescript_uses_js_fallback() {
+        let tokens = highlight_line_tokens("const x: number = 42;", "ts");
+        assert!(!tokens.is_empty(), "TypeScript should produce tokens via JS fallback");
+        let has_keyword = tokens.iter().any(|t| t.scope == "syn-keyword");
+        assert!(has_keyword, "'const' should be highlighted as syn-keyword");
+    }
+
+    #[test]
+    fn highlight_tsx_uses_js_fallback() {
+        assert!(has_syntax_for_extension("tsx"));
+        let tokens = highlight_line_tokens("export default function App() {}", "tsx");
+        assert!(!tokens.is_empty(), "TSX should produce tokens via JS fallback");
+    }
+
+    #[test]
+    fn highlight_svelte_uses_js_fallback() {
+        assert!(has_syntax_for_extension("svelte"));
+        let tokens = highlight_line_tokens("const count = 0;", "svelte");
+        assert!(!tokens.is_empty(), "Svelte should produce tokens via JS fallback");
     }
 
     #[test]
