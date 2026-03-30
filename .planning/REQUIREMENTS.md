@@ -10,8 +10,8 @@ Requirements for Better Diffs milestone. Each maps to roadmap phases.
 ### View Modes
 
 - [x] **VIEW-01**: User can toggle diff between hunk view, full file view, and split (side-by-side) view
-- [ ] **VIEW-02**: Split view shows old content on left, new on right, with phantom/spacer rows for alignment
-- [ ] **VIEW-03**: Split view panels scroll in sync (locked)
+- [x] **VIEW-02**: Split view shows old content on left, new on right, with phantom/spacer rows for alignment
+- [x] **VIEW-03**: Split view panels scroll in sync (locked)
 - [x] **VIEW-04**: Full file view shows entire file with changed lines highlighted (via context_lines=MAX)
 - [ ] **VIEW-05**: User can stage/unstage/discard hunks and lines in all view modes (disabled when whitespace ignore is active)
 
@@ -91,8 +91,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WHSP-02 | Phase 63 | Complete |
 | WHSP-03 | Phase 63 | Complete |
 | DISP-02 | Phase 63 | Complete |
-| VIEW-02 | Phase 64 | Pending |
-| VIEW-03 | Phase 64 | Pending |
+| VIEW-02 | Phase 64 | Complete |
+| VIEW-03 | Phase 64 | Complete |
 | VIEW-05 | Phase 64 | Pending |
 
 **Coverage:**

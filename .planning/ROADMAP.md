@@ -259,9 +259,9 @@ Plans:
   2. Scrolling either panel scrolls both panels in sync
   3. User can stage/unstage/discard hunks and lines from within split view (disabled when whitespace ignore is active)
   4. Word-level diff highlights and syntax coloring render correctly in both split view panels
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
-- [ ] 64-01-PLAN.md — ViewMode refactor: ContentMode + LayoutMode types, store functions, DiffToolbar two controls, DiffViewer 2D dispatch, tests
+- [x] 64-01-PLAN.md — ViewMode refactor: ContentMode + LayoutMode types, store functions, DiffToolbar two controls, DiffViewer 2D dispatch, tests
 - [ ] 64-02-PLAN.md — SplitView component: pairLines utility, row alignment, phantom spacers, scroll sync, resizable divider, tests
 - [ ] 64-03-PLAN.md — Staging in split view: hunk buttons, line selection on right panel, VIEW-05 tests, visual checkpoint
 **UI hint**: yes
@@ -278,7 +278,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | 61. Syntax Highlighting | 2/2 | Complete    | 2026-03-29 |
 | 62. UI Refactor & Component Structure | 2/2 | Complete    | 2026-03-29 |
 | 63. Full File View & Display Options | 3/3 | Complete    | 2026-03-30 |
-| 64. Split View | 0/3 | Not started | - |
+| 64. Split View | 1/3 | In Progress|  |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
