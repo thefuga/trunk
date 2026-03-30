@@ -244,7 +244,7 @@ Plans:
   3. User can toggle display of invisible characters (spaces as dots, tabs as arrows) in the diff viewer
   4. User can toggle word wrap on and off in the diff viewer
   5. All display preferences (word wrap, show invisibles, whitespace ignore, context lines, view mode) persist across sessions
-**Plans:** 2/2 plans complete
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 63-01-PLAN.md — Store preferences, CSS vars, DiffToolbar toggles, staging guard, word wrap, re-fetch wiring
 - [x] 63-02-PLAN.md — FullFileView continuous document, invisible character utility, HunkView invisibles integration, tests
@@ -273,7 +273,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | 60. Word-Level Diff | 2/2 | Complete    | 2026-03-28 |
 | 61. Syntax Highlighting | 2/2 | Complete    | 2026-03-29 |
 | 62. UI Refactor & Component Structure | 2/2 | Complete    | 2026-03-29 |
-| 63. Full File View & Display Options | 2/2 | Complete    | 2026-03-29 |
+| 63. Full File View & Display Options | 3/3 | Complete   | 2026-03-30 |
 | 64. Split View | 0/0 | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
