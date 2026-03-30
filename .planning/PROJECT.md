@@ -100,21 +100,26 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ IPC round-trip and startup time benchmarks for key commands — v0.11
 - ✓ WebdriverIO + tauri-driver E2E tests (10 tests, 3 specs) with Linux CI workflow — v0.11
 
+- ✓ Configurable diff options: context lines (3/5/10/25/All), whitespace ignore, full file view — v0.12
+- ✓ Word-level (intra-line) diff highlighting via similar crate with performance guards — v0.12
+- ✓ Syntax highlighting via syntect with base16-ocean.dark theme, auto language detection — v0.12
+- ✓ MergedSpan sweep-line boundary merge for zero-gap syntax + word-diff coverage — v0.12
+- ✓ DiffPanel decomposed into DiffToolbar, DiffViewer, HunkView, FullFileView, SplitView — v0.12
+- ✓ Display options: word wrap, show invisibles, whitespace ignore — all persisted via LazyStore — v0.12
+- ✓ Full file view: continuous document renderer, no hunk headers, no staging — v0.12
+- ✓ Split (side-by-side) view with paired-row alignment, phantom spacers, staging support — v0.12
+- ✓ ContentMode/LayoutMode orthogonal toggles with icon buttons — v0.12
+- ✓ Syntax fallback: TypeScript/Svelte/Vue/JSX/TSX use JavaScript highlighting — v0.12
+
 ### Active
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-## Current Milestone: v0.12 Better Diffs
+## Current Milestone: v0.12 Better Diffs (SHIPPED 2026-03-30)
 
 **Goal:** Overhaul the diff viewer with professional-grade display and interaction options matching GitHub/GitKraken.
 
-**Target features:**
-- View mode toggle: hunk view ↔ full file view ↔ split (side-by-side)
-- Syntax highlighting with auto language detection
-- Word-level (intra-line) diff highlighting for changed words/chars
-- Whitespace toggle (ignore whitespace changes) + show invisible characters
-- Configurable context lines with incremental expand
-- Display options: word wrap toggle, line numbers in gutter, scrollbar minimap
+**Delivered:** All 18 requirements shipped across 6 phases (14 plans). View mode toggle (hunk/full/split), syntax highlighting, word-level diff, whitespace controls, display options.
 
 ### Out of Scope
 
@@ -132,7 +137,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: Phase 64 complete — Split (side-by-side) diff view with paired-row alignment, phantom spacer rows, synchronized scrolling, and full staging support. ViewMode refactored into two orthogonal dimensions: ContentMode (hunk/full) and LayoutMode (inline/split) with icon toggle buttons. SplitView uses single-flow flex rows for perfect vertical alignment. pairLines() utility pairs deletes/adds with phantom rows for shorter side. DiffToolbar has five icon toggle buttons (content mode, layout mode, whitespace ignore, show invisibles, word wrap). All display preferences persisted via LazyStore with legacy migration. ~15,000 LOC TypeScript/Svelte, ~10,000 LOC Rust. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 402 frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
+- **Current state**: v0.12 Better Diffs shipped (2026-03-30). Professional-grade diff viewer with syntax highlighting (syntect + JS fallback for TS/Svelte), word-level diff (similar crate), split view (single-flow flex rows, phantom spacers), 5 display toggles (content mode, layout mode, whitespace, invisibles, word wrap), all preferences persisted via LazyStore. DiffPanel decomposed into 5 focused components. ~15,000 LOC TypeScript/Svelte, ~10,000 LOC Rust. 423+ frontend tests, 167+ Rust integration tests. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 402 frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -207,6 +212,15 @@ A developer can open any Git repository, browse its full commit history as a vis
 | WebdriverIO + tauri-driver for E2E | Separate e2e.yml workflow with Xvfb on Linux; macOS manual checklist | ✓ Good — 10 tests covering core workflows |
 | Drop macOS code signing | Apple Developer $99/yr not justified for personal project; ad-hoc + xattr -cr sufficient | ✓ Good — removed scope without user impact |
 
+| syntect with base16-ocean.dark for syntax highlighting | CSS custom properties compliance, no inline styles; color→class mapping | ✓ Good — 7 token classes, 15 CSS vars for future theme expansion |
+| similar crate for word-level diff | Rust thread pool, iter_inline_changes() API, performance guards | ✓ Good — 500 char + 0.4 ratio thresholds prevent pathological cases |
+| MergedSpan sweep-line merge algorithm | Collect boundary points, sort+dedup, iterate pairs for zero-gap coverage | ✓ Good — single unified field replaces separate word_spans and syntax_tokens |
+| ContentMode + LayoutMode orthogonal types | Two independent dimensions replacing 3-way ViewMode enum | ✓ Good — 4 combinations (hunk/full × inline/split) with clean 2D dispatch |
+| Single-flow flex rows for split view | Each row spans both sides as flex children, no scroll sync needed | ✓ Good — perfect vertical alignment, simpler than two-panel approach |
+| JS fallback for TypeScript/Svelte syntax | syntect defaults lack TS/Svelte; map to JavaScript highlighting | ✓ Good — covers keywords, strings, numbers for web stack files |
+| Icon toggle buttons over segmented controls | Single button per mode, icon swap communicates state, no highlight | ✓ Good — saves horizontal space, consistent with display option toggles |
+| LazyStore-first-then-callback pattern | DiffPanel persists value before calling parent callback | ✓ Good — prevents stale reads when parent rebuilds diff options |
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -225,4 +239,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after Phase 64 (Split View) completed — v0.12 milestone complete*
+*Last updated: 2026-03-30 after v0.12 Better Diffs milestone shipped*

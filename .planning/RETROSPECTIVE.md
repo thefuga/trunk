@@ -436,6 +436,45 @@
 
 ---
 
+## Milestone: v0.12 — Better Diffs
+
+**Shipped:** 2026-03-30
+**Phases:** 6 | **Plans:** 14 | **Timeline:** 3 days (2026-03-28 → 2026-03-30)
+
+### What Was Built
+- Configurable diff options: context lines, whitespace ignore, full file view — wired through all 3 diff commands
+- Word-level (intra-line) diff highlighting via similar crate with performance guards
+- Syntax highlighting via syntect with base16-ocean.dark theme, auto language detection, JS fallback for TS/Svelte
+- DiffPanel decomposed into 5 focused components: DiffToolbar, DiffViewer, HunkView, FullFileView, SplitView
+- Full file view: continuous document renderer with invisible character display
+- Split (side-by-side) view: single-flow flex rows, phantom spacers, staging support
+- Display options: word wrap, show invisibles, whitespace ignore — all persisted via LazyStore
+- ContentMode/LayoutMode orthogonal toggles with icon buttons
+
+### What Worked
+- **Sweep-line boundary merge algorithm**: MergedSpan approach produces zero-gap coverage, single unified field for frontend — eliminated complexity of separate word_spans and syntax_tokens
+- **Iterative visual verification**: Phase 64 checkpoint caught alignment issues, segmented control overdesign, and divider bloat — user feedback loops within execution are high-value
+- **Single-flow flex rows**: Switching from two independent scroll panels to a single container with flex rows solved alignment perfectly — simpler architecture, no scroll sync needed
+- **Icon toggles over segmented controls**: User-driven simplification saved horizontal toolbar space while improving consistency
+
+### What Was Inefficient
+- **syntect defaults lack TypeScript/Svelte**: Discovered at runtime that the most-used languages in the project weren't highlighted — should have tested all target extensions during Phase 61
+- **ViewMode type redesign in Phase 64**: The 3-way ViewMode from Phase 62 had to be fully refactored into ContentMode + LayoutMode — Phase 62 could have anticipated 2D dispatch
+- **Split view resizable divider was overengineered**: Built full drag-to-resize divider (Plan 02) then removed it (visual verification) — user said "we don't need the divider" immediately
+
+### Patterns Established
+- **fallback_extension() for syntect**: Map unsupported extensions (ts, tsx, svelte, vue, jsx) to supported ones (js) — extensible pattern for future languages
+- **pairLines() utility**: Transforms flat DiffLine arrays into PairedRow arrays for split view — clean data transformation before rendering
+- **Icon toggle pattern**: Single button with icon swap (no active highlight) for binary mode toggles — UnfoldVertical/FoldVertical, Columns2/Rows2
+
+### Key Lessons
+1. **Test all target file extensions for syntax highlighting**: Build a quick test covering every extension the project uses before shipping syntax support
+2. **Visual verification checkpoints are essential for UI phases**: Caught 4 issues in Phase 64 that automated tests couldn't — alignment, toolbar UX, divider, gap spacing
+3. **User feedback drives better UX than design specs**: UI-SPEC specified segmented controls and resizable divider; user immediately improved both to simpler toggle buttons and fixed 50/50 split
+4. **2D mode dispatch should be designed upfront**: When two independent dimensions exist (content mode, layout mode), model them as orthogonal types from the start
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -453,6 +492,7 @@
 | v0.9 | 3 | 6 | 13 | Fastest per-plan pace — multi-tab + tree view, parallel execution, zero gap closures needed |
 | v0.10 | 2 | 3 | 4 | Smallest milestone — CI/CD infrastructure, zero gap closures, deterministic YAML work |
 | v0.11 | 2 | 6 | 16 | Testing infrastructure — GOOS harness, 520+ tests, benchmarks, E2E, coverage reporting |
+| v0.12 | 3 | 6 | 14 | Diff overhaul — syntax highlighting, word diff, split view, display options, iterative UI refinement |
 
 ### Top Lessons (Verified Across Milestones)
 

@@ -1,5 +1,27 @@
 # Milestones
 
+## v0.12 Better Diffs (Shipped: 2026-03-30)
+
+**Phases completed:** 6 phases, 14 plans, 27 tasks
+
+**Key accomplishments:**
+
+- DiffRequestOptions struct with context_lines/whitespace/full-file threading through all 3 diff commands, plus WordSpan/SyntaxToken enrichment fields on DiffLine
+- TypeScript DiffRequestOptions/WordSpan/SyntaxToken type mirrors, LazyStore diff preference persistence, and all 4 RepoView diff invoke calls wired to pass options
+- Word-level diff via similar crate with iter_inline_changes, sequential Delete/Add pairing, and performance guards (500 char + 0.4 ratio thresholds)
+- Word-diff highlights in DiffPanel with .word-add/.word-delete CSS classes, theme custom properties, and 3 new tests
+- syntect-based syntax highlighting with base16-ocean.dark theme, MergedSpan type replacing separate word_spans/syntax_tokens, and 3-pass diff pipeline producing zero-gap span arrays
+- MergedSpan TypeScript types, 15 syntax color CSS custom properties, DiffPanel merged-span rendering with opacity 0.7 desaturation on add/delete backgrounds
+- Decomposed 667-line DiffPanel monolith into 5 focused diff/ components with view mode segmented control and two-column line number gutter
+- 7 new unit tests for view mode toggle (segmented control, Full/Split stubs) and line number gutter (context/add/delete line rendering) with stateful store mock
+- LazyStore preferences, CSS vars, three toolbar toggles (WS/invisibles/wrap), staging guard when whitespace ignored, word wrap toggle, and diff re-fetch callback wired end-to-end
+- FullFileView continuous document renderer with invisible character rendering (middle dot/arrow) in both view modes, plus 17 new tests covering VIEW-04, WHSP-02, WHSP-03, DISP-02
+- Fixed git2 whitespace API (git -w not -b), resolved async race conditions in view mode/whitespace toggle handlers, and eliminated toggle button flicker on mount
+- Refactored ViewMode into ContentMode + LayoutMode with 2D dispatch, two-control toolbar with Lucide icons, legacy store migration, and phantom row CSS variable
+- Side-by-side diff renderer with pairLines() row alignment, phantom spacers, synchronized vertical scrolling, resizable divider, and split+hunk/split+full mode support
+
+---
+
 ## v0.11 Infrastructure (Shipped: 2026-03-27)
 
 **Phases completed:** 6 phases, 16 plans, 34 tasks

@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.12
 milestone_name: Better Diffs
-status: executing
-stopped_at: Completed 64-02-PLAN.md
-last_updated: "2026-03-30T17:54:33.178Z"
+status: milestone_complete
+stopped_at: v0.12 Better Diffs shipped
+last_updated: "2026-03-30T20:28:48.701Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 6
@@ -18,16 +18,16 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-28 after v0.12 milestone started)
+See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 64 — split-view
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 64
-Plan: Not started
-Status: Ready to execute
+Phase: —
+Plan: —
+Status: v0.12 shipped, ready for next milestone
 Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
