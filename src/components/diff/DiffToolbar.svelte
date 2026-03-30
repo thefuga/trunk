@@ -1,5 +1,13 @@
 <script lang="ts">
-import { Columns2, FoldVertical, Pilcrow, Rows2, Space, TextWrap, UnfoldVertical } from "@lucide/svelte";
+import {
+	Columns2,
+	FoldVertical,
+	Pilcrow,
+	Rows2,
+	Space,
+	TextWrap,
+	UnfoldVertical,
+} from "@lucide/svelte";
 import type { ContentMode, LayoutMode } from "../../lib/types.js";
 
 interface Props {

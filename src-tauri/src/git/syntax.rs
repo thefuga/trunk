@@ -334,7 +334,10 @@ mod tests {
     #[test]
     fn highlight_typescript_uses_js_fallback() {
         let tokens = highlight_line_tokens("const x: number = 42;", "ts");
-        assert!(!tokens.is_empty(), "TypeScript should produce tokens via JS fallback");
+        assert!(
+            !tokens.is_empty(),
+            "TypeScript should produce tokens via JS fallback"
+        );
         let has_keyword = tokens.iter().any(|t| t.scope == "syn-keyword");
         assert!(has_keyword, "'const' should be highlighted as syn-keyword");
     }
@@ -343,14 +346,20 @@ mod tests {
     fn highlight_tsx_uses_js_fallback() {
         assert!(has_syntax_for_extension("tsx"));
         let tokens = highlight_line_tokens("export default function App() {}", "tsx");
-        assert!(!tokens.is_empty(), "TSX should produce tokens via JS fallback");
+        assert!(
+            !tokens.is_empty(),
+            "TSX should produce tokens via JS fallback"
+        );
     }
 
     #[test]
     fn highlight_svelte_uses_js_fallback() {
         assert!(has_syntax_for_extension("svelte"));
         let tokens = highlight_line_tokens("const count = 0;", "svelte");
-        assert!(!tokens.is_empty(), "Svelte should produce tokens via JS fallback");
+        assert!(
+            !tokens.is_empty(),
+            "Svelte should produce tokens via JS fallback"
+        );
     }
 
     #[test]
