@@ -109,8 +109,8 @@ let prevTotalHeightForScrollCorrection = $state<number>(0);
  * Reactive Height Manager - O(1) height calculation system
  */
 const heightManager = new ReactiveListManager({
-	itemLength: items.length,
-	itemHeight: defaultEstimatedItemHeight,
+	itemLength: untrack(() => items.length),
+	itemHeight: untrack(() => defaultEstimatedItemHeight),
 	internalDebug: false,
 });
 

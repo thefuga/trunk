@@ -68,10 +68,15 @@ function toRebaseCommits(source: RebaseTodoItem[]): RebaseCommit[] {
 	}));
 }
 
-let items = $state<RebaseCommit[]>(toRebaseCommits(commits));
-let originalItems = $state<RebaseCommit[]>(
-	structuredClone(toRebaseCommits(commits)),
-);
+let items = $state<RebaseCommit[]>([]);
+let originalItems = $state<RebaseCommit[]>([]);
+
+// Initialize and reinitialize when the commits prop changes
+$effect(() => {
+	items = toRebaseCommits(commits);
+	originalItems = structuredClone(toRebaseCommits(commits));
+});
+
 let focusedIndex = $state<number>(0);
 let listEl: HTMLDivElement | undefined = $state();
 
@@ -549,14 +554,16 @@ let lastVisibleColumn = $derived.by(() => {
   <div class="rebase-list" bind:this={listEl}>
     {#each items as item, idx (item.oid)}
       <div class="rebase-row-wrapper">
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="rebase-row"
+        role="row"
+        tabindex="0"
         class:rebase-row-focused={focusedIndex === idx}
         class:rebase-row-drop={item.action === 'drop'}
         class:rebase-row-squash={item.action === 'squash'}
         data-rebase-row={idx}
         onclick={() => (focusedIndex = idx)}
+        onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (item.action !== 'drop') openMessageEditor(idx); } else if (e.key === ' ') { e.preventDefault(); focusedIndex = idx; } }}
         ondblclick={() => { if (item.action !== 'drop') openMessageEditor(idx); }}
         style="height: {ROW_HEIGHT}px;"
       >
@@ -627,13 +634,12 @@ let lastVisibleColumn = $derived.by(() => {
 
       <!-- Floating message editor (absolute, doesn't push rows) -->
       {#if editingIdx === idx}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="rebase-msg-editor" onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') handleMessageCancel(); }}>
+        <div class="rebase-msg-editor" role="dialog" aria-label="Edit commit message" tabindex="-1" onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') handleMessageCancel(); }}>
           <div class="rebase-msg-editor-title">{items[editingIdx]?.action === 'squash' ? 'Edit squash message' : 'Reword commit message'}</div>
           <input
             class="rebase-msg-editor-summary"
             type="text"
-            tabindex="1"
+            tabindex="0"
             placeholder="Summary (required)"
             bind:value={editingSummary}
             use:selectAll
@@ -641,13 +647,13 @@ let lastVisibleColumn = $derived.by(() => {
           <textarea
             class="rebase-msg-editor-body"
             placeholder="Body (optional)"
-            tabindex="2"
+            tabindex="0"
             rows="4"
             bind:value={editingBody}
           ></textarea>
           <div class="rebase-msg-editor-buttons">
-            <button class="rebase-btn rebase-btn-confirm" tabindex="3" onclick={handleMessageUpdate}>Update Message</button>
-            <button class="rebase-btn rebase-btn-ghost" tabindex="4" onclick={handleMessageCancel}>Cancel</button>
+            <button class="rebase-btn rebase-btn-confirm" tabindex="0" onclick={handleMessageUpdate}>Update Message</button>
+            <button class="rebase-btn rebase-btn-ghost" tabindex="0" onclick={handleMessageCancel}>Cancel</button>
           </div>
         </div>
       {/if}
@@ -707,11 +713,6 @@ let lastVisibleColumn = $derived.by(() => {
     font-size: 13px;
     font-weight: 600;
     color: var(--color-text);
-  }
-
-  .rebase-toolbar-badge {
-    font-size: 11px;
-    color: var(--color-text-muted);
   }
 
   .rebase-toolbar-meta {
@@ -830,10 +831,6 @@ let lastVisibleColumn = $derived.by(() => {
 
   .rebase-col-action {
     flex-shrink: 0;
-  }
-
-  .rebase-col {
-    /* base column styling for header cells */
   }
 
   .col-resize-handle {

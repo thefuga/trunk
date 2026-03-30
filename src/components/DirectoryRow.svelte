@@ -33,10 +33,13 @@ let fileCount = $derived(countFiles(node.children));
 <div
   role="treeitem"
   aria-expanded={expanded}
+  aria-selected={focused}
   aria-level={depth + 1}
+  tabindex="0"
   onmouseenter={() => (hovered = true)}
   onmouseleave={() => (hovered = false)}
   onclick={ontoggle}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
   oncontextmenu={(e) => { if (oncontextmenu) { e.preventDefault(); oncontextmenu(e); } }}
   style="
     height: 26px;

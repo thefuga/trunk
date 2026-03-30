@@ -90,12 +90,13 @@ function autofocus(node: HTMLElement) {
 
     {#each fields as field, i}
       <div class="mb-3">
-        <label class="block text-xs mb-1" style="color: var(--color-text-muted);">
+        <label for="input-dialog-{field.key}" class="block text-xs mb-1" style="color: var(--color-text-muted);">
           {field.label}{#if field.required}<span style="color: var(--color-accent);"> *</span>{/if}
         </label>
         {#if field.multiline}
           {#if i === 0}
             <textarea
+              id="input-dialog-{field.key}"
               class="w-full rounded text-sm"
               style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 8px; resize: vertical; min-height: 60px;"
               placeholder={field.placeholder ?? ''}
@@ -104,6 +105,7 @@ function autofocus(node: HTMLElement) {
             ></textarea>
           {:else}
             <textarea
+              id="input-dialog-{field.key}"
               class="w-full rounded text-sm"
               style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 8px; resize: vertical; min-height: 60px;"
               placeholder={field.placeholder ?? ''}
@@ -113,6 +115,7 @@ function autofocus(node: HTMLElement) {
         {:else}
           {#if i === 0}
             <input
+              id="input-dialog-{field.key}"
               type="text"
               class="w-full rounded text-sm"
               style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 8px;"
@@ -122,6 +125,7 @@ function autofocus(node: HTMLElement) {
             />
           {:else}
             <input
+              id="input-dialog-{field.key}"
               type="text"
               class="w-full rounded text-sm"
               style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 8px;"

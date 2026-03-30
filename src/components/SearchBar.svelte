@@ -22,7 +22,12 @@ let {
 	onclose,
 }: Props = $props();
 
-let inputValue = $state(query);
+let inputValue = $state("");
+
+// Sync local input state with the query prop
+$effect(() => {
+	inputValue = query;
+});
 
 function handleInput() {
 	onquerychange(inputValue);

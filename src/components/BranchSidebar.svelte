@@ -678,7 +678,10 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
       {#each filteredStashes as stash (stash.index)}
         <div
           class="stash-row"
+          role="button"
+          tabindex="0"
           onclick={() => onrefnavigate?.(stash.oid)}
+          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onrefnavigate?.(stash.oid); } }}
           oncontextmenu={(e) => showStashEntryMenu(e, stash.index)}
         >
           <span class="stash-index">{stash.short_name}</span>

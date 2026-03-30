@@ -416,7 +416,10 @@ function isHunkAllTaken(side: "ours" | "theirs", regionIdx: number): boolean {
 
 {#snippet conflictHeader(side: 'ours' | 'theirs', row: FlatRow)}
   <div
+    role="button"
+    tabindex="0"
     onclick={() => handleToggleHunk(side, row.regionIdx)}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleHunk(side, row.regionIdx); } }}
     style="
       width: 100%;
       height: {HEADER_HEIGHT}px;
@@ -444,7 +447,10 @@ function isHunkAllTaken(side: "ours" | "theirs", regionIdx: number): boolean {
 {#snippet conflictLine(row: FlatRow, bgColor: string)}
   {@const taken = takenLines.has(row.key)}
   <div
+    role="button"
+    tabindex="0"
     onclick={(e: MouseEvent) => handleToggleLine(row.key, e)}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleLine(row.key); } }}
     class="merge-line"
     style="
       display: flex;

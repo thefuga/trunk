@@ -60,11 +60,14 @@ const isStash = $derived(commit.is_stash);
 
 <div
   data-testid="commit-row"
+  role="row"
+  tabindex="0"
   class="relative flex items-center cursor-pointer text-[13px]"
   class:hover:bg-[var(--color-surface)]={!selected && !isCurrentMatch && !isSearchMatch}
   style:height="{rowHeight}px"
   style="color: var(--color-text); {isCurrentMatch ? 'background: rgba(245, 158, 11, 0.2);' : isSearchMatch ? 'background: rgba(234, 179, 8, 0.1);' : selected ? 'background: var(--color-selected-row);' : ''} {isSearchActive && !isSearchMatch && !isCurrentMatch ? 'opacity: 0.35;' : ''}"
   onclick={() => onselect?.(commit.oid)}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect?.(commit.oid); } }}
   oncontextmenu={(e: MouseEvent) => { if (oncontextmenu && !isWip) { e.preventDefault(); oncontextmenu(e, commit); } }}
 >
   <!-- Column 1: Branch/Tag refs spacer (SVG overlay handles rendering) -->

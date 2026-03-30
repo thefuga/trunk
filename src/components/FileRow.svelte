@@ -58,6 +58,8 @@ let iconConfig = $derived(
 		color: "var(--color-text-muted)",
 	},
 );
+
+let Icon = $derived(iconConfig.component);
 </script>
 
 <div
@@ -89,7 +91,7 @@ let iconConfig = $derived(
     min-width: 14px;
     color: {isLoading ? 'var(--color-text-muted)' : iconConfig.color};
   ">
-    <svelte:component this={iconConfig.component} size={12} color={isLoading ? 'var(--color-text-muted)' : iconConfig.color} />
+    <Icon size={12} color={isLoading ? 'var(--color-text-muted)' : iconConfig.color} />
   </span>
 
   <!-- Filename -->
