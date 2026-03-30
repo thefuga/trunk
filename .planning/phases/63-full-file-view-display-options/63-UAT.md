@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 63-full-file-view-display-options
 source: [63-01-SUMMARY.md, 63-02-SUMMARY.md]
 started: 2026-03-30T00:00:00Z
-updated: 2026-03-30T00:15:00Z
+updated: 2026-03-30T00:20:00Z
 ---
 
 ## Current Test
@@ -63,27 +63,42 @@ blocked: 0
   reason: "User reported: buttons flicker — show inactive briefly then update to persisted state"
   severity: minor
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "DiffPanel.svelte initializes toggle state to false (lines 45-48), then $effect loads persisted values async via Promise.all (lines 60-71). First render shows defaults, second render shows persisted values."
+  artifacts:
+    - path: "src/components/DiffPanel.svelte"
+      issue: "Sync defaults + async load = guaranteed flicker on mount"
+  missing:
+    - "Delay rendering toggle buttons until preferences load, or lift preferences to parent so they're resolved before DiffPanel mounts"
+  debug_session: ".planning/debug/toggle-buttons-flicker.md"
 
 - truth: "Switching from Hunk to Full view mode updates the diff display live"
   status: failed
   reason: "User reported: only works after closing and reopening diff panel, not when switching modes live"
   severity: major
   test: 4
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Race condition: handleViewModeChange calls setDiffShowFullFile() (async) but fires ondiffoptionschange() immediately without awaiting. buildDiffOptions in RepoView reads the stale store value."
+  artifacts:
+    - path: "src/components/DiffPanel.svelte"
+      issue: "setDiffShowFullFile() not awaited before ondiffoptionschange() on line 78-80"
+    - path: "src/components/RepoView.svelte"
+      issue: "buildDiffOptions reads showFullFile from store which still has old value"
+  missing:
+    - "Await setDiffShowFullFile() before calling ondiffoptionschange()"
+  debug_session: ".planning/debug/viewmode-switch-no-live-update.md"
 
 - truth: "Toggling Ignore Whitespace re-fetches diff and removes whitespace-only changes"
   status: failed
   reason: "User reported: toggling ignore whitespace on/off shows the same exact diff, indentation changes still visible"
   severity: major
   test: 7
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Two issues: (1) diff.rs line 39 uses opts.ignore_whitespace_change() (git -b flag, only ignores amount changes) instead of opts.ignore_whitespace() (git -w flag, ignores all whitespace). (2) Same async race as test 4: setDiffIgnoreWhitespace() not awaited before ondiffoptionschange()."
+  artifacts:
+    - path: "src-tauri/src/commands/diff.rs"
+      issue: "Line 39: ignore_whitespace_change() should be ignore_whitespace()"
+    - path: "src/components/DiffPanel.svelte"
+      issue: "setDiffIgnoreWhitespace() not awaited before ondiffoptionschange()"
+  missing:
+    - "Change ignore_whitespace_change to ignore_whitespace in diff.rs"
+    - "Await setDiffIgnoreWhitespace() before calling ondiffoptionschange()"
+    - "Update test_diff.rs to cover indentation (not just amount changes)"
+  debug_session: ".planning/debug/ignore-whitespace-toggle.md"
