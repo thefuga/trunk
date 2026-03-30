@@ -692,6 +692,20 @@ function startRightResize(e: MouseEvent) {
           cachedDiffOptions = options;
           if (selectedFile && selectedFile.kind !== "conflicted") {
             await refetchFileDiff(selectedFile.path, selectedFile.kind, options);
+          } else if (selectedCommitFile && selectedCommitOid) {
+            try {
+              const fileDiffs = await safeInvoke<FileDiff[]>("diff_commit_file", {
+                path: repoPath,
+                oid: selectedCommitOid,
+                filePath: selectedCommitFile,
+                options,
+              });
+              commitFileDiffs = commitFileDiffs.map((fd) =>
+                fd.path === selectedCommitFile && fileDiffs.length > 0 ? fileDiffs[0] : fd,
+              );
+            } catch {
+              // non-fatal
+            }
           }
         }}
         onclose={handleDiffClose}
