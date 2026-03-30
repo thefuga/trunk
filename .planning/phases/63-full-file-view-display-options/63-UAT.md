@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 63-full-file-view-display-options
 source: [63-01-SUMMARY.md, 63-02-SUMMARY.md]
 started: 2026-03-30T00:00:00Z
-updated: 2026-03-30T00:20:00Z
+updated: 2026-03-30T01:00:00Z
 ---
 
 ## Current Test
@@ -59,7 +59,7 @@ blocked: 0
 ## Gaps
 
 - truth: "Toggle buttons show persisted active state immediately when diff opens"
-  status: failed
+  status: resolved
   reason: "User reported: buttons flicker — show inactive briefly then update to persisted state"
   severity: minor
   test: 1
@@ -72,7 +72,7 @@ blocked: 0
   debug_session: ".planning/debug/toggle-buttons-flicker.md"
 
 - truth: "Switching from Hunk to Full view mode updates the diff display live"
-  status: failed
+  status: resolved
   reason: "User reported: only works after closing and reopening diff panel, not when switching modes live"
   severity: major
   test: 4
@@ -87,7 +87,7 @@ blocked: 0
   debug_session: ".planning/debug/viewmode-switch-no-live-update.md"
 
 - truth: "Toggling Ignore Whitespace re-fetches diff and removes whitespace-only changes"
-  status: failed
+  status: resolved
   reason: "User reported: toggling ignore whitespace on/off shows the same exact diff, indentation changes still visible"
   severity: major
   test: 7
