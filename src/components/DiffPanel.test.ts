@@ -11,6 +11,14 @@ import DiffPanel from "./DiffPanel.svelte";
 // Shared Tauri mock
 import "../__tests__/helpers/tauri-mock";
 
+// Helper: flush microtasks (Promise.resolve in store mocks) + Svelte update queue
+// Needed because DiffPanel gates rendering on prefsLoaded, which is set after
+// the $effect's Promise.all resolves (microtask) and Svelte processes the update.
+async function flushPrefs() {
+	await new Promise((r) => setTimeout(r, 0));
+	await tick();
+}
+
 // Mock invoke and toast for hunk staging operations
 vi.mock("../lib/invoke.js", () => ({
 	safeInvoke: vi.fn().mockResolvedValue(undefined),
@@ -157,7 +165,7 @@ const testDiffWithMergedSpans: FileDiff = {
 };
 
 describe("DiffPanel", () => {
-	it("renders hunk header", () => {
+	it("renders hunk header", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -165,10 +173,11 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
 	});
 
-	it("renders added lines with + marker", () => {
+	it("renders added lines with + marker", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -176,11 +185,12 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// originSymbol("Add") = "+", content follows
 		expect(screen.getByText("+const x = 2;")).toBeInTheDocument();
 	});
 
-	it("renders deleted lines with - marker", () => {
+	it("renders deleted lines with - marker", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -188,10 +198,11 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("-const x = 1;")).toBeInTheDocument();
 	});
 
-	it("renders context lines", () => {
+	it("renders context lines", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -199,6 +210,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// Context lines rendered as " " + content (space marker + content)
 		// Testing Library normalizes leading whitespace, so check raw textContent
 		const bodyText = container.textContent ?? "";
@@ -206,7 +218,7 @@ describe("DiffPanel", () => {
 		expect(bodyText).toContain("export { x };");
 	});
 
-	it("renders file path in multi-file view", () => {
+	it("renders file path in multi-file view", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -215,11 +227,12 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// When selectedPath is null, file header bar shows the path
 		expect(screen.getByText("src/main.ts")).toBeInTheDocument();
 	});
 
-	it("shows binary file indicator", () => {
+	it("shows binary file indicator", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [binaryDiff],
@@ -228,6 +241,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		expect(
 			screen.getByText(/Binary file.*no diff available/),
 		).toBeInTheDocument();
@@ -242,12 +256,13 @@ describe("DiffPanel", () => {
 				onclose,
 			},
 		});
+		await flushPrefs();
 		const closeBtn = screen.getByLabelText("Close diff");
 		await fireEvent.click(closeBtn);
 		expect(onclose).toHaveBeenCalledOnce();
 	});
 
-	it("shows Stage Hunk button for unstaged diffs", () => {
+	it("shows Stage Hunk button for unstaged diffs", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -257,11 +272,12 @@ describe("DiffPanel", () => {
 				repoPath: "/test/repo",
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("Stage Hunk")).toBeInTheDocument();
 		expect(screen.getByText("Discard Hunk")).toBeInTheDocument();
 	});
 
-	it("shows Unstage Hunk button for staged diffs", () => {
+	it("shows Unstage Hunk button for staged diffs", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -271,10 +287,11 @@ describe("DiffPanel", () => {
 				repoPath: "/test/repo",
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("Unstage Hunk")).toBeInTheDocument();
 	});
 
-	it("does not show hunk action buttons for commit diffs", () => {
+	it("does not show hunk action buttons for commit diffs", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -283,12 +300,13 @@ describe("DiffPanel", () => {
 				diffKind: "commit",
 			},
 		});
+		await flushPrefs();
 		expect(screen.queryByText("Stage Hunk")).toBeNull();
 		expect(screen.queryByText("Unstage Hunk")).toBeNull();
 		expect(screen.queryByText("Discard Hunk")).toBeNull();
 	});
 
-	it("renders word-span highlights for emphasized segments", () => {
+	it("renders word-span highlights for emphasized segments", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiffWithMergedSpans],
@@ -296,6 +314,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		const deleteSpans = container.querySelectorAll(".word-delete");
 		const addSpans = container.querySelectorAll(".word-add");
 		expect(deleteSpans.length).toBeGreaterThanOrEqual(1);
@@ -306,7 +325,7 @@ describe("DiffPanel", () => {
 		expect(addTexts).toContain("mars");
 	});
 
-	it("renders non-emphasized spans without highlight class", () => {
+	it("renders non-emphasized spans without highlight class", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiffWithMergedSpans],
@@ -314,6 +333,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// "hello " text should not be inside a .word-add or .word-delete element
 		const highlightedEls = container.querySelectorAll(
 			".word-add, .word-delete",
@@ -329,7 +349,7 @@ describe("DiffPanel", () => {
 		expect(container.textContent).toContain("hello ");
 	});
 
-	it("falls back to plain rendering when spans is empty", () => {
+	it("falls back to plain rendering when spans is empty", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -337,6 +357,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// No word-span highlight elements should exist
 		expect(container.querySelectorAll(".word-add").length).toBe(0);
 		expect(container.querySelectorAll(".word-delete").length).toBe(0);
@@ -344,7 +365,7 @@ describe("DiffPanel", () => {
 		expect(container.textContent).toContain("+const x = 2;");
 	});
 
-	it("renders syntax class on span elements", () => {
+	it("renders syntax class on span elements", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiffWithMergedSpans],
@@ -352,13 +373,14 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		const keywordSpans = container.querySelectorAll(".syn-keyword");
 		expect(keywordSpans.length).toBeGreaterThanOrEqual(1);
 		const stringSpans = container.querySelectorAll(".syn-string");
 		expect(stringSpans.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("applies opacity reduction class on add/delete lines", () => {
+	it("applies opacity reduction class on add/delete lines", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiffWithMergedSpans],
@@ -366,6 +388,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// Verify diff-line-add and diff-line-delete classes exist on line containers
 		const addLines = container.querySelectorAll(".diff-line-add");
 		const deleteLines = container.querySelectorAll(".diff-line-delete");
@@ -373,7 +396,7 @@ describe("DiffPanel", () => {
 		expect(deleteLines.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("renders syntax and word-diff classes simultaneously on emphasized spans", () => {
+	it("renders syntax and word-diff classes simultaneously on emphasized spans", async () => {
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiffWithMergedSpans],
@@ -381,6 +404,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// Emphasized spans on Delete lines should have both syn-string and word-delete
 		const combinedSpans = container.querySelectorAll(".syn-string.word-delete");
 		expect(combinedSpans.length).toBeGreaterThanOrEqual(1);
@@ -391,7 +415,7 @@ describe("DiffPanel", () => {
 
 	// ---- VIEW-01: View mode toggle tests ----
 
-	it("renders view mode segmented control with three options", () => {
+	it("renders view mode segmented control with three options", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -399,12 +423,13 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("Hunk")).toBeInTheDocument();
 		expect(screen.getByText("Full")).toBeInTheDocument();
 		expect(screen.getByText("Split")).toBeInTheDocument();
 	});
 
-	it("shows hunk view by default", () => {
+	it("shows hunk view by default", async () => {
 		render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -412,6 +437,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		expect(screen.getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
 	});
 
@@ -424,10 +450,10 @@ describe("DiffPanel", () => {
 			},
 		});
 		// Let the initial $effect (getDiffViewMode) settle
-		await tick();
+		await flushPrefs();
 		await fireEvent.click(screen.getByText("Full"));
 		// Flush Svelte reactivity
-		await tick();
+		await flushPrefs();
 		// Full file view renders diff content (no hunk headers)
 		expect(screen.queryByText("@@ -1,3 +1,4 @@")).toBeNull();
 	});
@@ -441,16 +467,20 @@ describe("DiffPanel", () => {
 			},
 		});
 		// Let the initial $effect (getDiffViewMode) settle
-		await tick();
+		await flushPrefs();
 		await fireEvent.click(screen.getByText("Split"));
 		// Flush Svelte reactivity
-		await tick();
+		await flushPrefs();
 		expect(screen.getByText(/Split view/)).toBeInTheDocument();
 	});
 
 	// ---- DISP-01: Line number gutter tests ----
 
-	it("renders line numbers in gutter for context lines", () => {
+	it("renders line numbers in gutter for context lines", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
+			() => Promise.resolve("hunk"),
+		);
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -458,6 +488,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		// Context lines have both old_lineno and new_lineno set
 		// The first context line has old_lineno: 1, new_lineno: 1
 		// Each diff line div has two gutter spans as the first two children
@@ -473,7 +504,11 @@ describe("DiffPanel", () => {
 		expect(gutterSpans[1].textContent).toBe("1");
 	});
 
-	it("shows only new line number for Add lines", () => {
+	it("shows only new line number for Add lines", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
+			() => Promise.resolve("hunk"),
+		);
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -481,6 +516,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		const addLines = container.querySelectorAll(".diff-line-add");
 		expect(addLines.length).toBeGreaterThanOrEqual(1);
 		for (const addLine of addLines) {
@@ -491,7 +527,11 @@ describe("DiffPanel", () => {
 		}
 	});
 
-	it("shows only old line number for Delete lines", () => {
+	it("shows only old line number for Delete lines", async () => {
+		const storeMock = await import("../lib/store.js");
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
+			() => Promise.resolve("hunk"),
+		);
 		const { container } = render(DiffPanel, {
 			props: {
 				fileDiffs: [testDiff],
@@ -499,6 +539,7 @@ describe("DiffPanel", () => {
 				onclose: vi.fn(),
 			},
 		});
+		await flushPrefs();
 		const deleteLines = container.querySelectorAll(".diff-line-delete");
 		expect(deleteLines.length).toBeGreaterThanOrEqual(1);
 		for (const deleteLine of deleteLines) {
@@ -581,9 +622,9 @@ describe("VIEW-04: Full file view", () => {
 				onclose: vi.fn(),
 			},
 		});
-		await tick();
+		await flushPrefs();
 		await fireEvent.click(screen.getByText("Full"));
-		await tick();
+		await flushPrefs();
 		// Hunk header should not be present
 		expect(screen.queryByText("@@ -1,3 +1,4 @@")).toBeNull();
 		// But diff content should be present
@@ -598,9 +639,9 @@ describe("VIEW-04: Full file view", () => {
 				onclose: vi.fn(),
 			},
 		});
-		await tick();
+		await flushPrefs();
 		await fireEvent.click(screen.getByText("Full"));
-		await tick();
+		await flushPrefs();
 		// Context lines should have gutter numbers
 		const contextLines = container.querySelectorAll(".diff-line-context");
 		expect(contextLines.length).toBeGreaterThanOrEqual(1);
@@ -621,9 +662,9 @@ describe("VIEW-04: Full file view", () => {
 				repoPath: "/test/repo",
 			},
 		});
-		await tick();
+		await flushPrefs();
 		await fireEvent.click(screen.getByText("Full"));
-		await tick();
+		await flushPrefs();
 		expect(screen.queryByText("Stage Hunk")).toBeNull();
 		expect(screen.queryByText("Discard Hunk")).toBeNull();
 	});
@@ -651,8 +692,8 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 				repoPath: "/test/repo",
 			},
 		});
-		await tick();
-		await tick();
+		await flushPrefs();
+		await flushPrefs();
 
 		const stageBtn = screen.getByText("Stage Hunk");
 		expect(stageBtn.closest("button")).toBeDisabled();
@@ -682,8 +723,8 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 				selectedPath: "src/main.ts",
 			},
 		});
-		await tick();
-		await tick();
+		await flushPrefs();
+		await flushPrefs();
 
 		const stageFileBtn = screen.getByText("Stage File");
 		expect(stageFileBtn.closest("button")).toBeDisabled();
@@ -711,8 +752,8 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 				repoPath: "/test/repo",
 			},
 		});
-		await tick();
-		await tick();
+		await flushPrefs();
+		await flushPrefs();
 
 		const stageBtn = screen.getByText("Stage Hunk").closest("button");
 		expect(stageBtn?.title).toBe(
@@ -744,12 +785,12 @@ describe("DISP-02: Word wrap toggle", () => {
 				onclose: vi.fn(),
 			},
 		});
-		await tick();
+		await flushPrefs();
 
 		// Click the word wrap toggle button
 		const wrapBtn = screen.getByTitle("Toggle word wrap");
 		await fireEvent.click(wrapBtn);
-		await tick();
+		await flushPrefs();
 
 		// Verify that setDiffWordWrap was called with true
 		expect(vi.mocked(storeMock.setDiffWordWrap)).toHaveBeenCalledWith(true);
@@ -771,14 +812,14 @@ describe("DISP-02: Word wrap toggle", () => {
 				onclose: vi.fn(),
 			},
 		});
-		await tick();
+		await flushPrefs();
 
 		const wrapBtn = screen.getByTitle("Toggle word wrap");
 		// Before click: should not have active class
 		expect(wrapBtn.classList.contains("active")).toBe(false);
 
 		await fireEvent.click(wrapBtn);
-		await tick();
+		await flushPrefs();
 
 		// After click: should have active class
 		expect(wrapBtn.classList.contains("active")).toBe(true);

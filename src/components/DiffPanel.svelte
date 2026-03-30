@@ -46,6 +46,7 @@ let viewMode = $state<ViewMode>("hunk");
 let ignoreWhitespace = $state(false);
 let showInvisibles = $state(false);
 let wordWrap = $state(false);
+let prefsLoaded = $state(false);
 let hunkOperationInFlight = $state(false);
 let focusedHunkIndex = $state(0);
 let hunkElements = $state<Record<string, HTMLDivElement>>({});
@@ -68,21 +69,22 @@ $effect(() => {
 		ignoreWhitespace = iw;
 		showInvisibles = si;
 		wordWrap = ww;
+		prefsLoaded = true;
 	}).catch(() => {});
 });
 
-function handleViewModeChange(mode: ViewMode) {
+async function handleViewModeChange(mode: ViewMode) {
 	viewMode = mode;
-	setDiffViewMode(mode);
+	await setDiffViewMode(mode);
 	const shouldShowFull = mode === "full";
-	setDiffShowFullFile(shouldShowFull);
+	await setDiffShowFullFile(shouldShowFull);
 	clearSelection();
 	ondiffoptionschange?.();
 }
 
-function handleIgnoreWhitespaceChange(value: boolean) {
+async function handleIgnoreWhitespaceChange(value: boolean) {
 	ignoreWhitespace = value;
-	setDiffIgnoreWhitespace(value);
+	await setDiffIgnoreWhitespace(value);
 	ondiffoptionschange?.();
 }
 
@@ -342,6 +344,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 </script>
 
 <div style="height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg);">
+	{#if prefsLoaded}
 	<DiffToolbar
 		{viewMode}
 		onviewmodechange={handleViewModeChange}
@@ -383,4 +386,5 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 		onunstagelines={handleUnstageLines}
 		ondiscardlines={handleDiscardLines}
 	/>
+	{/if}
 </div>
