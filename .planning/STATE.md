@@ -4,13 +4,13 @@ milestone: v0.12
 milestone_name: Better Diffs
 status: executing
 stopped_at: Completed 64-02-PLAN.md
-last_updated: "2026-03-30T15:56:30.034Z"
+last_updated: "2026-03-30T17:54:33.178Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md (updated 2026-03-28 after v0.12 milestone started)
 
 ## Current Position
 
-Phase: 64 (split-view) — EXECUTING
-Plan: 3 of 3
+Phase: 64
+Plan: Not started
 Status: Ready to execute
 Last activity: 2026-03-30
 

@@ -173,7 +173,7 @@ Full details: [milestones/v0.11-ROADMAP.md](milestones/v0.11-ROADMAP.md)
 - [x] **Phase 61: Syntax Highlighting** - Language-aware syntax coloring for all diff lines using syntect (completed 2026-03-29)
 - [x] **Phase 62: UI Refactor & Component Structure** - Extract DiffPanel monolith into composable components with view mode dispatch (completed 2026-03-29)
 - [x] **Phase 63: Full File View & Display Options** - Full file view, whitespace toggle, context dropdown, word wrap, show invisibles, line numbers (completed 2026-03-29)
-- [ ] **Phase 64: Split View** - Side-by-side diff with aligned phantom rows and synchronized scrolling
+- [x] **Phase 64: Split View** - Side-by-side diff with aligned phantom rows and synchronized scrolling (completed 2026-03-30)
 
 ## Phase Details
 
@@ -259,7 +259,7 @@ Plans:
   2. Scrolling either panel scrolls both panels in sync
   3. User can stage/unstage/discard hunks and lines from within split view (disabled when whitespace ignore is active)
   4. Word-level diff highlights and syntax coloring render correctly in both split view panels
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 64-01-PLAN.md — ViewMode refactor: ContentMode + LayoutMode types, store functions, DiffToolbar two controls, DiffViewer 2D dispatch, tests
 - [x] 64-02-PLAN.md — SplitView component: pairLines utility, row alignment, phantom spacers, scroll sync, resizable divider, tests
@@ -278,7 +278,7 @@ Phases execute in numeric order: 59 → 60 → 61 → 62 → 63 → 64
 | 61. Syntax Highlighting | 2/2 | Complete    | 2026-03-29 |
 | 62. UI Refactor & Component Structure | 2/2 | Complete    | 2026-03-29 |
 | 63. Full File View & Display Options | 3/3 | Complete    | 2026-03-30 |
-| 64. Split View | 2/3 | In Progress|  |
+| 64. Split View | 2/3 | Complete    | 2026-03-30 |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
