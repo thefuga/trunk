@@ -113,8 +113,10 @@ function gutterWidth(maxNum: number): string {
   <div>
     <!-- File header bar (hidden for single-file view since top bar shows the path) -->
     {#if !selectedPath}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div style="
+      <div
+        role="button"
+        tabindex="0"
+        style="
         background: var(--color-surface);
         border-bottom: 1px solid var(--color-border);
         font-size: 12px;
@@ -129,7 +131,10 @@ function gutterWidth(maxNum: number): string {
         display: flex;
         align-items: center;
         gap: 4px;
-      " onclick={() => onfilecollapsetoggle(fd.path)}>
+      "
+        onclick={() => onfilecollapsetoggle(fd.path)}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onfilecollapsetoggle(fd.path); } }}
+      >
         <span style="font-size: 10px; color: var(--color-text-muted); width: 10px; display: inline-block;">{collapsedFiles.has(fd.path) ? '▶' : '▼'}</span>
         {fd.path}
       </div>
@@ -299,6 +304,8 @@ function gutterWidth(maxNum: number): string {
           {@const trailStart = showInvisibles ? trailingWhitespaceStart(line.content) : line.content.length}
           <div
             class="diff-line {line.origin === 'Add' ? 'diff-line-add' : line.origin === 'Delete' ? 'diff-line-delete' : 'diff-line-context'}"
+            role={isSelectable ? 'button' : undefined}
+            tabindex={isSelectable ? 0 : undefined}
             style="
               font-family: monospace;
               font-size: 12px;
@@ -316,7 +323,8 @@ function gutterWidth(maxNum: number): string {
             "
             onmousedown={(e) => { if (isSelectable && e.shiftKey) e.preventDefault(); }}
             onclick={(e) => isSelectable && onlineclick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, e)}
-          ><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); user-select: none; flex-shrink: 0;">{line.old_lineno ?? ''}</span><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0;">{line.new_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}<span>{originSymbol(line.origin)}</span>{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{originSymbol(line.origin)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{originSymbol(line.origin)}{line.content}{/if}{/if}</span></div>
+            onkeydown={(e) => { if (isSelectable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onlineclick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, e); } }}
+          ><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0;">{line.old_lineno ?? ''}</span><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0;">{line.new_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}<span>{originSymbol(line.origin)}</span>{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{originSymbol(line.origin)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{originSymbol(line.origin)}{line.content}{/if}{/if}</span></div>
         {/each}
       {/each}
     {/if}
