@@ -66,7 +66,6 @@ let {
     {/if}
   </button>
 
-  <div class="toolbar-divider"></div>
   <button
     class="toggle-btn"
     class:active={ignoreWhitespace}
@@ -182,13 +181,6 @@ let {
     line-height: 1;
     padding: 2px 4px;
     border-radius: 3px;
-    flex-shrink: 0;
-  }
-
-  .toolbar-divider {
-    width: 1px;
-    height: 16px;
-    background: var(--color-border);
     flex-shrink: 0;
   }
 
