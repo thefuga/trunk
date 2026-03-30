@@ -64,10 +64,10 @@ describe("TabBar", () => {
 		render(TabBar, {
 			props: { ...defaultProps, onactivate },
 		});
-		// Click the inactive tab (role="tab")
+		// Mousedown on the inactive tab (role="tab") — TabBar uses onmousedown, not onclick
 		const otherTab = screen.getByText("other").closest('[role="tab"]');
 		expect(otherTab).toBeTruthy();
-		await fireEvent.click(otherTab as Element);
+		await fireEvent.mouseDown(otherTab as Element, { button: 0 });
 		expect(onactivate).toHaveBeenCalledWith("2");
 	});
 
