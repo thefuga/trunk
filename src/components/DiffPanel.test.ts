@@ -1,11 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { describe, expect, it, vi } from "vitest";
+import { splitInvisibles, trailingWhitespaceStart } from "../lib/diff-utils.js";
 import type { FileDiff } from "../lib/types.js";
-import {
-	splitInvisibles,
-	trailingWhitespaceStart,
-} from "../lib/diff-utils.js";
 import DiffPanel from "./DiffPanel.svelte";
 
 // Shared Tauri mock
@@ -40,8 +37,8 @@ vi.mock("../lib/store.js", () => {
 			currentViewMode = mode;
 			return Promise.resolve(undefined);
 		}),
-		getDiffIgnoreWhitespace: vi.fn(
-			() => Promise.resolve(currentIgnoreWhitespace),
+		getDiffIgnoreWhitespace: vi.fn(() =>
+			Promise.resolve(currentIgnoreWhitespace),
 		),
 		setDiffIgnoreWhitespace: vi.fn((v: boolean) => {
 			currentIgnoreWhitespace = v;
@@ -49,9 +46,7 @@ vi.mock("../lib/store.js", () => {
 		}),
 		getDiffShowFullFile: vi.fn().mockResolvedValue(false),
 		setDiffShowFullFile: vi.fn().mockResolvedValue(undefined),
-		getDiffShowInvisibles: vi.fn(
-			() => Promise.resolve(currentShowInvisibles),
-		),
+		getDiffShowInvisibles: vi.fn(() => Promise.resolve(currentShowInvisibles)),
 		setDiffShowInvisibles: vi.fn((v: boolean) => {
 			currentShowInvisibles = v;
 			return Promise.resolve(undefined);
@@ -146,7 +141,12 @@ const testDiffWithMergedSpans: FileDiff = {
 					old_lineno: 1,
 					new_lineno: null,
 					spans: [
-						{ start: 0, end: 6, syntax_class: "syn-keyword", emphasized: false },
+						{
+							start: 0,
+							end: 6,
+							syntax_class: "syn-keyword",
+							emphasized: false,
+						},
 						{ start: 6, end: 11, syntax_class: "syn-string", emphasized: true },
 					],
 				},
@@ -156,7 +156,12 @@ const testDiffWithMergedSpans: FileDiff = {
 					old_lineno: null,
 					new_lineno: 1,
 					spans: [
-						{ start: 0, end: 6, syntax_class: "syn-keyword", emphasized: false },
+						{
+							start: 0,
+							end: 6,
+							syntax_class: "syn-keyword",
+							emphasized: false,
+						},
 						{ start: 6, end: 10, syntax_class: "syn-string", emphasized: true },
 					],
 				},
@@ -479,8 +484,8 @@ describe("DiffPanel", () => {
 
 	it("renders line numbers in gutter for context lines", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
 		const { container } = render(DiffPanel, {
 			props: {
@@ -507,8 +512,8 @@ describe("DiffPanel", () => {
 
 	it("shows only new line number for Add lines", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
 		const { container } = render(DiffPanel, {
 			props: {
@@ -530,8 +535,8 @@ describe("DiffPanel", () => {
 
 	it("shows only old line number for Delete lines", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
 		const { container } = render(DiffPanel, {
 			props: {
@@ -677,11 +682,11 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 	it("disables Stage Hunk button when whitespace ignore is active", async () => {
 		const storeMock = await import("../lib/store.js");
 		// Reset viewMode to hunk (previous tests may have changed it)
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(true),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(true),
 		);
 
 		render(DiffPanel, {
@@ -700,18 +705,18 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 		expect(stageBtn.closest("button")).toBeDisabled();
 
 		// Reset mock
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(false),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(false),
 		);
 	});
 
 	it("disables Stage File button when whitespace ignore is active", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(true),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(true),
 		);
 
 		render(DiffPanel, {
@@ -730,18 +735,18 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 		const stageFileBtn = screen.getByText("Stage File");
 		expect(stageFileBtn.closest("button")).toBeDisabled();
 
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(false),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(false),
 		);
 	});
 
 	it("shows tooltip on disabled staging buttons", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(true),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(true),
 		);
 
 		render(DiffPanel, {
@@ -761,8 +766,8 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 			"Staging is disabled while whitespace changes are ignored",
 		);
 
-		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(
-			() => Promise.resolve(false),
+		vi.mocked(storeMock.getDiffIgnoreWhitespace).mockImplementation(() =>
+			Promise.resolve(false),
 		);
 	});
 });
@@ -772,11 +777,11 @@ describe("WHSP-02: Staging disabled when whitespace ignore active", () => {
 describe("DISP-02: Word wrap toggle", () => {
 	it("persists word wrap preference when toggle clicked", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
-		vi.mocked(storeMock.getDiffWordWrap).mockImplementation(
-			() => Promise.resolve(false),
+		vi.mocked(storeMock.getDiffWordWrap).mockImplementation(() =>
+			Promise.resolve(false),
 		);
 
 		render(DiffPanel, {
@@ -799,11 +804,11 @@ describe("DISP-02: Word wrap toggle", () => {
 
 	it("word wrap toggle button becomes active when clicked", async () => {
 		const storeMock = await import("../lib/store.js");
-		vi.mocked(storeMock.getDiffViewMode).mockImplementation(
-			() => Promise.resolve("hunk"),
+		vi.mocked(storeMock.getDiffViewMode).mockImplementation(() =>
+			Promise.resolve("hunk"),
 		);
-		vi.mocked(storeMock.getDiffWordWrap).mockImplementation(
-			() => Promise.resolve(false),
+		vi.mocked(storeMock.getDiffWordWrap).mockImplementation(() =>
+			Promise.resolve(false),
 		);
 
 		render(DiffPanel, {

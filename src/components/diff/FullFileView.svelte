@@ -1,47 +1,52 @@
 <script lang="ts">
+import {
+	splitInvisibles,
+	trailingWhitespaceStart,
+} from "../../lib/diff-utils.js";
 import type { FileDiff } from "../../lib/types.js";
-import { splitInvisibles, trailingWhitespaceStart } from "../../lib/diff-utils.js";
 
 interface Props {
-  fileDiffs: FileDiff[];
-  showInvisibles: boolean;
-  wordWrap: boolean;
+	fileDiffs: FileDiff[];
+	showInvisibles: boolean;
+	wordWrap: boolean;
 }
 
 let { fileDiffs, showInvisibles, wordWrap }: Props = $props();
 
 function lineBackground(origin: string): string {
-  if (origin === "Add") return "var(--color-diff-add-bg)";
-  if (origin === "Delete") return "var(--color-diff-delete-bg)";
-  return "transparent";
+	if (origin === "Add") return "var(--color-diff-add-bg)";
+	if (origin === "Delete") return "var(--color-diff-delete-bg)";
+	return "transparent";
 }
 
 function lineColor(origin: string): string {
-  if (origin === "Add") return "var(--color-diff-add)";
-  if (origin === "Delete") return "var(--color-diff-delete)";
-  return "var(--color-text)";
+	if (origin === "Add") return "var(--color-diff-add)";
+	if (origin === "Delete") return "var(--color-diff-delete)";
+	return "var(--color-text)";
 }
 
 function originSymbol(origin: string): string {
-  if (origin === "Add") return "+";
-  if (origin === "Delete") return "-";
-  return " ";
+	if (origin === "Add") return "+";
+	if (origin === "Delete") return "-";
+	return " ";
 }
 
 function maxLineNumber(fd: FileDiff): number {
-  let max = 0;
-  for (const hunk of fd.hunks) {
-    for (const line of hunk.lines) {
-      if (line.old_lineno !== null && line.old_lineno > max) max = line.old_lineno;
-      if (line.new_lineno !== null && line.new_lineno > max) max = line.new_lineno;
-    }
-  }
-  return max;
+	let max = 0;
+	for (const hunk of fd.hunks) {
+		for (const line of hunk.lines) {
+			if (line.old_lineno !== null && line.old_lineno > max)
+				max = line.old_lineno;
+			if (line.new_lineno !== null && line.new_lineno > max)
+				max = line.new_lineno;
+		}
+	}
+	return max;
 }
 
 function gutterWidth(maxNum: number): string {
-  const digits = Math.max(String(maxNum).length, 1);
-  return `${digits + 1}ch`;
+	const digits = Math.max(String(maxNum).length, 1);
+	return `${digits + 1}ch`;
 }
 </script>
 

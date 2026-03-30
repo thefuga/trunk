@@ -1,14 +1,19 @@
 <script lang="ts">
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
-import { showToast } from "../lib/toast.svelte.js";
 import {
 	getDiffContextLines,
-	getDiffViewMode, setDiffViewMode,
-	getDiffIgnoreWhitespace, setDiffIgnoreWhitespace,
-	getDiffShowFullFile, setDiffShowFullFile,
-	getDiffShowInvisibles, setDiffShowInvisibles,
-	getDiffWordWrap, setDiffWordWrap,
+	getDiffIgnoreWhitespace,
+	getDiffShowFullFile,
+	getDiffShowInvisibles,
+	getDiffViewMode,
+	getDiffWordWrap,
+	setDiffIgnoreWhitespace,
+	setDiffShowFullFile,
+	setDiffShowInvisibles,
+	setDiffViewMode,
+	setDiffWordWrap,
 } from "../lib/store.js";
+import { showToast } from "../lib/toast.svelte.js";
 import type {
 	CommitDetail,
 	DiffLine,
@@ -67,16 +72,20 @@ $effect(() => {
 		getDiffIgnoreWhitespace(),
 		getDiffShowInvisibles(),
 		getDiffWordWrap(),
-	]).then(([m, cl, iw, si, ww]) => {
-		viewMode = m;
-		contextLines = cl;
-		ignoreWhitespace = iw;
-		showInvisibles = si;
-		wordWrap = ww;
-	}).catch(() => {});
+	])
+		.then(([m, cl, iw, si, ww]) => {
+			viewMode = m;
+			contextLines = cl;
+			ignoreWhitespace = iw;
+			showInvisibles = si;
+			wordWrap = ww;
+		})
+		.catch(() => {});
 });
 
-function currentDiffOptions(overrides?: Partial<DiffRequestOptions>): DiffRequestOptions {
+function currentDiffOptions(
+	overrides?: Partial<DiffRequestOptions>,
+): DiffRequestOptions {
 	return {
 		contextLines,
 		ignoreWhitespace,

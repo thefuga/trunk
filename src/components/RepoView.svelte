@@ -180,9 +180,11 @@ $effect(() => {
 		getDiffContextLines(),
 		getDiffIgnoreWhitespace(),
 		getDiffShowFullFile(),
-	]).then(([contextLines, ignoreWhitespace, showFullFile]) => {
-		cachedDiffOptions = { contextLines, ignoreWhitespace, showFullFile };
-	}).catch(() => {});
+	])
+		.then(([contextLines, ignoreWhitespace, showFullFile]) => {
+			cachedDiffOptions = { contextLines, ignoreWhitespace, showFullFile };
+		})
+		.catch(() => {});
 });
 
 function buildDiffOptions(): DiffRequestOptions {

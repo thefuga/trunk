@@ -35,13 +35,11 @@ jobs:
             webkit2gtk-driver \
             xvfb
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: jdx/mise-action@v2
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - uses: oven-sh/setup-bun@v2
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile

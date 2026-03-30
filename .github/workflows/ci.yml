@@ -21,27 +21,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: biomejs/setup-biome@v2
-      - run: biome ci .
+      - uses: jdx/mise-action@v2
+      - run: bun install --frozen-lockfile
+      - run: just biome
 
   cargo-fmt:
     name: Rust Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - uses: jdx/mise-action@v2
+      - run: rustup component add rustfmt
+      - run: just fmt
 
   svelte-check:
     name: Svelte Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
+      - uses: jdx/mise-action@v2
       - run: bun install --frozen-lockfile
-      - run: bun run check
+      - run: just svelte-check
 
   # ── Gate 2: Heavy checks (only after Gate 1 passes) ──
 
@@ -64,14 +64,13 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      - uses: jdx/mise-action@v2
+      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - run: just clippy
 
   cargo-test:
     name: Rust Tests
@@ -92,26 +91,22 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
+      - uses: jdx/mise-action@v2
+      - run: rustup component add llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage
-        run: cargo llvm-cov --manifest-path src-tauri/Cargo.toml --lcov --output-path rust-lcov.info
-      - name: Generate HTML coverage report
-        run: cargo llvm-cov report --manifest-path src-tauri/Cargo.toml --html --output-dir rust-coverage-html
+        run: just cargo-test-cov
       - name: Upload Rust coverage HTML
         uses: actions/upload-artifact@v4
         with:
           name: rust-coverage-report
           path: rust-coverage-html/
       - name: Compile-check benchmarks
-        run: cargo test --benches --no-run --manifest-path src-tauri/Cargo.toml
+        run: just bench-check
       - name: Report Rust coverage
         if: github.event_name == 'pull_request'
         uses: zgosalvez/github-actions-report-lcov@v4
@@ -128,10 +123,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
+      - uses: jdx/mise-action@v2
       - run: bun install --frozen-lockfile
       - name: Run tests with coverage
-        run: bun run test -- --coverage.enabled
+        run: just vitest-cov
       - name: Upload TypeScript coverage HTML
         uses: actions/upload-artifact@v4
         with:

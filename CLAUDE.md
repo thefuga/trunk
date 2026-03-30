@@ -5,11 +5,13 @@ Desktop Git GUI — Tauri 2 + Svelte 5 + Rust.
 ## Commands
 
 ```bash
-bun run dev          # Vite dev + Tauri watch
-bun run build        # Production build
-bun run test         # vitest (src/**/*.test.ts)
-bun run check        # svelte-check
+just              # List all recipes
+just dev          # Vite dev + Tauri watch
+just build        # Production build
+just check        # Run ALL checks (fmt, biome, svelte-check, clippy, cargo-test, vitest)
 ```
+
+Run `just check` before every commit and push.
 
 ## Stack
 

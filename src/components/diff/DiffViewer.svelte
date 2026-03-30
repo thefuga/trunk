@@ -1,65 +1,72 @@
 <script lang="ts">
 import type {
-  CommitDetail,
-  DiffLine,
-  DiffOrigin,
-  FileDiff,
-  ViewMode,
+	CommitDetail,
+	DiffLine,
+	DiffOrigin,
+	FileDiff,
+	ViewMode,
 } from "../../lib/types.js";
-import HunkView from "./HunkView.svelte";
 import FullFileView from "./FullFileView.svelte";
+import HunkView from "./HunkView.svelte";
 import SplitView from "./SplitView.svelte";
 
 interface Props {
-  viewMode: ViewMode;
-  fileDiffs: FileDiff[];
-  commitDetail: CommitDetail | null;
-  selectedPath: string | null;
-  diffKind: "unstaged" | "staged" | "commit";
-  loading: boolean;
-  hunkOperationInFlight: boolean;
-  ignoreWhitespace: boolean;
-  showInvisibles: boolean;
-  wordWrap: boolean;
-  selectedHunkKey: string | null;
-  selectedLineIndices: Set<number>;
-  selectedCount: number;
-  collapsedFiles: Set<string>;
-  hunkElements: Record<string, HTMLDivElement>;
-  onfilecollapsetoggle: (path: string) => void;
-  onlineclick: (filePath: string, hunkIdx: number, lineIndex: number, origin: DiffOrigin, hunkLines: DiffLine[], e: MouseEvent) => void;
-  onstagehunk: (filePath: string, hunkIndex: number) => void;
-  onunstagehunk: (filePath: string, hunkIndex: number) => void;
-  ondiscardhunk: (filePath: string, hunkIndex: number) => void;
-  onstagelines: (filePath: string, hunkIndex: number) => void;
-  onunstagelines: (filePath: string, hunkIndex: number) => void;
-  ondiscardlines: (filePath: string, hunkIndex: number) => void;
+	viewMode: ViewMode;
+	fileDiffs: FileDiff[];
+	commitDetail: CommitDetail | null;
+	selectedPath: string | null;
+	diffKind: "unstaged" | "staged" | "commit";
+	loading: boolean;
+	hunkOperationInFlight: boolean;
+	ignoreWhitespace: boolean;
+	showInvisibles: boolean;
+	wordWrap: boolean;
+	selectedHunkKey: string | null;
+	selectedLineIndices: Set<number>;
+	selectedCount: number;
+	collapsedFiles: Set<string>;
+	hunkElements: Record<string, HTMLDivElement>;
+	onfilecollapsetoggle: (path: string) => void;
+	onlineclick: (
+		filePath: string,
+		hunkIdx: number,
+		lineIndex: number,
+		origin: DiffOrigin,
+		hunkLines: DiffLine[],
+		e: MouseEvent,
+	) => void;
+	onstagehunk: (filePath: string, hunkIndex: number) => void;
+	onunstagehunk: (filePath: string, hunkIndex: number) => void;
+	ondiscardhunk: (filePath: string, hunkIndex: number) => void;
+	onstagelines: (filePath: string, hunkIndex: number) => void;
+	onunstagelines: (filePath: string, hunkIndex: number) => void;
+	ondiscardlines: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
-  viewMode,
-  fileDiffs,
-  commitDetail,
-  selectedPath,
-  diffKind,
-  loading,
-  hunkOperationInFlight,
-  ignoreWhitespace,
-  showInvisibles,
-  wordWrap,
-  selectedHunkKey,
-  selectedLineIndices,
-  selectedCount,
-  collapsedFiles,
-  hunkElements,
-  onfilecollapsetoggle,
-  onlineclick,
-  onstagehunk,
-  onunstagehunk,
-  ondiscardhunk,
-  onstagelines,
-  onunstagelines,
-  ondiscardlines,
+	viewMode,
+	fileDiffs,
+	commitDetail,
+	selectedPath,
+	diffKind,
+	loading,
+	hunkOperationInFlight,
+	ignoreWhitespace,
+	showInvisibles,
+	wordWrap,
+	selectedHunkKey,
+	selectedLineIndices,
+	selectedCount,
+	collapsedFiles,
+	hunkElements,
+	onfilecollapsetoggle,
+	onlineclick,
+	onstagehunk,
+	onunstagehunk,
+	ondiscardhunk,
+	onstagelines,
+	onunstagelines,
+	ondiscardlines,
 }: Props = $props();
 </script>
 

@@ -290,7 +290,8 @@ const DIFF_VIEW_MODE_KEY = "diff_view_mode";
 
 export async function getDiffViewMode(): Promise<ViewMode> {
 	const stored = await store.get<string>(DIFF_VIEW_MODE_KEY);
-	if (stored === "hunk" || stored === "full" || stored === "split") return stored;
+	if (stored === "hunk" || stored === "full" || stored === "split")
+		return stored;
 	return "hunk";
 }
 

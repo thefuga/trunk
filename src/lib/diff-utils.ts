@@ -4,9 +4,9 @@
  * separate segments with substitution characters.
  */
 export interface InvisibleSegment {
-  text: string;
-  isInvisible: boolean;
-  isTrailing: boolean;
+	text: string;
+	isInvisible: boolean;
+	isTrailing: boolean;
 }
 
 /**
@@ -14,11 +14,11 @@ export interface InvisibleSegment {
  * Returns the string length if there is no trailing whitespace.
  */
 export function trailingWhitespaceStart(text: string): number {
-  let i = text.length;
-  while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) {
-    i--;
-  }
-  return i;
+	let i = text.length;
+	while (i > 0 && (text[i - 1] === " " || text[i - 1] === "\t")) {
+		i--;
+	}
+	return i;
 }
 
 /**
@@ -33,40 +33,40 @@ export function trailingWhitespaceStart(text: string): number {
  * @param isTrailingRegion - Whether this segment falls within trailing whitespace
  */
 export function splitInvisibles(
-  text: string,
-  isTrailingRegion: boolean,
+	text: string,
+	isTrailingRegion: boolean,
 ): InvisibleSegment[] {
-  if (!text) return [];
+	if (!text) return [];
 
-  const segments: InvisibleSegment[] = [];
-  let current = "";
-  let currentIsInvisible = false;
+	const segments: InvisibleSegment[] = [];
+	let current = "";
+	let currentIsInvisible = false;
 
-  for (const ch of text) {
-    const invisible = ch === " " || ch === "\t";
-    if (invisible !== currentIsInvisible && current) {
-      segments.push({
-        text: currentIsInvisible
-          ? current.replace(/ /g, "\u00B7").replace(/\t/g, "\u2192")
-          : current,
-        isInvisible: currentIsInvisible,
-        isTrailing: currentIsInvisible && isTrailingRegion,
-      });
-      current = "";
-    }
-    current += ch;
-    currentIsInvisible = invisible;
-  }
+	for (const ch of text) {
+		const invisible = ch === " " || ch === "\t";
+		if (invisible !== currentIsInvisible && current) {
+			segments.push({
+				text: currentIsInvisible
+					? current.replace(/ /g, "\u00B7").replace(/\t/g, "\u2192")
+					: current,
+				isInvisible: currentIsInvisible,
+				isTrailing: currentIsInvisible && isTrailingRegion,
+			});
+			current = "";
+		}
+		current += ch;
+		currentIsInvisible = invisible;
+	}
 
-  if (current) {
-    segments.push({
-      text: currentIsInvisible
-        ? current.replace(/ /g, "\u00B7").replace(/\t/g, "\u2192")
-        : current,
-      isInvisible: currentIsInvisible,
-      isTrailing: currentIsInvisible && isTrailingRegion,
-    });
-  }
+	if (current) {
+		segments.push({
+			text: currentIsInvisible
+				? current.replace(/ /g, "\u00B7").replace(/\t/g, "\u2192")
+				: current,
+			isInvisible: currentIsInvisible,
+			isTrailing: currentIsInvisible && isTrailingRegion,
+		});
+	}
 
-  return segments;
+	return segments;
 }

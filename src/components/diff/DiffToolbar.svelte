@@ -1,45 +1,45 @@
 <script lang="ts">
+import { Pilcrow, Space, TextWrap } from "@lucide/svelte";
 import type { ViewMode } from "../../lib/types.js";
-import { Space, Pilcrow, TextWrap } from "@lucide/svelte";
 
 interface Props {
-  viewMode: ViewMode;
-  onviewmodechange: (mode: ViewMode) => void;
-  selectedPath: string | null;
-  diffKind: "unstaged" | "staged" | "commit";
-  hunkOperationInFlight: boolean;
-  ignoreWhitespace: boolean;
-  showInvisibles: boolean;
-  wordWrap: boolean;
-  onignorewhitespacechange: (value: boolean) => void;
-  onshowinvisibleschange: (value: boolean) => void;
-  onwordwrapchange: (value: boolean) => void;
-  onstagefile: () => void;
-  onunstagefile: () => void;
-  onclose: () => void;
+	viewMode: ViewMode;
+	onviewmodechange: (mode: ViewMode) => void;
+	selectedPath: string | null;
+	diffKind: "unstaged" | "staged" | "commit";
+	hunkOperationInFlight: boolean;
+	ignoreWhitespace: boolean;
+	showInvisibles: boolean;
+	wordWrap: boolean;
+	onignorewhitespacechange: (value: boolean) => void;
+	onshowinvisibleschange: (value: boolean) => void;
+	onwordwrapchange: (value: boolean) => void;
+	onstagefile: () => void;
+	onunstagefile: () => void;
+	onclose: () => void;
 }
 
 let {
-  viewMode,
-  onviewmodechange,
-  selectedPath,
-  diffKind,
-  hunkOperationInFlight,
-  ignoreWhitespace,
-  showInvisibles,
-  wordWrap,
-  onignorewhitespacechange,
-  onshowinvisibleschange,
-  onwordwrapchange,
-  onstagefile,
-  onunstagefile,
-  onclose,
+	viewMode,
+	onviewmodechange,
+	selectedPath,
+	diffKind,
+	hunkOperationInFlight,
+	ignoreWhitespace,
+	showInvisibles,
+	wordWrap,
+	onignorewhitespacechange,
+	onshowinvisibleschange,
+	onwordwrapchange,
+	onstagefile,
+	onunstagefile,
+	onclose,
 }: Props = $props();
 
 const modes: { label: string; value: ViewMode }[] = [
-  { label: "Hunk", value: "hunk" },
-  { label: "Full", value: "full" },
-  { label: "Split", value: "split" },
+	{ label: "Hunk", value: "hunk" },
+	{ label: "Full", value: "full" },
+	{ label: "Split", value: "split" },
 ];
 </script>
 
