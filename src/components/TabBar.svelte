@@ -27,6 +27,18 @@ let {
 }: Props = $props();
 
 let tabBarEl: HTMLDivElement;
+let resolvedPaths: Record<string, string> = $state({});
+
+$effect(() => {
+	for (const tab of tabs) {
+		const path = tab.repoPath;
+		if (path && !(path in resolvedPaths)) {
+			displayPath(path).then((p) => {
+				resolvedPaths[path] = p;
+			});
+		}
+	}
+});
 
 $effect(() => {
 	const activeButton = tabBarEl?.querySelector(
@@ -68,7 +80,7 @@ $effect(() => {
       class="tab-item"
       class:active={tab.id === activeTabId}
       data-tab-id={tab.id}
-      title={tab.repoPath ? displayPath(tab.repoPath) : tab.repoName || 'New Tab'}
+      title={tab.repoPath ? (resolvedPaths[tab.repoPath] ?? tab.repoPath) : tab.repoName || 'New Tab'}
       onmousedown={(e: MouseEvent) => { if (e.button === 0) onactivate(tab.id); }}
       onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onactivate(tab.id); }}
       oncontextmenu={(e: MouseEvent) => { e.preventDefault(); oncontextmenu(tab.id, e); }}

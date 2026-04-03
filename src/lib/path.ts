@@ -1,9 +1,17 @@
 import { homeDir } from "@tauri-apps/api/path";
 
-const home = await homeDir().catch(() => "");
+let home: string | undefined;
 
-export function displayPath(path: string): string {
-	if (!home || !path.startsWith(home)) return path;
-	const rest = path.slice(home.length).replace(/^\//, "");
+async function getHome(): Promise<string> {
+	if (home === undefined) {
+		home = await homeDir().catch(() => "");
+	}
+	return home;
+}
+
+export async function displayPath(path: string): Promise<string> {
+	const h = await getHome();
+	if (!h || !path.startsWith(h)) return path;
+	const rest = path.slice(h.length).replace(/^\//, "");
 	return `~/${rest}`;
 }

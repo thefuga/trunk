@@ -17,6 +17,7 @@ interface Props {
 let { onopen, isFullscreen = false }: Props = $props();
 
 let recentRepos = $state<RecentRepo[]>([]);
+let resolvedPaths: Record<string, string> = $state({});
 let loading = $state(false);
 let error = $state<string | null>(null);
 
@@ -24,6 +25,16 @@ $effect(() => {
 	getRecentRepos().then((repos) => {
 		recentRepos = repos;
 	});
+});
+
+$effect(() => {
+	for (const repo of recentRepos) {
+		if (!(repo.path in resolvedPaths)) {
+			displayPath(repo.path).then((p) => {
+				resolvedPaths[repo.path] = p;
+			});
+		}
+	}
 });
 
 async function openRepository() {
@@ -90,6 +101,7 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
       <p class="text-xs font-medium mb-2 uppercase tracking-widest" style="color: var(--color-text-muted);">Recent</p>
       <ul class="flex flex-col gap-1">
         {#each recentRepos as repo (repo.path)}
+          {@const dp = resolvedPaths[repo.path] ?? repo.path}
           <li>
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -101,7 +113,7 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
               onkeydown={(e) => e.key === 'Enter' && openPath(repo.path)}
             >
               <span class="text-sm truncate min-w-0 flex-1">
-                <span style="color: var(--color-text-muted);">{displayPath(repo.path).substring(0, displayPath(repo.path).lastIndexOf('/'))}/</span><span class="font-semibold" style="color: var(--color-text);">{displayPath(repo.path).split('/').at(-1)}</span>
+                <span style="color: var(--color-text-muted);">{dp.substring(0, dp.lastIndexOf('/'))}/</span><span class="font-semibold" style="color: var(--color-text);">{dp.split('/').at(-1)}</span>
               </span>
               <button
                 class="ml-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs"
