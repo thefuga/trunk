@@ -793,7 +793,25 @@ function handleRowContextMenu(e: MouseEvent, commit: GraphCommit) {
 	}
 }
 
-// Pill context menu actions (branch delete/rename, tag delete)
+// Pill context menu actions (branch delete/rename, tag delete, remote branch delete)
+
+async function handleDeleteRemoteBranch(branchName: string) {
+	const confirmed = await ask(
+		`Delete remote branch '${branchName}'? This will remove it from the remote.`,
+		{ title: "Delete Remote Branch", kind: "warning" },
+	);
+	if (!confirmed) return;
+	try {
+		await safeInvoke("delete_remote_branch", { path: repoPath, branchName });
+		showToast(`Deleted remote branch ${branchName}`, "success");
+	} catch (e) {
+		const err = e as TrunkError;
+		await message(err.message ?? "Failed to delete remote branch", {
+			title: "Delete Remote Branch Error",
+			kind: "error",
+		});
+	}
+}
 
 async function handleDeleteBranch(branchName: string) {
 	const confirmed = await ask(
@@ -1010,6 +1028,13 @@ async function showRefContextMenu(e: MouseEvent, ref: RefInfo) {
 							}),
 						]
 					: []),
+				await PredefinedMenuItem.new({ item: "Separator" }),
+				await MenuItem.new({
+					text: "Delete",
+					action: () => {
+						handleDeleteRemoteBranch(ref.name).catch(() => {});
+					},
+				}),
 			],
 		});
 		await menu.popup();

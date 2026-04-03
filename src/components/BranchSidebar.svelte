@@ -429,6 +429,27 @@ async function handleInteractiveRebase(branchName: string) {
 	}
 }
 
+async function handleDeleteRemoteBranch(fullRefName: string) {
+	const { ask } = await import("@tauri-apps/plugin-dialog");
+	const confirmed = await ask(
+		`Delete remote branch '${fullRefName}'? This will remove it from the remote.`,
+		{ title: "Delete Remote Branch", kind: "warning" },
+	);
+	if (!confirmed) return;
+	try {
+		await safeInvoke("delete_remote_branch", {
+			path: repoPath,
+			branchName: fullRefName,
+		});
+		await loadRefs(repoPath);
+		onrefreshed?.();
+		showToast(`Deleted remote branch ${fullRefName}`, "success");
+	} catch (e) {
+		const err = e as TrunkError;
+		showToast(err.message ?? "Failed to delete remote branch", "error");
+	}
+}
+
 async function showBranchContextMenu(
 	_e: MouseEvent,
 	branchName: string,
@@ -504,27 +525,39 @@ async function showTagContextMenu(_e: MouseEvent, tagShortName: string) {
 }
 
 async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
-	const { Menu, MenuItem } = await import("@tauri-apps/api/menu");
+	const { Menu, MenuItem, PredefinedMenuItem } = await import(
+		"@tauri-apps/api/menu"
+	);
 	const headBranchName = refs?.local.find((b) => b.is_head)?.name;
-	if (!headBranchName) return; // Detached HEAD -- no merge/rebase items
 	const menu = await Menu.new({
 		items: [
+			...(headBranchName
+				? [
+						await MenuItem.new({
+							text: `Merge ${fullRefName} into ${headBranchName}`,
+							action: () => {
+								handleMergeBranch(fullRefName).catch(() => {});
+							},
+						}),
+						await MenuItem.new({
+							text: `Rebase ${headBranchName} onto ${fullRefName}`,
+							action: () => {
+								handleRebaseBranch(fullRefName).catch(() => {});
+							},
+						}),
+						await MenuItem.new({
+							text: `Interactive Rebase ${fullRefName}...`,
+							action: () => {
+								handleInteractiveRebase(fullRefName).catch(() => {});
+							},
+						}),
+						await PredefinedMenuItem.new({ item: "Separator" }),
+					]
+				: []),
 			await MenuItem.new({
-				text: `Merge ${fullRefName} into ${headBranchName}`,
+				text: "Delete",
 				action: () => {
-					handleMergeBranch(fullRefName).catch(() => {});
-				},
-			}),
-			await MenuItem.new({
-				text: `Rebase ${headBranchName} onto ${fullRefName}`,
-				action: () => {
-					handleRebaseBranch(fullRefName).catch(() => {});
-				},
-			}),
-			await MenuItem.new({
-				text: `Interactive Rebase ${fullRefName}...`,
-				action: () => {
-					handleInteractiveRebase(fullRefName).catch(() => {});
+					handleDeleteRemoteBranch(fullRefName).catch(() => {});
 				},
 			}),
 		],
