@@ -8,6 +8,7 @@ interface Props {
 	errorBranch: string | null;
 	errorText: string;
 	oncheckout: (fullName: string) => void;
+	ondblclick?: (fullName: string) => void;
 	oncontextmenu?: (e: MouseEvent, fullName: string) => void;
 }
 
@@ -18,6 +19,7 @@ let {
 	errorBranch,
 	errorText,
 	oncheckout,
+	ondblclick,
 	oncontextmenu,
 }: Props = $props();
 </script>
@@ -45,6 +47,7 @@ let {
         isError={errorBranch === remoteName + '/' + branch}
         {errorText}
         onclick={() => oncheckout(remoteName + '/' + branch)}
+        ondblclick={() => ondblclick?.(remoteName + '/' + branch)}
         oncontextmenu={(e) => oncontextmenu?.(e, remoteName + '/' + branch)}
       />
     </div>
