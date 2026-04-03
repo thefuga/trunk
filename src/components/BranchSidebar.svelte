@@ -149,6 +149,36 @@ async function handleCheckout(branchName: string) {
 	}
 }
 
+async function handleCheckoutRemoteBranch(fullName: string) {
+	const shortName = fullName.includes("/")
+		? fullName.slice(fullName.indexOf("/") + 1)
+		: fullName;
+	checkoutError = null;
+	checkingOutBranch = fullName;
+	try {
+		await safeInvoke<void>("create_branch", {
+			path: repoPath,
+			name: shortName,
+			fromOid: fullName,
+		});
+		await loadRefs(repoPath);
+		onrefreshed?.();
+		showToast(`Checked out ${shortName}`, "success");
+	} catch (e) {
+		const err = e as TrunkError;
+		if (err.code === "dirty_workdir") {
+			checkoutError = {
+				branch: fullName,
+				message:
+					"Cannot checkout — working tree has uncommitted changes. Commit or stash your changes first.",
+			};
+		}
+		showToast(err.message ?? "Checkout failed", "error");
+	} finally {
+		checkingOutBranch = null;
+	}
+}
+
 async function handleCreateBranch() {
 	const trimmed = newBranchName.trim();
 	if (!trimmed) return;
@@ -617,7 +647,8 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
             checkingOut={checkingOutBranch}
             errorBranch={checkoutError?.branch ?? null}
             errorText={checkoutError?.message ?? ''}
-            oncheckout={(fullName) => handleCheckout(fullName)}
+            oncheckout={(fullName) => onrefnavigate?.(fullName)}
+            ondblclick={handleCheckoutRemoteBranch}
             oncontextmenu={(e, fullName) => showRemoteContextMenu(e, fullName)}
           />
         {/each}
