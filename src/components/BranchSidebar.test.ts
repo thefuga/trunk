@@ -193,16 +193,12 @@ describe("BranchSidebar", () => {
 				expect(screen.getByText("feature")).toBeInTheDocument();
 			});
 
-			// Double-click the remote branch
-			const branchButtons = screen
+			// Double-click the remote branch row (find the BranchRow button containing "feature")
+			const remoteBranchRow = screen
 				.getByTestId("branch-section-remote")
-				.querySelectorAll('[role="button"]');
-			// First button is the section header, subsequent ones are branch rows
-			const remoteBranchButton = Array.from(branchButtons).find(
-				(btn) => btn.textContent?.includes("feature"),
-			);
-			expect(remoteBranchButton).toBeTruthy();
-			await fireEvent.dblClick(remoteBranchButton!);
+				.querySelector('[data-testid="branch-row"] [role="button"]');
+			expect(remoteBranchRow).toBeTruthy();
+			await fireEvent.dblClick(remoteBranchRow as Element);
 
 			await waitFor(() => {
 				expect(mockInvoke).toHaveBeenCalledWith("create_branch", {
@@ -240,13 +236,10 @@ describe("BranchSidebar", () => {
 				expect(screen.getByText("feature")).toBeInTheDocument();
 			});
 
-			const branchButtons = screen
+			const remoteBranchRow = screen
 				.getByTestId("branch-section-remote")
-				.querySelectorAll('[role="button"]');
-			const remoteBranchButton = Array.from(branchButtons).find(
-				(btn) => btn.textContent?.includes("feature"),
-			);
-			await fireEvent.dblClick(remoteBranchButton!);
+				.querySelector('[data-testid="branch-row"] [role="button"]');
+			await fireEvent.dblClick(remoteBranchRow as Element);
 
 			// Verify create_branch was called (and it rejected)
 			await waitFor(() => {
