@@ -112,11 +112,12 @@ None.
 | 260325-lkj | Fix graph column width too wide for linear repos (auto-fit to content) | 2026-03-25 | 51add5e | [260325-lkj-fix-graph-column-width-too-wide-for-line](./quick/260325-lkj-fix-graph-column-width-too-wide-for-line/) |
 | 260325-up9 | Add keyboard arrow navigation to commit graph pane | 2026-03-26 | a048c3f | [260325-up9-when-the-commit-graph-pane-has-focus-the](./quick/260325-up9-when-the-commit-graph-pane-has-focus-the/) |
 | 260402-wea | Show full repo path tooltip on tab hover | 2026-04-03 | 12fdf14 | [260402-wea-show-full-repo-path-tooltip-on-tab-hover](./quick/260402-wea-show-full-repo-path-tooltip-on-tab-hover/) |
+| 260402-x1v | Double-click remote branch to create+checkout local tracking branch | 2026-04-03 | b31a968 | [260402-x1v-double-click-remote-branch-to-checkout-l](./quick/260402-x1v-double-click-remote-branch-to-checkout-l/) |
 
 ## Session Continuity
 
 Last activity: 2026-04-03
-Last session: 2026-04-03T02:24:20Z
-Stopped at: Completed quick task 260402-wea
+Last session: 2026-04-03T02:58:02Z
+Stopped at: Completed quick task 260402-x1v
 Resume file: None
 Next action: /gsd:plan-phase 59
