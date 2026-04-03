@@ -417,9 +417,16 @@ pub fn create_branch_inner(
         ));
     }
 
-    // Auto-checkout the new branch
-    repo.set_head(&format!("refs/heads/{}", name))?;
-    repo.checkout_head(Some(git2::build::CheckoutBuilder::default().safe()))?;
+    // Auto-checkout the new branch (checkout_tree updates index + working tree, then set_head moves HEAD)
+    let branch_ref = format!("refs/heads/{}", name);
+    {
+        let (object, _reference) = repo.revparse_ext(&branch_ref)?;
+        repo.checkout_tree(
+            &object,
+            Some(&mut git2::build::CheckoutBuilder::new().safe()),
+        )?;
+    }
+    repo.set_head(&branch_ref)?;
     drop(repo);
 
     // Rebuild graph cache after branch creation
