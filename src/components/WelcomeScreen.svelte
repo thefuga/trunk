@@ -1,7 +1,7 @@
 <script lang="ts">
-import { homeDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
+import { displayPath } from "../lib/path.js";
 import {
 	addRecentRepo,
 	getRecentRepos,
@@ -19,18 +19,8 @@ let { onopen, isFullscreen = false }: Props = $props();
 let recentRepos = $state<RecentRepo[]>([]);
 let loading = $state(false);
 let error = $state<string | null>(null);
-let home = $state("");
-
-function displayPath(path: string): string {
-	if (!home || !path.startsWith(home)) return path;
-	const rest = path.slice(home.length).replace(/^\//, "");
-	return `~/${rest}`;
-}
 
 $effect(() => {
-	homeDir().then((h) => {
-		home = h;
-	});
 	getRecentRepos().then((repos) => {
 		recentRepos = repos;
 	});

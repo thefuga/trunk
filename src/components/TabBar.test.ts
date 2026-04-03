@@ -107,4 +107,41 @@ describe("TabBar", () => {
 		expect(activeTab).toBeTruthy();
 		expect(activeTab?.textContent).toContain("trunk");
 	});
+
+	describe("tab tooltips", () => {
+		it("shows repoPath as title when repoPath is set", () => {
+			render(TabBar, { props: defaultProps });
+			const tab = screen.getByText("trunk").closest(".tab-item");
+			expect(tab?.getAttribute("title")).toBe("/path/to/trunk");
+		});
+
+		it("shows repoName as title when repoPath is null", () => {
+			const tabsWithNull: TabInfo[] = [
+				...tabs,
+				{ id: "3", repoPath: null, repoName: "orphan", dirty: false },
+			];
+			render(TabBar, {
+				props: { ...defaultProps, tabs: tabsWithNull },
+			});
+			const tab = screen.getByText("orphan").closest(".tab-item");
+			expect(tab?.getAttribute("title")).toBe("orphan");
+		});
+
+		it("shows 'New Tab' as title when repoPath is null and repoName is empty", () => {
+			const tabsWithEmpty: TabInfo[] = [
+				...tabs,
+				{ id: "4", repoPath: null, repoName: "", dirty: false },
+			];
+			render(TabBar, {
+				props: { ...defaultProps, tabs: tabsWithEmpty },
+			});
+			// The tab text displays "New Tab" via the existing fallback
+			const newTabText = screen.getAllByText("New Tab");
+			// Find the one inside a tab-item (not the new-tab button)
+			const tabEl = newTabText
+				.map((el) => el.closest(".tab-item"))
+				.find((el) => el !== null);
+			expect(tabEl?.getAttribute("title")).toBe("New Tab");
+		});
+	});
 });

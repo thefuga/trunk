@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Plus, X } from "@lucide/svelte";
 import Sortable from "sortablejs";
+import { displayPath } from "../lib/path.js";
 import type { TabInfo } from "../lib/tab-types.js";
 
 interface Props {
@@ -67,6 +68,7 @@ $effect(() => {
       class="tab-item"
       class:active={tab.id === activeTabId}
       data-tab-id={tab.id}
+      title={tab.repoPath ? displayPath(tab.repoPath) : tab.repoName || 'New Tab'}
       onmousedown={(e: MouseEvent) => { if (e.button === 0) onactivate(tab.id); }}
       onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onactivate(tab.id); }}
       oncontextmenu={(e: MouseEvent) => { e.preventDefault(); oncontextmenu(tab.id, e); }}
