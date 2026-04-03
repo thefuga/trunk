@@ -41,4 +41,21 @@ describe("RemoteGroup", () => {
 		// The BranchRow for "main" should show loading indicator
 		expect(screen.getByText(/main/)).toBeInTheDocument();
 	});
+
+	it("calls ondblclick with full remote name when branch is double-clicked", async () => {
+		const ondblclick = vi.fn();
+		render(RemoteGroup, {
+			props: { ...defaultProps, ondblclick },
+		});
+		const buttons = screen.getAllByRole("button");
+		await fireEvent.dblClick(buttons[0]);
+		expect(ondblclick).toHaveBeenCalledWith("origin/main");
+	});
+
+	it("renders without error when ondblclick is not provided", () => {
+		const { container } = render(RemoteGroup, {
+			props: { ...defaultProps },
+		});
+		expect(container).toBeTruthy();
+	});
 });
