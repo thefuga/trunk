@@ -251,6 +251,51 @@ pub async fn git_push(
 }
 
 #[tauri::command]
+pub async fn delete_remote_branch(
+    path: String,
+    branch_name: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    running: State<'_, RunningOp>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_buf = state_map
+        .get(&path)
+        .ok_or_else(|| {
+            serde_json::to_string(&TrunkError::new(
+                "not_open",
+                format!("Repository not open: {}", path),
+            ))
+            .unwrap()
+        })?
+        .clone();
+
+    // Parse "origin/feature" into remote="origin", branch="feature"
+    let slash = branch_name.find('/').ok_or_else(|| {
+        serde_json::to_string(&TrunkError::new(
+            "invalid_ref",
+            format!("Invalid remote branch name: {}", branch_name),
+        ))
+        .unwrap()
+    })?;
+    let remote = &branch_name[..slash];
+    let branch = &branch_name[slash + 1..];
+
+    run_git_remote(
+        &["push", "--delete", "--progress", remote, branch],
+        &path_buf,
+        &app,
+        &path,
+        &running.0,
+    )
+    .await
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    refresh_graph(&path, &state_map, &cache, &app).await
+}
+
+#[tauri::command]
 pub async fn cancel_remote_op(path: String, running: State<'_, RunningOp>) -> Result<(), String> {
     let mut guard = running.0.lock().unwrap();
     if let Some(pid) = guard.remove(&path) {

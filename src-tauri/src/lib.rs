@@ -118,6 +118,7 @@ pub fn run() {
             commands::remote::git_fetch,
             commands::remote::git_pull,
             commands::remote::git_push,
+            commands::remote::delete_remote_branch,
             commands::remote::cancel_remote_op,
             commands::operation_state::get_operation_state,
             commands::operation_state::merge_continue,
