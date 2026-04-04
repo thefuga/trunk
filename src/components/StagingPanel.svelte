@@ -33,6 +33,10 @@ interface Props {
 	) => void;
 	onsubjectchange?: (value: string) => void;
 	onfileresolved?: () => void;
+	onfileadvance?: (
+		path: string,
+		kind: "unstaged" | "staged" | "conflicted",
+	) => void;
 	clearRedoStack: () => void;
 	treeViewEnabled?: boolean;
 	ontreeviewtoggle?: () => void;
@@ -44,6 +48,7 @@ let {
 	onfileselect,
 	onsubjectchange,
 	onfileresolved,
+	onfileadvance,
 	clearRedoStack,
 	treeViewEnabled = false,
 	ontreeviewtoggle,
@@ -119,6 +124,7 @@ async function stageFile(filePath: string) {
 	const next = new Set(loadingFiles);
 	next.delete(filePath);
 	loadingFiles = next;
+	onfileadvance?.(filePath, "unstaged");
 }
 
 async function unstageFile(filePath: string) {
@@ -128,6 +134,7 @@ async function unstageFile(filePath: string) {
 	const next = new Set(loadingFiles);
 	next.delete(filePath);
 	loadingFiles = next;
+	onfileadvance?.(filePath, "staged");
 }
 
 async function stageDirectory(dirPath: string) {
@@ -193,6 +200,7 @@ async function handleDiscardFile(filePath: string, fileStatus: FileStatusType) {
 		await safeInvoke("discard_file", { path: repoPath, filePath });
 		await loadStatus();
 		showToast(`Discarded ${filePath}`, "success");
+		onfileadvance?.(filePath, "unstaged");
 	} catch (e) {
 		const err = e as TrunkError;
 		showToast(err.message ?? "Discard failed", "error");
@@ -394,6 +402,7 @@ async function resolveConflictedFile(
 		});
 		await loadStatus();
 		onfileresolved?.();
+		onfileadvance?.(filePath, "conflicted");
 	} catch (e) {
 		const err = e as TrunkError;
 		showToast(err.message ?? "Resolution failed", "error");
