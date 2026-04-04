@@ -720,8 +720,8 @@ function startRightResize(e: MouseEvent) {
         }}
         onfileemptied={(filePath, action) => {
           if (selectedFile?.path === filePath) {
-            stagingPanelRef?.optimisticMove(filePath, selectedFile.kind, action);
             advanceToNextFile(selectedFile.path, selectedFile.kind);
+            stagingPanelRef?.optimisticMove(filePath, selectedFile.kind, action);
           }
         }}
         ondiffoptionschange={async (options) => {

@@ -148,8 +148,8 @@ async function loadStatus() {
 async function stageFile(filePath: string) {
 	loadingFiles = new Set([...loadingFiles, filePath]);
 	await safeInvoke("stage_file", { path: repoPath, filePath });
-	optimisticMove(filePath, "unstaged", "stage");
 	onfileadvance?.(filePath, "unstaged");
+	optimisticMove(filePath, "unstaged", "stage");
 	await loadStatus();
 	const next = new Set(loadingFiles);
 	next.delete(filePath);
@@ -159,8 +159,8 @@ async function stageFile(filePath: string) {
 async function unstageFile(filePath: string) {
 	loadingFiles = new Set([...loadingFiles, filePath]);
 	await safeInvoke("unstage_file", { path: repoPath, filePath });
-	optimisticMove(filePath, "staged", "unstage");
 	onfileadvance?.(filePath, "staged");
+	optimisticMove(filePath, "staged", "unstage");
 	await loadStatus();
 	const next = new Set(loadingFiles);
 	next.delete(filePath);
@@ -228,8 +228,8 @@ async function handleDiscardFile(filePath: string, fileStatus: FileStatusType) {
 	if (!confirmed) return;
 	try {
 		await safeInvoke("discard_file", { path: repoPath, filePath });
-		optimisticMove(filePath, "unstaged", "discard");
 		onfileadvance?.(filePath, "unstaged");
+		optimisticMove(filePath, "unstaged", "discard");
 		showToast(`Discarded ${filePath}`, "success");
 		await loadStatus();
 	} catch (e) {
