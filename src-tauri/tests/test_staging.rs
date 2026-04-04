@@ -372,6 +372,26 @@ fn stage_hunk_stages_single_hunk() {
 }
 
 #[test]
+fn stage_hunk_works_on_untracked_file() {
+    let ctx = TestContext::builder()
+        .with_file("README.md", "hello")
+        .with_commit("Initial commit")
+        .build();
+
+    // Create a brand-new untracked file
+    std::fs::write(ctx.repo_path().join("new_file.txt"), "new content\n").unwrap();
+
+    ctx.stage_hunk("new_file.txt", 0)
+        .expect("stage_hunk should work on untracked files");
+
+    let status = ctx.get_status().expect("get_status failed");
+    assert!(
+        status.staged.iter().any(|f| f.path == "new_file.txt"),
+        "expected new_file.txt in staged list"
+    );
+}
+
+#[test]
 fn stage_hunk_stale_index_returns_error() {
     let ctx = TestContext::builder()
         .with_file("README.md", "hello")

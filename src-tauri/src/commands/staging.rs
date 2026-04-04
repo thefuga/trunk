@@ -261,9 +261,11 @@ pub fn stage_hunk_inner(
 ) -> Result<(), TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
 
-    // Generate diff for this file (index -> workdir)
+    // Generate diff for this file (index -> workdir), including untracked files
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts.pathspec(file_path);
+    diff_opts.include_untracked(true);
+    diff_opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     // Validate: at least one delta expected
@@ -288,6 +290,32 @@ pub fn stage_hunk_inner(
         ));
     }
     drop(patch); // Release borrow on diff
+
+    // For untracked files, seed an empty index entry so apply() has a base
+    let needs_seed = {
+        let index = repo.index()?;
+        index.get_path(Path::new(file_path), 0).is_none()
+    };
+    if needs_seed {
+        let empty_oid = repo.blob(&[])?;
+        let mut index = repo.index()?;
+        let entry = git2::IndexEntry {
+            ctime: git2::IndexTime::new(0, 0),
+            mtime: git2::IndexTime::new(0, 0),
+            dev: 0,
+            ino: 0,
+            mode: 0o100644,
+            uid: 0,
+            gid: 0,
+            file_size: 0,
+            id: empty_oid,
+            flags: 0,
+            flags_extended: 0,
+            path: file_path.as_bytes().to_vec(),
+        };
+        index.add(&entry)?;
+        index.write()?;
+    }
 
     // Apply only the target hunk to the index
     let target = hunk_index as usize;
@@ -374,6 +402,8 @@ pub fn discard_hunk_inner(
     // Generate reversed diff (workdir -> index) so applying to workdir undoes the change
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts.pathspec(file_path).reverse(true);
+    diff_opts.include_untracked(true);
+    diff_opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     if diff.deltas().len() == 0 {
@@ -849,9 +879,11 @@ pub fn stage_lines_inner(
 ) -> Result<(), TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
 
-    // Generate diff for this file (index -> workdir)
+    // Generate diff for this file (index -> workdir), including untracked files
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts.pathspec(file_path);
+    diff_opts.include_untracked(true);
+    diff_opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     if diff.deltas().len() == 0 {
@@ -879,6 +911,32 @@ pub fn stage_lines_inner(
         build_partial_patch_text(file_path, &patch, hunk_index as usize, &line_indices, false)?;
     drop(patch);
     drop(diff);
+
+    // For untracked files, seed an empty index entry so apply() has a base
+    let needs_seed = {
+        let index = repo.index()?;
+        index.get_path(Path::new(file_path), 0).is_none()
+    };
+    if needs_seed {
+        let empty_oid = repo.blob(&[])?;
+        let mut index = repo.index()?;
+        let entry = git2::IndexEntry {
+            ctime: git2::IndexTime::new(0, 0),
+            mtime: git2::IndexTime::new(0, 0),
+            dev: 0,
+            ino: 0,
+            mode: 0o100644,
+            uid: 0,
+            gid: 0,
+            file_size: 0,
+            id: empty_oid,
+            flags: 0,
+            flags_extended: 0,
+            path: file_path.as_bytes().to_vec(),
+        };
+        index.add(&entry)?;
+        index.write()?;
+    }
 
     let partial_diff = git2::Diff::from_buffer(patch_text.as_bytes())
         .map_err(|e| TrunkError::new("patch_parse_failed", e.message().to_owned()))?;
@@ -961,6 +1019,8 @@ pub fn discard_lines_inner(
     // then build a reversed partial patch to undo selected lines.
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts.pathspec(file_path);
+    diff_opts.include_untracked(true);
+    diff_opts.show_untracked_content(true);
     let diff = repo.diff_index_to_workdir(None, Some(&mut diff_opts))?;
 
     if diff.deltas().len() == 0 {
