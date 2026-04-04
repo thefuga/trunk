@@ -121,7 +121,15 @@ pub fn stage_file_inner(
 ) -> Result<(), TrunkError> {
     let repo = open_repo_from_state(path, state_map)?;
     let mut index = repo.index()?;
-    index.add_path(Path::new(file_path))?;
+    let abs_path = repo
+        .workdir()
+        .ok_or_else(|| TrunkError::new("bare_repo", "Cannot stage in a bare repository"))?
+        .join(file_path);
+    if abs_path.exists() {
+        index.add_path(Path::new(file_path))?;
+    } else {
+        index.remove_path(Path::new(file_path))?;
+    }
     index.write()?;
     Ok(())
 }

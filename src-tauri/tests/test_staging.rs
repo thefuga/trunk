@@ -86,6 +86,31 @@ fn stage_file_moves_to_staged() {
 }
 
 #[test]
+fn stage_file_handles_deleted_file() {
+    let ctx = TestContext::builder()
+        .with_file("to_delete.txt", "content")
+        .with_commit("Initial commit")
+        .build();
+
+    // Delete the file from the working directory
+    std::fs::remove_file(ctx.repo_path().join("to_delete.txt")).unwrap();
+
+    // Staging a deleted file should succeed (stages the deletion)
+    ctx.stage_file("to_delete.txt")
+        .expect("stage_file should handle deleted files");
+
+    let status = ctx.get_status().expect("get_status failed");
+    assert!(
+        status.staged.iter().any(|f| f.path == "to_delete.txt"),
+        "expected to_delete.txt in staged list (deletion staged)"
+    );
+    assert!(
+        !status.unstaged.iter().any(|f| f.path == "to_delete.txt"),
+        "expected to_delete.txt NOT in unstaged list after staging deletion"
+    );
+}
+
+#[test]
 fn unstage_file_moves_back_to_unstaged() {
     let ctx = TestContext::builder()
         .with_file("README.md", "hello")
