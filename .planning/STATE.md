@@ -114,11 +114,12 @@ None.
 | 260402-wea | Show full repo path tooltip on tab hover | 2026-04-03 | 12fdf14 | [260402-wea-show-full-repo-path-tooltip-on-tab-hover](./quick/260402-wea-show-full-repo-path-tooltip-on-tab-hover/) |
 | 260402-x1v | Double-click remote branch to create+checkout local tracking branch | 2026-04-03 | b31a968 | [260402-x1v-double-click-remote-branch-to-checkout-l](./quick/260402-x1v-double-click-remote-branch-to-checkout-l/) |
 | 260403-1yi | Delete remote branches from sidebar and graph context menus | 2026-04-03 | 5c48d8d | [260403-1yi-delete-remote-branches-from-sidebar-and-](./quick/260403-1yi-delete-remote-branches-from-sidebar-and-/) |
+| 260403-uy4 | Auto-advance focus to next file after staging/unstaging/discarding | 2026-04-03 | 753358e | [260403-uy4-auto-advance-focus-to-next-file-after-st](./quick/260403-uy4-auto-advance-focus-to-next-file-after-st/) |
 
 ## Session Continuity
 
 Last activity: 2026-04-03
-Last session: 2026-04-03T04:39:31Z
-Stopped at: Completed quick-260403-1yi
+Last session: 2026-04-04T04:07:43Z
+Stopped at: Completed quick-260403-uy4
 Resume file: None
 Next action: /gsd:next
