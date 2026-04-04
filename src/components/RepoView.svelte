@@ -85,6 +85,8 @@ let selectedFile = $state<{
 } | null>(null);
 let stagingDiffFiles = $state<FileDiff[]>([]);
 let stagingDiffLoading = $state(false);
+let selectGeneration = 0;
+let advanceInFlight = false;
 
 // Commit selection (from CommitGraph)
 let selectedCommitOid = $state<string | null>(null);
@@ -209,10 +211,12 @@ async function advanceToNextFile(
 	currentPath: string,
 	section: "unstaged" | "staged" | "conflicted",
 ) {
+	if (advanceInFlight) return;
 	if (!repoPath) {
 		clearStagingDiff();
 		return;
 	}
+	advanceInFlight = true;
 	try {
 		const status = await safeInvoke<WorkingTreeStatus>("get_status", {
 			path: repoPath,
@@ -238,12 +242,14 @@ async function advanceToNextFile(
 			}
 		}
 		if (next) {
-			handleFileSelect(next.path, section);
+			await handleFileSelect(next.path, section);
 		} else {
 			clearStagingDiff();
 		}
 	} catch {
 		clearStagingDiff();
+	} finally {
+		advanceInFlight = false;
 	}
 }
 
@@ -274,21 +280,27 @@ async function handleFileSelect(
 		stagingDiffFiles = [];
 		return;
 	}
+	const gen = ++selectGeneration;
 	stagingDiffLoading = true;
 	try {
 		const command = kind === "unstaged" ? "diff_unstaged" : "diff_staged";
 		const options = buildDiffOptions();
-		stagingDiffFiles = await safeInvoke<FileDiff[]>(command, {
+		const result = await safeInvoke<FileDiff[]>(command, {
 			path: repoPath,
 			filePath: path,
 			options,
 		});
+		if (gen !== selectGeneration) return;
+		stagingDiffFiles = result;
 	} catch (e) {
+		if (gen !== selectGeneration) return;
 		const err = e as TrunkError;
 		showToast(err.message ?? "Failed to load diff", "error");
 		stagingDiffFiles = [];
 	} finally {
-		stagingDiffLoading = false;
+		if (gen === selectGeneration) {
+			stagingDiffLoading = false;
+		}
 	}
 }
 
@@ -383,19 +395,25 @@ async function refetchFileDiff(
 	path: string,
 	kind: "unstaged" | "staged" | "conflicted",
 	options?: DiffRequestOptions,
-) {
-	if (!repoPath) return;
-	if (kind === "conflicted") return; // MergeEditor handles its own data loading
+): Promise<boolean> {
+	if (!repoPath) return false;
+	if (kind === "conflicted") return false; // MergeEditor handles its own data loading
+	const gen = selectGeneration;
 	try {
 		const command = kind === "unstaged" ? "diff_unstaged" : "diff_staged";
 		const reloadOptions = options ?? buildDiffOptions();
-		stagingDiffFiles = await safeInvoke<FileDiff[]>(command, {
+		const result = await safeInvoke<FileDiff[]>(command, {
 			path: repoPath,
 			filePath: path,
 			options: reloadOptions,
 		});
+		if (gen !== selectGeneration) return false;
+		stagingDiffFiles = result;
+		return result.length === 0 || result.every((f) => f.hunks.length === 0);
 	} catch {
+		if (gen !== selectGeneration) return false;
 		stagingDiffFiles = [];
+		return true;
 	}
 }
 
@@ -718,10 +736,10 @@ function startRightResize(e: MouseEvent) {
         loading={stagingDiffLoading}
         onhunkaction={async (filePath) => {
           if (selectedFile) {
-            await refetchFileDiff(filePath, selectedFile.kind);
-            const isEmpty = stagingDiffFiles.length === 0 || stagingDiffFiles.every((f) => f.hunks.length === 0);
-            if (isEmpty) {
-              await advanceToNextFile(selectedFile.path, selectedFile.kind);
+            const { path, kind } = selectedFile;
+            const isEmpty = await refetchFileDiff(filePath, kind);
+            if (isEmpty && selectedFile?.path === path && selectedFile?.kind === kind) {
+              await advanceToNextFile(path, kind);
             }
           }
         }}
