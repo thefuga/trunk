@@ -37,6 +37,8 @@ interface Props {
 		path: string,
 		kind: "unstaged" | "staged" | "conflicted",
 	) => void;
+	selectedPath?: string | null;
+	selectedKind?: "unstaged" | "staged" | "conflicted" | null;
 	clearRedoStack: () => void;
 	treeViewEnabled?: boolean;
 	ontreeviewtoggle?: () => void;
@@ -49,6 +51,8 @@ let {
 	onsubjectchange,
 	onfileresolved,
 	onfileadvance,
+	selectedPath = null,
+	selectedKind = null,
 	clearRedoStack,
 	treeViewEnabled = false,
 	ontreeviewtoggle,
@@ -939,6 +943,7 @@ $effect(() => {
             onfileclick={(path) => onfileselect?.(path, 'conflicted')}
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
             ondirectorycontextmenu={(e, dirPath) => showConflictedDirContextMenu(e, dirPath)}
+            selectedPath={selectedKind === 'conflicted' ? selectedPath : null}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -1052,6 +1057,7 @@ $effect(() => {
             onfilecontextmenu={(e, path) => showConflictedContextMenu(e, path)}
             ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
             ondirectorycontextmenu={(e, dirPath) => showConflictedDirContextMenu(e, dirPath)}
+            selectedPath={selectedKind === 'conflicted' ? selectedPath : null}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -1066,6 +1072,7 @@ $effect(() => {
             onfilecontextmenu={(e, path, file) => showUnstagedContextMenu(e, path, file.status)}
             ondirectoryaction={(dirPath) => stageDirectory(dirPath)}
             ondirectorycontextmenu={(e, dirPath) => showUnstagedDirContextMenu(e, dirPath)}
+            selectedPath={selectedKind === 'unstaged' ? selectedPath : null}
             {expandAllSignal}
             {collapseAllSignal}
           />
@@ -1134,6 +1141,7 @@ $effect(() => {
           onfilecontextmenu={(e, path) => showStagedContextMenu(e, path)}
           ondirectoryaction={(dirPath) => unstageDirectory(dirPath)}
           ondirectorycontextmenu={(e, dirPath) => showStagedDirContextMenu(e, dirPath)}
+          selectedPath={selectedKind === 'staged' ? selectedPath : null}
           {expandAllSignal}
           {collapseAllSignal}
         />

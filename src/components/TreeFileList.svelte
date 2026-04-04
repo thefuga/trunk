@@ -22,6 +22,7 @@ interface Props {
 	onfilecontextmenu?: (e: MouseEvent, path: string, status: FileStatus) => void;
 	ondirectoryaction?: (dirPath: string) => void;
 	ondirectorycontextmenu?: (e: MouseEvent, dirPath: string) => void;
+	selectedPath?: string | null;
 	expandAllSignal?: number;
 	collapseAllSignal?: number;
 }
@@ -36,6 +37,7 @@ let {
 	onfilecontextmenu,
 	ondirectoryaction,
 	ondirectorycontextmenu,
+	selectedPath = null,
 	expandAllSignal = 0,
 	collapseAllSignal = 0,
 }: Props = $props();
@@ -96,6 +98,19 @@ $effect(() => {
 	if (collapseAllSignal > 0 && collapseAllSignal !== prevCollapseAll) {
 		prevCollapseAll = collapseAllSignal;
 		expanded = new Set();
+	}
+});
+
+// Sync focusIndex when parent sets selectedPath (e.g. auto-advance)
+$effect(() => {
+	if (selectedPath && flatRows.length > 0) {
+		const idx = flatRows.findIndex(
+			(r) => r.type === "file" && r.node.file.path === selectedPath,
+		);
+		if (idx >= 0) {
+			focusIndex = idx;
+			lastFocusedPath = selectedPath;
+		}
 	}
 });
 

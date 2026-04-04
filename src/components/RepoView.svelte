@@ -217,15 +217,25 @@ async function advanceToNextFile(
 		const status = await safeInvoke<WorkingTreeStatus>("get_status", {
 			path: repoPath,
 		});
-		const files = status[section];
+		const files = [...status[section]].sort((a, b) =>
+			a.path.localeCompare(b.path),
+		);
 		const idx = files.findIndex((f) => f.path === currentPath);
 		let next: { path: string } | undefined;
 		if (idx >= 0) {
 			// File still in same section -- pick the next sibling, or previous
 			next = files[idx + 1] ?? files[idx - 1];
 		} else {
-			// File moved out of section -- pick first remaining file
-			next = files[0];
+			// File moved out of section -- pick positional successor
+			const insertIdx = files.findIndex(
+				(f) => f.path.localeCompare(currentPath) > 0,
+			);
+			if (insertIdx >= 0) {
+				next = files[insertIdx];
+			} else {
+				// currentPath was alphabetically last -- pick the new last file
+				next = files[files.length - 1];
+			}
 		}
 		if (next) {
 			handleFileSelect(next.path, section);
@@ -756,7 +766,7 @@ function startRightResize(e: MouseEvent) {
         ontreeviewtoggle={handleTreeViewToggle}
       />
     {:else}
-      <StagingPanel {repoPath} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} onfileresolved={handleFileResolved} onfileadvance={(path: string, kind: "unstaged" | "staged" | "conflicted") => { if (selectedFile?.path === path && selectedFile?.kind === kind) { advanceToNextFile(path, kind); } }} clearRedoStack={undoRedo.clear} {treeViewEnabled} ontreeviewtoggle={handleTreeViewToggle} />
+      <StagingPanel {repoPath} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} onfileresolved={handleFileResolved} onfileadvance={(path: string, kind: "unstaged" | "staged" | "conflicted") => { if (selectedFile?.path === path && selectedFile?.kind === kind) { advanceToNextFile(path, kind); } }} selectedPath={selectedFile?.path ?? null} selectedKind={selectedFile?.kind ?? null} clearRedoStack={undoRedo.clear} {treeViewEnabled} ontreeviewtoggle={handleTreeViewToggle} />
     {/if}
   </div>
   {/if}
