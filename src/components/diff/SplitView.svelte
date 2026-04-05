@@ -67,6 +67,32 @@ let {
 	ondiscardlines,
 }: Props = $props();
 
+const syncedCells: Set<HTMLElement> = new Set();
+let syncing = false;
+
+function splitCellSync(node: HTMLElement) {
+	syncedCells.add(node);
+
+	function onScroll() {
+		if (syncing) return;
+		syncing = true;
+		const { scrollLeft } = node;
+		for (const cell of syncedCells) {
+			if (cell !== node) cell.scrollLeft = scrollLeft;
+		}
+		syncing = false;
+	}
+
+	node.addEventListener("scroll", onScroll);
+
+	return {
+		destroy() {
+			node.removeEventListener("scroll", onScroll);
+			syncedCells.delete(node);
+		},
+	};
+}
+
 const stagingDisabled = $derived(hunkOperationInFlight || ignoreWhitespace);
 const stagingDisabledTitle = $derived(
 	ignoreWhitespace
@@ -268,7 +294,7 @@ const pairedData = $derived(
           {#each section.rows as row}
             <div class="split-row">
               <!-- Left cell (old content) -->
-              <div class="split-cell">
+              <div class="split-cell" use:splitCellSync>
                 {#if row.left}
                   {@const line = row.left.line}
                   {@const isSelected = selectedHunkKey === `${fd.path}-${section.hunkIdx}` && selectedLineIndices.has(row.left.lineIdx)}
@@ -286,7 +312,7 @@ const pairedData = $derived(
                 {/if}
               </div>
               <!-- Right cell (new content) -->
-              <div class="split-cell">
+              <div class="split-cell" use:splitCellSync>
                 {#if row.right}
                   {@const line = row.right.line}
                   {@const isSelectable = diffKind !== 'commit' && line.origin === 'Add'}
@@ -333,7 +359,13 @@ const pairedData = $derived(
   .split-cell {
     flex: 1;
     min-width: 0;
-    overflow-x: hidden;
+    overflow-x: auto;
+    overscroll-behavior-x: none;
+    scrollbar-width: none;
+  }
+
+  .split-cell::-webkit-scrollbar {
+    display: none;
   }
 
   .split-cell:first-child {
@@ -347,6 +379,8 @@ const pairedData = $derived(
     padding: 0 8px;
     display: flex;
     align-items: flex-start;
+    min-width: 100%;
+    width: max-content;
   }
 
   .gutter {
@@ -364,6 +398,7 @@ const pairedData = $derived(
     padding: 0 8px;
     background: var(--color-diff-phantom-bg);
     min-height: 100%;
+    min-width: 100%;
   }
 
   .split-hunk-header {
