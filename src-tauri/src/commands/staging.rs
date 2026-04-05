@@ -134,6 +134,31 @@ pub fn stage_file_inner(
     Ok(())
 }
 
+pub fn stage_files_inner(
+    path: &str,
+    file_paths: &[String],
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    if file_paths.is_empty() {
+        return Ok(());
+    }
+    let repo = open_repo_from_state(path, state_map)?;
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| TrunkError::new("bare_repo", "Cannot stage in a bare repository"))?;
+    let mut index = repo.index()?;
+    for fp in file_paths {
+        let abs_path = workdir.join(fp);
+        if abs_path.exists() {
+            index.add_path(Path::new(fp))?;
+        } else {
+            index.remove_path(Path::new(fp))?;
+        }
+    }
+    index.write()?;
+    Ok(())
+}
+
 /// Build diff options for workdir diffs that include untracked files.
 fn workdir_diff_opts(file_path: &str) -> git2::DiffOptions {
     let mut opts = git2::DiffOptions::new();
@@ -197,6 +222,33 @@ pub fn unstage_file_inner(
         // Reset the file to HEAD state using reset_default
         let head_commit = repo.head()?.peel_to_commit()?;
         repo.reset_default(Some(head_commit.as_object()), std::iter::once(file_path))?;
+    }
+
+    Ok(())
+}
+
+pub fn unstage_files_inner(
+    path: &str,
+    file_paths: &[String],
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
+    if file_paths.is_empty() {
+        return Ok(());
+    }
+    let repo = open_repo_from_state(path, state_map)?;
+
+    if is_head_unborn(&repo) {
+        let mut index = repo.index()?;
+        for fp in file_paths {
+            index.remove_path(Path::new(fp))?;
+        }
+        index.write()?;
+    } else {
+        let head_commit = repo.head()?.peel_to_commit()?;
+        repo.reset_default(
+            Some(head_commit.as_object()),
+            file_paths.iter().map(String::as_str),
+        )?;
     }
 
     Ok(())
@@ -617,6 +669,36 @@ pub async fn unstage_file(
             serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
         })?
         .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn stage_files(
+    path: String,
+    file_paths: Vec<String>,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || stage_files_inner(&path, &file_paths, &state_map))
+        .await
+        .map_err(|e| {
+            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+        })?
+        .map_err(|e| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn unstage_files(
+    path: String,
+    file_paths: Vec<String>,
+    state: State<'_, RepoState>,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        unstage_files_inner(&path, &file_paths, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())
 }
 
 #[tauri::command]
