@@ -110,7 +110,7 @@ function gutterWidth(maxNum: number): string {
 
 {#each fileDiffs as fd (fd.path)}
   {@const gutterW = gutterWidth(maxLineNumber(fd))}
-  <div>
+  <div style="min-width: 100%; width: max-content;">
     <!-- File header bar (hidden for single-file view since top bar shows the path) -->
     {#if !selectedPath}
       <div
@@ -125,7 +125,10 @@ function gutterWidth(maxNum: number): string {
         color: var(--color-text);
         position: sticky;
         top: 0;
-        z-index: 1;
+        left: 0;
+        z-index: 2;
+        width: 100cqi;
+        box-sizing: border-box;
         cursor: pointer;
         user-select: none;
         display: flex;
@@ -162,6 +165,11 @@ function gutterWidth(maxNum: number): string {
             align-items: center;
             padding: 4px 8px;
             gap: 8px;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            width: 100cqi;
+            box-sizing: border-box;
           "
         >
           <span style="flex: 1; color: var(--color-text-muted); font-size: 11px; font-family: var(--font-mono, monospace);">

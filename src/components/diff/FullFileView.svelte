@@ -53,7 +53,7 @@ function gutterWidth(maxNum: number): string {
 {#each fileDiffs as fd (fd.path)}
   {@const gutterW = gutterWidth(maxLineNumber(fd))}
   {@const allLines = fd.hunks.flatMap(h => h.lines)}
-  <div>
+  <div style="min-width: 100%; width: max-content;">
     {#if fd.is_binary}
       <div style="
         padding: 8px;

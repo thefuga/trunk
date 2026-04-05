@@ -1306,4 +1306,98 @@ describe("VIEW-05: Staging in split view", () => {
 			Promise.resolve("inline"),
 		);
 	});
+
+	// ---- Diff scroll layout regression tests ----
+	// These verify the structural CSS properties that make horizontal scrolling work correctly:
+	// - Hunk toolbars and file headers stay visible (sticky left)
+	// - Diff line backgrounds extend the full content width (no gaps on short lines)
+
+	describe("diff scroll layout", () => {
+		function findAncestorWithOverflow(el: Element): HTMLElement | null {
+			let current = el.parentElement;
+			while (current) {
+				const style = current.getAttribute("style") || "";
+				if (
+					style.includes("overflow: auto") ||
+					style.includes("overflow:auto")
+				) {
+					return current;
+				}
+				current = current.parentElement;
+			}
+			return null;
+		}
+
+		it("scroll container establishes container query context for sticky sizing", async () => {
+			const { container } = render(DiffPanel, {
+				props: {
+					fileDiffs: [testDiff],
+					commitDetail: null,
+					onclose: vi.fn(),
+				},
+			});
+			await flushPrefs();
+			const line = container.querySelector(".diff-line");
+			expect(line).toBeTruthy();
+			const scrollContainer = findAncestorWithOverflow(line as Element);
+			expect(scrollContainer).toBeTruthy();
+			const style = scrollContainer?.getAttribute("style") ?? "";
+			expect(style).toContain("container-type: inline-size");
+			expect(style).toContain("overscroll-behavior-x: none");
+		});
+
+		it("hunk toolbar is horizontally sticky so buttons stay visible", async () => {
+			render(DiffPanel, {
+				props: {
+					fileDiffs: [testDiff],
+					commitDetail: null,
+					onclose: vi.fn(),
+				},
+			});
+			await flushPrefs();
+			const hunkHeaderText = screen.getByText("@@ -1,3 +1,4 @@");
+			const toolbar = hunkHeaderText.parentElement;
+			expect(toolbar).toBeTruthy();
+			const style = toolbar?.getAttribute("style") ?? "";
+			expect(style).toContain("position: sticky");
+			expect(style).toContain("left: 0");
+		});
+
+		it("file header is horizontally sticky in multi-file view", async () => {
+			const { container } = render(DiffPanel, {
+				props: {
+					fileDiffs: [testDiff],
+					commitDetail: null,
+					selectedPath: null,
+					onclose: vi.fn(),
+				},
+			});
+			await flushPrefs();
+			const headers = container.querySelectorAll('[role="button"]');
+			const fileHeader = Array.from(headers).find((el) =>
+				el.textContent?.includes("src/main.ts"),
+			);
+			expect(fileHeader).toBeTruthy();
+			const style = fileHeader?.getAttribute("style") ?? "";
+			expect(style).toContain("position: sticky");
+			expect(style).toContain("left: 0");
+		});
+
+		it("diff lines wrapper ensures full-width backgrounds via min-width", async () => {
+			const { container } = render(DiffPanel, {
+				props: {
+					fileDiffs: [testDiff],
+					commitDetail: null,
+					onclose: vi.fn(),
+				},
+			});
+			await flushPrefs();
+			const line = container.querySelector(".diff-line");
+			expect(line).toBeTruthy();
+			const wrapper = line?.parentElement;
+			expect(wrapper).toBeTruthy();
+			const style = wrapper?.getAttribute("style") ?? "";
+			expect(style).toContain("min-width: 100%");
+		});
+	});
 });
