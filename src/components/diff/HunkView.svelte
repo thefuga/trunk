@@ -83,12 +83,6 @@ function lineColor(origin: string): string {
 	return "var(--color-text)";
 }
 
-function originSymbol(origin: string): string {
-	if (origin === "Add") return "+";
-	if (origin === "Delete") return "-";
-	return " ";
-}
-
 function maxLineNumber(fd: FileDiff): number {
 	let max = 0;
 	for (const hunk of fd.hunks) {
@@ -330,7 +324,7 @@ function gutterWidth(maxNum: number): string {
             onmousedown={(e) => { if (isSelectable && e.shiftKey) e.preventDefault(); }}
             onclick={(e) => isSelectable && onlineclick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, e)}
             onkeydown={(e) => { if (isSelectable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onlineclick(fd.path, hunkIdx, lineIdx, line.origin, hunk.lines, new MouseEvent('click', { shiftKey: e.shiftKey })); } }}
-          ><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0; position: sticky; left: 0; background: inherit; z-index: 1;">{line.old_lineno ?? ''}</span><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0; position: sticky; left: {gutterW}; background: inherit; z-index: 1;">{line.new_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}<span>{originSymbol(line.origin)}</span>{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{originSymbol(line.origin)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{originSymbol(line.origin)}{line.content}{/if}{/if}</span></div>
+          ><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0; position: sticky; left: 0; background: inherit; z-index: 1;">{line.old_lineno ?? ''}</span><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0; position: sticky; left: {gutterW}; background: inherit; z-index: 1;">{line.new_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{line.content}{/if}{/if}</span></div>
         {/each}
       {/each}
     {/if}

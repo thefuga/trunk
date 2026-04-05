@@ -202,8 +202,7 @@ describe("DiffPanel", () => {
 			},
 		});
 		await flushPrefs();
-		// originSymbol("Add") = "+", content follows
-		expect(screen.getByText("+const x = 2;")).toBeInTheDocument();
+		expect(screen.getByText("const x = 2;")).toBeInTheDocument();
 	});
 
 	it("renders deleted lines with - marker", async () => {
@@ -215,7 +214,7 @@ describe("DiffPanel", () => {
 			},
 		});
 		await flushPrefs();
-		expect(screen.getByText("-const x = 1;")).toBeInTheDocument();
+		expect(screen.getByText("const x = 1;")).toBeInTheDocument();
 	});
 
 	it("renders context lines", async () => {
@@ -378,7 +377,7 @@ describe("DiffPanel", () => {
 		expect(container.querySelectorAll(".word-add").length).toBe(0);
 		expect(container.querySelectorAll(".word-delete").length).toBe(0);
 		// Line content still renders with origin symbols
-		expect(container.textContent).toContain("+const x = 2;");
+		expect(container.textContent).toContain("const x = 2;");
 	});
 
 	it("renders syntax class on span elements", async () => {
