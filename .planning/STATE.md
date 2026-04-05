@@ -116,11 +116,12 @@ None.
 | 260403-1yi | Delete remote branches from sidebar and graph context menus | 2026-04-03 | 5c48d8d | [260403-1yi-delete-remote-branches-from-sidebar-and-](./quick/260403-1yi-delete-remote-branches-from-sidebar-and-/) |
 | 260403-uy4 | Auto-advance focus to next file after staging/unstaging/discarding | 2026-04-04 | 753358e | [260403-uy4-auto-advance-focus-to-next-file-after-st](./quick/260403-uy4-auto-advance-focus-to-next-file-after-st/) |
 | 260405-ik1 | Fix tree view folder staging to stage all files (bulk stage_files/unstage_files) | 2026-04-05 | 96013e7 | [260405-ik1-fix-tree-view-folder-staging-to-stage-al](./quick/260405-ik1-fix-tree-view-folder-staging-to-stage-al/) |
+| 260405-j41 | Fix diff view horizontal scroll to scroll entire view together | 2026-04-05 | c458fd3 | [260405-j41-fix-diff-view-horizontal-scroll-scroll-e](./quick/260405-j41-fix-diff-view-horizontal-scroll-scroll-e/) |
 
 ## Session Continuity
 
 Last activity: 2026-04-05
-Last session: 2026-04-05T16:42:47Z
-Stopped at: Completed quick-260405-ik1
+Last session: 2026-04-05T16:50:34Z
+Stopped at: Completed quick-260405-j41
 Resume file: None
 Next action: /gsd:next
