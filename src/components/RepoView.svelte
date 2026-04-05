@@ -388,7 +388,7 @@ async function refetchFileDiff(
 	} catch {
 		if (gen !== selectGeneration) return false;
 		stagingDiffFiles = [];
-		return true;
+		return false;
 	}
 }
 
@@ -766,7 +766,25 @@ function startRightResize(e: MouseEvent) {
         ontreeviewtoggle={handleTreeViewToggle}
       />
     {:else}
-      <StagingPanel bind:this={stagingPanelRef} {repoPath} currentBranch={headBranch} onfileselect={handleFileSelect} onsubjectchange={(v) => (wipSubject = v)} onfileresolved={handleFileResolved} onfileadvance={(path: string, kind: "unstaged" | "staged" | "conflicted") => { if (selectedFile?.path === path && selectedFile?.kind === kind) { advanceToNextFile(path, kind); } }} selectedPath={selectedFile?.path ?? null} selectedKind={selectedFile?.kind ?? null} onstatuschange={(s) => { cachedStatus = s; }} clearRedoStack={undoRedo.clear} {treeViewEnabled} ontreeviewtoggle={handleTreeViewToggle} />
+      <StagingPanel
+        bind:this={stagingPanelRef}
+        {repoPath}
+        currentBranch={headBranch}
+        onfileselect={handleFileSelect}
+        onsubjectchange={(v) => (wipSubject = v)}
+        onfileresolved={handleFileResolved}
+        onfileadvance={(path, kind) => {
+          if (selectedFile?.path === path && selectedFile?.kind === kind) {
+            advanceToNextFile(path, kind);
+          }
+        }}
+        selectedPath={selectedFile?.path ?? null}
+        selectedKind={selectedFile?.kind ?? null}
+        onstatuschange={(s) => { cachedStatus = s; }}
+        clearRedoStack={undoRedo.clear}
+        {treeViewEnabled}
+        ontreeviewtoggle={handleTreeViewToggle}
+      />
     {/if}
   </div>
   {/if}

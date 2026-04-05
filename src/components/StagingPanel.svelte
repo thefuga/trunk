@@ -75,13 +75,20 @@ export function optimisticMove(
 		[from]: status[from].filter((f) => f.path !== filePath),
 	};
 	if (action === "stage") {
-		updated.staged = [...status.staged, file];
+		updated.staged = [
+			...status.staged.filter((f) => f.path !== filePath),
+			file,
+		];
 	} else if (action === "unstage") {
-		updated.unstaged = [...status.unstaged, file];
+		updated.unstaged = [
+			...status.unstaged.filter((f) => f.path !== filePath),
+			file,
+		];
 	}
 	status = updated;
 	onstatuschange?.(status);
 }
+
 let unstaged_expanded = $state(true);
 let staged_expanded = $state(true);
 let loadingFiles = $state<Set<string>>(new Set());

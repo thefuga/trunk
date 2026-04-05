@@ -727,6 +727,48 @@ fn stage_lines_stale_hunk_index_returns_error() {
     );
 }
 
+#[test]
+fn stage_lines_works_on_untracked_file() {
+    let ctx = TestContext::builder()
+        .with_file("README.md", "hello")
+        .with_commit("Initial commit")
+        .build();
+
+    // Create an untracked file
+    std::fs::write(
+        ctx.repo_path().join("new_file.txt"),
+        "line 1\nline 2\nline 3\n",
+    )
+    .unwrap();
+
+    let unstaged = ctx
+        .diff_unstaged("new_file.txt")
+        .expect("diff_unstaged failed");
+    assert!(
+        !unstaged.is_empty(),
+        "expected unstaged diff for untracked file"
+    );
+
+    let add_indices: Vec<u32> = unstaged[0].hunks[0]
+        .lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| matches!(l.origin, DiffOrigin::Add))
+        .map(|(i, _)| i as u32)
+        .collect();
+    assert!(!add_indices.is_empty(), "expected add lines");
+
+    // Stage only the first add line
+    ctx.stage_lines("new_file.txt", 0, vec![add_indices[0]])
+        .expect("stage_lines should work on untracked files");
+
+    let status = ctx.get_status().expect("get_status failed");
+    assert!(
+        status.staged.iter().any(|f| f.path == "new_file.txt"),
+        "expected new_file.txt in staged list"
+    );
+}
+
 // -- unstage_lines tests --
 
 #[test]
