@@ -264,7 +264,8 @@ pub fn discard_file_inner(
     let mut opts = StatusOptions::new();
     opts.pathspec(file_path)
         .include_untracked(true)
-        .include_ignored(false);
+        .include_ignored(false)
+        .recurse_untracked_dirs(true);
 
     let statuses = repo.statuses(Some(&mut opts))?;
 

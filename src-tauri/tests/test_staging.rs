@@ -262,6 +262,45 @@ fn discard_file_deletes_untracked_file() {
 }
 
 #[test]
+fn discard_file_deletes_untracked_file_in_subdirectory() {
+    let ctx = TestContext::builder()
+        .with_file("README.md", "hello")
+        .with_commit("Initial commit")
+        .build();
+
+    let sub = ctx.repo_path().join(".claude");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("settings.local.json"), "{}").unwrap();
+
+    ctx.discard_file(".claude/settings.local.json")
+        .expect("discard_file failed for nested untracked file");
+
+    assert!(
+        !sub.join("settings.local.json").exists(),
+        "expected .claude/settings.local.json to be deleted after discard"
+    );
+}
+
+#[test]
+fn discard_all_deletes_nested_untracked_file() {
+    let ctx = TestContext::builder()
+        .with_file("README.md", "hello")
+        .with_commit("Initial commit")
+        .build();
+
+    let sub = ctx.repo_path().join(".claude");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("settings.local.json"), "{}").unwrap();
+
+    ctx.discard_all().expect("discard_all failed");
+
+    assert!(
+        !sub.join("settings.local.json").exists(),
+        "expected .claude/settings.local.json to be deleted after discard_all"
+    );
+}
+
+#[test]
 fn discard_all_reverts_all_changes() {
     let ctx = TestContext::builder()
         .with_file("README.md", "hello")
