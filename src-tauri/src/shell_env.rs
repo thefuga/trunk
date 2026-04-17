@@ -36,6 +36,7 @@ fn from_path_helper() -> Option<String> {
     parse_path_helper_output(&String::from_utf8_lossy(&output.stdout))
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn parse_path_helper_output(stdout: &str) -> Option<String> {
     // Output format: PATH="<paths>"; export PATH;\n
     let start = stdout.find('"')? + 1;
