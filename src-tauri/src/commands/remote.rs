@@ -188,6 +188,51 @@ pub async fn git_fetch(
     refresh_graph(&path, &state_map, &cache, &app).await
 }
 
+/// Silent periodic fetch. Best-effort: skips when the repo is mid-operation
+/// (rebase/merge/cherry-pick/revert) or another remote op is already running,
+/// and swallows any error so the UI never surfaces a popup or toast.
+#[tauri::command]
+pub async fn git_fetch_background(
+    path: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    running: State<'_, RunningOp>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let Some(path_buf) = state_map.get(&path).cloned() else {
+        return Ok(());
+    };
+
+    let path_for_state = path_buf.clone();
+    let is_clean = tauri::async_runtime::spawn_blocking(move || {
+        git2::Repository::open(&path_for_state)
+            .map(|r| r.state() == git2::RepositoryState::Clean)
+            .unwrap_or(false)
+    })
+    .await
+    .unwrap_or(false);
+    if !is_clean {
+        return Ok(());
+    }
+
+    if run_git_remote(
+        &["fetch", "--all", "--tags", "--prune", "--progress"],
+        &path_buf,
+        &app,
+        &path,
+        &running.0,
+    )
+    .await
+    .is_err()
+    {
+        return Ok(());
+    }
+
+    let _ = refresh_graph(&path, &state_map, &cache, &app).await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_pull(
     path: String,

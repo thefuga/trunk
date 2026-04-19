@@ -339,3 +339,18 @@ export async function setDiffWordWrap(wrap: boolean): Promise<void> {
 	await store.set(DIFF_WORD_WRAP_KEY, wrap);
 	await store.save();
 }
+
+// Periodic background fetch interval. 0 disables. Default 5 min.
+const FETCH_INTERVAL_KEY = "fetch_interval_ms";
+const DEFAULT_FETCH_INTERVAL_MS = 60 * 1000;
+
+export async function getFetchIntervalMs(): Promise<number> {
+	return (
+		(await store.get<number>(FETCH_INTERVAL_KEY)) ?? DEFAULT_FETCH_INTERVAL_MS
+	);
+}
+
+export async function setFetchIntervalMs(ms: number): Promise<void> {
+	await store.set(FETCH_INTERVAL_KEY, ms);
+	await store.save();
+}

@@ -7,6 +7,7 @@ import {
 	getDiffContextLines,
 	getDiffIgnoreWhitespace,
 	getDiffShowFullFile,
+	getFetchIntervalMs,
 	getTreeViewEnabled,
 	setLeftPaneCollapsed,
 	setLeftPaneWidth,
@@ -47,6 +48,7 @@ interface Props {
 	leftPaneCollapsed: boolean;
 	rightPaneWidth: number;
 	rightPaneCollapsed: boolean;
+	windowVisible: boolean;
 	onleftpanecollapsedchange: (collapsed: boolean) => void;
 	onrightpanecollapsedchange: (collapsed: boolean) => void;
 	onleftpanewidthchange: (width: number) => void;
@@ -62,6 +64,7 @@ let {
 	leftPaneCollapsed,
 	rightPaneWidth,
 	rightPaneCollapsed,
+	windowVisible,
 	onleftpanecollapsedchange,
 	onrightpanecollapsedchange,
 	onleftpanewidthchange,
@@ -405,6 +408,28 @@ $effect(() => {
 	getTreeViewEnabled().then((v) => {
 		treeViewEnabled = v;
 	});
+});
+
+// Silent periodic background fetch. Pauses while the window is unfocused;
+// backend swallows auth/rebase/busy cases so errors never surface.
+$effect(() => {
+	const path = repoPath;
+	let timer: ReturnType<typeof setInterval> | undefined;
+	let cancelled = false;
+
+	(async () => {
+		const intervalMs = await getFetchIntervalMs();
+		if (cancelled || intervalMs <= 0) return;
+		timer = setInterval(() => {
+			if (!windowVisible) return;
+			safeInvoke("git_fetch_background", { path }).catch(() => {});
+		}, intervalMs);
+	})();
+
+	return () => {
+		cancelled = true;
+		if (timer) clearInterval(timer);
+	};
 });
 
 // Listen for repo-changed events scoped to this repo

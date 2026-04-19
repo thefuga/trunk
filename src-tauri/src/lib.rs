@@ -119,6 +119,7 @@ pub fn run() {
             commands::commit_actions::redo_commit,
             commands::commit_actions::check_undo_available,
             commands::remote::git_fetch,
+            commands::remote::git_fetch_background,
             commands::remote::git_pull,
             commands::remote::git_push,
             commands::remote::delete_remote_branch,

@@ -44,6 +44,7 @@ let leftPaneCollapsed = $state(false);
 let rightPaneWidth = $state(240);
 let rightPaneCollapsed = $state(false);
 let isFullscreen = $state(false);
+let windowVisible = $state(true);
 
 // Tab state
 let tabs = $state<TabInfo[]>([]);
@@ -361,6 +362,28 @@ $effect(() => {
 	};
 });
 
+// Track window focus — gates the periodic background fetch so hidden tabs
+// don't hit the network.
+$effect(() => {
+	const appWindow = getCurrentWindow();
+	appWindow.isFocused().then((f) => {
+		windowVisible = f;
+	});
+
+	let unlistenFocus: (() => void) | undefined;
+	appWindow
+		.onFocusChanged(({ payload: focused }) => {
+			windowVisible = focused;
+		})
+		.then((fn) => {
+			unlistenFocus = fn;
+		});
+
+	return () => {
+		unlistenFocus?.();
+	};
+});
+
 // Apply zoom to webview
 $effect(() => {
 	getCurrentWebview().setZoom(zoomLevel);
@@ -511,6 +534,7 @@ $effect(() => {
             {leftPaneCollapsed}
             {rightPaneWidth}
             {rightPaneCollapsed}
+            {windowVisible}
             onleftpanecollapsedchange={(c) => { leftPaneCollapsed = c; setLeftPaneCollapsed(c); }}
             onrightpanecollapsedchange={(c) => { rightPaneCollapsed = c; setRightPaneCollapsed(c); }}
             onleftpanewidthchange={(w) => { leftPaneWidth = w; setLeftPaneWidth(w); }}
