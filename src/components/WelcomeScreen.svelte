@@ -21,6 +21,11 @@ let resolvedPaths: Record<string, string> = $state({});
 let loading = $state(false);
 let error = $state<string | null>(null);
 
+// Storage is uncapped (the picker shows full history); the dashboard intentionally
+// shows only the most recent few to keep the welcome screen compact.
+const DASHBOARD_RECENT_LIMIT = 10;
+const displayedRepos = $derived(recentRepos.slice(0, DASHBOARD_RECENT_LIMIT));
+
 $effect(() => {
 	getRecentRepos().then((repos) => {
 		recentRepos = repos;
@@ -90,17 +95,17 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
       onclick={openRepository}
       disabled={loading}
       class="w-full rounded-md px-4 py-2.5 text-sm font-medium transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-      style="background: var(--color-accent); color: #fff;"
+      style="background: var(--color-accent); color: var(--color-on-accent);"
     >
       {loading ? 'Opening...' : 'Open Repository'}
     </button>
   </div>
 
-  {#if recentRepos.length > 0}
+  {#if displayedRepos.length > 0}
     <div class="w-full max-w-md px-4">
       <p class="text-xs font-medium mb-2 uppercase tracking-widest" style="color: var(--color-text-muted);">Recent</p>
       <ul class="flex flex-col gap-1">
-        {#each recentRepos as repo (repo.path)}
+        {#each displayedRepos as repo (repo.path)}
           {@const dp = resolvedPaths[repo.path] ?? repo.path}
           <li>
             <!-- svelte-ignore a11y_no_static_element_interactions -->

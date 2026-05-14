@@ -11,14 +11,10 @@ export interface RecentRepo {
 
 const store = new LazyStore("trunk-prefs.json");
 const RECENT_KEY = "recent_repos";
-const MAX_RECENT = 10;
 
 export async function addRecentRepo(repo: RecentRepo): Promise<void> {
 	const current = (await store.get<RecentRepo[]>(RECENT_KEY)) ?? [];
-	const updated = [repo, ...current.filter((r) => r.path !== repo.path)].slice(
-		0,
-		MAX_RECENT,
-	);
+	const updated = [repo, ...current.filter((r) => r.path !== repo.path)];
 	await store.set(RECENT_KEY, updated);
 	await store.save();
 }

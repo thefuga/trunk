@@ -114,15 +114,18 @@ describe("store", () => {
 			]);
 		});
 
-		it("addRecentRepo caps at MAX_RECENT (10)", async () => {
-			for (let i = 0; i < 11; i++) {
+		it("addRecentRepo keeps every entry (no cap) so the picker can list full history", async () => {
+			for (let i = 0; i < 25; i++) {
 				await addRecentRepo({ name: `repo${i}`, path: `/path/${i}` });
 			}
 			const repos = await getRecentRepos();
-			expect(repos).toHaveLength(10);
-			// The first-added (repo0) should be dropped, most recent (repo10) should be first
-			expect(repos[0]).toEqual({ name: "repo10", path: "/path/10" });
-			expect(repos.find((r) => r.path === "/path/0")).toBeUndefined();
+			expect(repos).toHaveLength(25);
+			// Most recently added is at the front, very first add is still at the back.
+			expect(repos[0]).toEqual({ name: "repo24", path: "/path/24" });
+			expect(repos[repos.length - 1]).toEqual({
+				name: "repo0",
+				path: "/path/0",
+			});
 		});
 
 		it("removeRecentRepo removes matching path", async () => {
