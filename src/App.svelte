@@ -2,6 +2,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import RecentReposPicker from "./components/RecentReposPicker.svelte";
 import RepoView from "./components/RepoView.svelte";
 import TabBar from "./components/TabBar.svelte";
 import Toast from "./components/Toast.svelte";
@@ -13,6 +14,7 @@ import {
 	type RemoteState,
 } from "./lib/remote-state.svelte.js";
 import {
+	addRecentRepo,
 	getActiveTabId,
 	getLeftPaneCollapsed,
 	getLeftPaneWidth,
@@ -21,6 +23,7 @@ import {
 	getRightPaneCollapsed,
 	getRightPaneWidth,
 	getZoomLevel,
+	removeRecentRepo,
 	setActiveTabId,
 	setLeftPaneCollapsed,
 	setLeftPaneWidth,
@@ -45,6 +48,9 @@ let rightPaneWidth = $state(240);
 let rightPaneCollapsed = $state(false);
 let isFullscreen = $state(false);
 let windowVisible = $state(true);
+
+// Recent-projects picker (quick-260514-356)
+let pickerOpen = $state(false);
 
 // Tab state
 let tabs = $state<TabInfo[]>([]);
@@ -175,6 +181,26 @@ function openRepoInTab(tabId: string, path: string, name: string) {
 		tab.repoName = name;
 		persistTabs();
 	}
+}
+
+async function handlePickerPick(path: string, name: string) {
+	// No-op if the active tab already shows this repo (CONTEXT.md decision).
+	if (activeTab?.repoPath === path) {
+		pickerOpen = false;
+		return;
+	}
+	try {
+		await safeInvoke("open_repo", { path });
+	} catch {
+		// Path slipped past the prune step (race or transient). Drop it
+		// silently — picker stays quiet by design.
+		await removeRecentRepo(path);
+		pickerOpen = false;
+		return;
+	}
+	await addRecentRepo({ name, path });
+	openRepoInTab(activeTabId, path, name);
+	pickerOpen = false;
 }
 
 function closeTab(tabId: string) {
@@ -441,6 +467,24 @@ $effect(() => {
 				return;
 			}
 
+			// Cmd/Ctrl+R: open recent-projects picker (quick-260514-356)
+			if (e.key === "r" || e.key === "R") {
+				const active = document.activeElement;
+				const inEditable =
+					active instanceof HTMLInputElement ||
+					active instanceof HTMLTextAreaElement ||
+					(active instanceof HTMLElement &&
+						active.getAttribute("contenteditable") === "true");
+				if (inEditable) return;
+				if (pickerOpen) {
+					e.preventDefault();
+					return;
+				}
+				e.preventDefault();
+				pickerOpen = true;
+				return;
+			}
+
 			// Zoom: Cmd+/Cmd-/Cmd+0
 			if (e.key === "=" || e.key === "+") {
 				e.preventDefault();
@@ -546,6 +590,8 @@ $effect(() => {
       </div>
     {/each}
   </div>
+
+  <RecentReposPicker open={pickerOpen} onpick={handlePickerPick} onclose={() => (pickerOpen = false)} />
 
   <Toast />
 </div>

@@ -2,6 +2,7 @@ pub mod branches;
 pub mod commit;
 pub mod commit_actions;
 pub mod diff;
+pub mod fs;
 pub mod history;
 pub mod interactive_rebase;
 pub mod merge_editor;

@@ -69,6 +69,7 @@ pub fn run() {
             commands::repo::open_repo,
             commands::repo::close_repo,
             commands::repo::force_close_repo,
+            commands::fs::validate_recent_path,
             commands::history::get_commit_graph,
             commands::history::refresh_commit_graph,
             commands::history::search_commits,
