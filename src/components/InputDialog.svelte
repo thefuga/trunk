@@ -78,7 +78,7 @@ function autofocus(node: HTMLElement) {
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="fixed inset-0 flex items-center justify-center"
-  style="z-index: 9999; background: rgba(0,0,0,0.5);"
+  style="z-index: 9999; background: var(--color-backdrop);"
   onkeydown={handleKeydown}
   onclick={handleBackdropClick}
 >
@@ -147,7 +147,7 @@ function autofocus(node: HTMLElement) {
       </button>
       <button
         class="rounded px-3 py-1.5 text-xs font-medium"
-        style="background: var(--color-accent); color: white; opacity: {canSubmit ? '1' : '0.5'};"
+        style="background: var(--color-accent); color: var(--color-on-accent); opacity: {canSubmit ? '1' : '0.5'};"
         disabled={!canSubmit}
         onclick={handleSubmit}
       >

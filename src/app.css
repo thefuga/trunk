@@ -11,6 +11,9 @@
 	--color-selected-row: rgba(56, 139, 253, 0.1);
 	--color-tab-hover: rgba(255, 255, 255, 0.04);
 	--color-tree-focus: var(--color-selected-row);
+	--color-hover: rgba(255, 255, 255, 0.06);
+	--color-on-accent: #fff;
+	--color-backdrop: rgba(0, 0, 0, 0.5);
 
 	/* Diff line colors */
 	--color-diff-add: #4ade80;
