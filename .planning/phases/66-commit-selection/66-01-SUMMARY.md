@@ -92,7 +92,7 @@ None — plan executed exactly as written. All six Task-1 tests, three Task-2 te
 - **Pre-existing clippy warnings in `tests/test_graph.rs`** (2: "returning the result of a `let` binding from a block", "unneeded late initialization"). These are in an integration-test file I did not touch and predate this plan (last modified in `5aa735d`). Out of scope per the scope boundary — not fixed here. The lib (`cargo clippy --lib`) is warning-free, including all new helpers.
 
 ## Verification
-- `cd src-tauri && cargo test --lib review` → 15 passed, 0 failed (11 new selection tests + 4 pre-existing merge-status tests).
+- `cd src-tauri && cargo test --lib review` → 15 passed, 0 failed (11 new selection tests + 3 pre-existing `commands::review` merge-status tests + 1 `git::review_store` test the `review` filter also matches).
 - `cd src-tauri && cargo clippy --lib` → no warnings on the new helpers.
 - `cargo fmt --check` → clean (applied in the Task 3 GREEN commit).
 
