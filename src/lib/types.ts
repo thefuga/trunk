@@ -333,3 +333,20 @@ export interface SessionCommit {
 	short_oid: string;
 	summary: string;
 }
+
+// Request DTOs for the comment-capture commands (Plan 67-02 Rust structs use
+// #[serde(rename_all = "camelCase")], so the wire keys are camelCase here while
+// the nested Anchor keeps its frozen snake_case schema). These reuse the existing
+// Anchor type above — do NOT redeclare it.
+export interface AddCommentRequest {
+	path: string;
+	text: string;
+	anchor: Anchor;
+	cachedExcerpt: string;
+}
+
+export interface SaveDraftCommentRequest {
+	path: string;
+	text: string;
+	anchor: Anchor | null;
+}

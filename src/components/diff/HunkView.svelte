@@ -300,7 +300,7 @@ function gutterWidth(maxNum: number): string {
 
         <!-- Diff lines -->
         {#each hunk.lines as line, lineIdx}
-          {@const isSelectable = diffKind !== 'commit' && line.origin !== 'Context'}
+          {@const isSelectable = line.origin !== 'Context'}
           {@const hunkKey = `${fd.path}-${hunkIdx}`}
           {@const isSelected = selectedHunkKey === hunkKey && selectedLineIndices.has(lineIdx)}
           {@const trailStart = showInvisibles ? trailingWhitespaceStart(line.content) : line.content.length}

@@ -304,7 +304,6 @@ function handleLineClick(
 	e: MouseEvent,
 ) {
 	if (origin === "Context") return;
-	if (diffKind === "commit") return;
 
 	const hunkKey = `${filePath}-${hunkIdx}`;
 

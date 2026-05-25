@@ -320,7 +320,7 @@ const pairedData = $derived(
               {#each section.rows as row}
                 {#if row.right}
                   {@const line = row.right.line}
-                  {@const isSelectable = diffKind !== 'commit' && line.origin === 'Add'}
+                  {@const isSelectable = line.origin === 'Add'}
                   {@const isSelected = selectedHunkKey === `${fd.path}-${section.hunkIdx}` && selectedLineIndices.has(row.right.lineIdx)}
                   {@const trailStart = showInvisibles ? trailingWhitespaceStart(line.content) : line.content.length}
                   <div

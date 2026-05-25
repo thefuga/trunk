@@ -676,7 +676,7 @@ function startRightResize(e: MouseEvent) {
       {#if rebaseDiffFile}
           <DiffPanel
             fileDiffs={rebaseFocusedFileDiffs.filter((f) => f.path === rebaseDiffFile)}
-            commitDetail={null}
+            commitDetail={rebaseFocusedCommitDetail}
             selectedPath={rebaseDiffFile}
             diffKind="commit"
             {repoPath}
@@ -729,7 +729,7 @@ function startRightResize(e: MouseEvent) {
     {:else if showDiff}
       <DiffPanel
         fileDiffs={currentDiffFiles}
-        commitDetail={null}
+        commitDetail={commitDetail}
         selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
         diffKind={selectedCommitFile ? 'commit' : (selectedFile?.kind === 'conflicted' ? 'commit' : selectedFile?.kind ?? 'commit')}
         {repoPath}
