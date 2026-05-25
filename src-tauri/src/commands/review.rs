@@ -191,9 +191,12 @@ pub fn validate_range(
 
 /// Compute the OIDs in the inclusive range `[base..tip]` (SEL-01, D-02).
 ///
-/// Walks `push(tip)` then `hide(base.parent(0))` so `base` itself stays in the
-/// set. A root-commit base (`parent_count() == 0`) hides nothing, mirroring the
-/// verified `interactive_rebase.rs` fallback, so it never panics on `parent_id(0)`.
+/// Walks `push(tip)` then hides EVERY parent of `base` so `base` itself stays in
+/// the set while none of its ancestors do. Hiding all parents (not just the
+/// first) matters when `base` is a merge commit: hiding only `parent(0)` would
+/// leave the second-parent side branch reachable from `tip` and leak it into the
+/// selection (CR-01). A root-commit base (`parent_count() == 0`) hides nothing,
+/// mirroring the verified `interactive_rebase.rs` fallback, so it never panics.
 pub fn compute_range_oids(
     repo: &git2::Repository,
     base: git2::Oid,
@@ -206,9 +209,9 @@ pub fn compute_range_oids(
     revwalk.push(tip).map_err(TrunkError::from)?;
 
     let base_commit = repo.find_commit(base).map_err(TrunkError::from)?;
-    if base_commit.parent_count() > 0 {
+    for i in 0..base_commit.parent_count() {
         revwalk
-            .hide(base_commit.parent_id(0).map_err(TrunkError::from)?)
+            .hide(base_commit.parent_id(i).map_err(TrunkError::from)?)
             .map_err(TrunkError::from)?;
     }
     // Root commit base: hide nothing — the whole ancestry through tip is included.
@@ -781,6 +784,30 @@ mod tests {
         assert!(
             oids.contains(&t.side.to_string()),
             "merge brings in side branch"
+        );
+    }
+
+    #[test]
+    fn seed_range_merge_base_excludes_side_branch() {
+        let t = make_repo();
+        // D-02 + D-08: when the range BASE is a merge commit, [base..tip] includes
+        // base but excludes ALL of base's ancestors — including the second-parent
+        // side branch. Regression for CR-01 (hiding only parent_id(0) leaked the
+        // side branch into the selection).
+        let top = commit(&t.repo, "top of merge", &[t.merge]);
+        let oids = compute_range_oids(&t.repo, t.merge, top).unwrap();
+        assert!(oids.contains(&top.to_string()), "tip must be included");
+        assert!(
+            oids.contains(&t.merge.to_string()),
+            "merge base must be included"
+        );
+        assert!(
+            !oids.contains(&t.side.to_string()),
+            "second-parent side branch must NOT leak when base is a merge"
+        );
+        assert!(
+            !oids.contains(&t.d.to_string()),
+            "first-parent ancestor must be excluded"
         );
     }
 
