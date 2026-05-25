@@ -694,4 +694,90 @@ mod tests {
         let unresolved = out.iter().find(|c| c.oid == bogus).unwrap();
         assert_eq!(unresolved.summary, "(unavailable)");
     }
+
+    // ── Task 1: RMW serialization (SEL-02/03, Pitfall 2) ─────────────────────
+
+    #[test]
+    fn selection_rmw_serialized() {
+        use std::sync::{Arc, Mutex};
+        use std::thread;
+
+        let data_dir = TempDir::new().unwrap();
+        let canonical = data_dir.path().join("repo-canonical");
+        let sessions: Arc<Mutex<HashMap<PathBuf, ReviewSession>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        sessions.lock().unwrap().insert(
+            canonical.clone(),
+            ReviewSession {
+                schema_version: 1,
+                commits: vec![],
+                comments: vec![],
+                draft_comment: None,
+            },
+        );
+
+        // 50 threads each add a distinct oid concurrently. Without serialization
+        // the read-modify-write races and writes clobber each other; with the
+        // mutex held across read→mutate→save→map-write, every add survives.
+        let n = 50;
+        let mut handles = Vec::new();
+        for i in 0..n {
+            let sessions = Arc::clone(&sessions);
+            let data_dir = data_dir.path().to_path_buf();
+            let canonical = canonical.clone();
+            handles.push(thread::spawn(move || {
+                let oid = format!("oid-{i:04}");
+                add_review_commit_rmw(&data_dir, &canonical, &sessions, &oid).unwrap();
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // In-memory set holds all N adds (no lost write).
+        {
+            let in_memory = sessions.lock().unwrap();
+            let commits = &in_memory.get(&canonical).unwrap().commits;
+            assert_eq!(
+                commits.len(),
+                n,
+                "every concurrent add must survive in memory"
+            );
+            for i in 0..n {
+                assert!(
+                    commits.contains(&format!("oid-{i:04}")),
+                    "oid-{i:04} lost under concurrent RMW"
+                );
+            }
+        }
+
+        // Disk reflects the same set (save_session ran inside the critical section).
+        match review_store::load_session(data_dir.path(), &canonical).unwrap() {
+            LoadOutcome::Loaded(s) => {
+                assert_eq!(s.commits.len(), n, "disk must hold every concurrent add");
+            }
+            _ => panic!("expected a loadable session on disk"),
+        }
+
+        // Removing one oid through the same serialized path leaves a stable set.
+        remove_review_commit_rmw(data_dir.path(), &canonical, &sessions, "oid-0000").unwrap();
+        let in_memory = sessions.lock().unwrap();
+        let commits = &in_memory.get(&canonical).unwrap().commits;
+        assert_eq!(commits.len(), n - 1, "remove drops exactly one");
+        assert!(
+            !commits.contains(&"oid-0000".to_string()),
+            "removed oid must be gone"
+        );
+    }
+
+    #[test]
+    fn rmw_missing_session_is_no_session_error() {
+        use std::sync::Mutex;
+        let data_dir = TempDir::new().unwrap();
+        let canonical = data_dir.path().join("absent");
+        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        // No in-memory session for `canonical` → RMW must reject with `no_session`.
+        let err = add_review_commit_rmw(data_dir.path(), &canonical, &sessions, "x").unwrap_err();
+        assert_eq!(err.code, "no_session");
+    }
 }
