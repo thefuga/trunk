@@ -9,6 +9,9 @@
 	--color-text-muted: #8b949e;
 	--color-accent: #388bfd;
 	--color-selected-row: rgba(56, 139, 253, 0.1);
+	/* Code-review commit markers (Phase 66) — distinct accents for in-session vs transient range-base */
+	--color-review-row: var(--color-accent);
+	--color-review-pending-base: var(--color-warning);
 	--color-tab-hover: rgba(255, 255, 255, 0.04);
 	--color-tree-focus: var(--color-selected-row);
 	--color-hover: rgba(255, 255, 255, 0.06);

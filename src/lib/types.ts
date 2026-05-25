@@ -325,3 +325,11 @@ export interface SessionStatus {
 	file_exists: boolean;
 	canonical_path: string;
 }
+
+// A commit hand-picked into the active review session (mirrors the Rust
+// SessionCommit struct from Plan 66-01, Serialize-default snake_case fields).
+export interface SessionCommit {
+	oid: string;
+	short_oid: string;
+	summary: string;
+}

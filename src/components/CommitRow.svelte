@@ -25,6 +25,10 @@ interface Props {
 	isCurrentMatch?: boolean;
 	/** True when any search is active (for dimming non-matches) */
 	isSearchActive?: boolean;
+	/** True when this commit is in the active review session (D-04 membership marker) */
+	inSession?: boolean;
+	/** True when this commit is the transient range-base highlight (D-01 support) */
+	isPendingBase?: boolean;
 }
 
 let {
@@ -40,6 +44,8 @@ let {
 	isSearchMatch = false,
 	isCurrentMatch = false,
 	isSearchActive = false,
+	inSession = false,
+	isPendingBase = false,
 }: Props = $props();
 
 function relativeDate(ts: number): string {
@@ -56,6 +62,18 @@ function relativeDate(ts: number): string {
 
 const isWip = $derived(commit.oid === "__wip__");
 const isStash = $derived(commit.is_stash);
+
+// D-04 in-session + D-01 pending-base markers: theme-variable inset accents on
+// distinct edges so they compose with the background ternaries (and each other)
+// without fighting them. Never an inline literal color, never the SVG pipeline.
+const reviewMarker = $derived(
+	[
+		inSession ? "inset 3px 0 0 var(--color-review-row)" : "",
+		isPendingBase ? "inset 0 -3px 0 var(--color-review-pending-base)" : "",
+	]
+		.filter(Boolean)
+		.join(", "),
+);
 </script>
 
 <div
@@ -65,7 +83,7 @@ const isStash = $derived(commit.is_stash);
   class="relative flex items-center cursor-pointer text-[13px]"
   class:hover:bg-[var(--color-surface)]={!selected && !isCurrentMatch && !isSearchMatch}
   style:height="{rowHeight}px"
-  style="color: var(--color-text); {isCurrentMatch ? 'background: rgba(245, 158, 11, 0.2);' : isSearchMatch ? 'background: rgba(234, 179, 8, 0.1);' : selected ? 'background: var(--color-selected-row);' : ''} {isSearchActive && !isSearchMatch && !isCurrentMatch ? 'opacity: 0.35;' : ''}"
+  style="color: var(--color-text); {isCurrentMatch ? 'background: rgba(245, 158, 11, 0.2);' : isSearchMatch ? 'background: rgba(234, 179, 8, 0.1);' : selected ? 'background: var(--color-selected-row);' : ''} {isSearchActive && !isSearchMatch && !isCurrentMatch ? 'opacity: 0.35;' : ''} {reviewMarker ? `box-shadow: ${reviewMarker};` : ''}"
   onclick={() => onselect?.(commit.oid)}
   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect?.(commit.oid); } }}
   oncontextmenu={(e: MouseEvent) => { if (oncontextmenu && !isWip) { e.preventDefault(); oncontextmenu(e, commit); } }}
