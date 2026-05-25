@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Completed 65-02-PLAN.md
-last_updated: "2026-05-25T09:26:47.298Z"
+stopped_at: Completed 65-03-PLAN.md
+last_updated: "2026-05-25T09:35:13.447Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 0
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 ## Current Position
 
 Phase: 65 (data-model-persistence-session-lifecycle) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-05-25
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [█████░░░░░] 50%
 | Phase 64 P02 | 10min | 2 tasks | 3 files |
 | Phase 65 P01 | 15min | 2 tasks | 3 files |
 | Phase 65 P02 | 5min | 3 tasks | 4 files |
+| Phase 65 P03 | ~12min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 64]: Line selection only on right panel Add lines using original lineIdx from PairedRow for correct staging indices
 - [Phase 65]: Review-session DTOs derive Deserialize and serialize PascalCase enums (Source/Side) with no rename_all; struct fields snake_case. Frozen keystone schema for phases 66/67/68/70.
 - [Phase 65]: review_store persists per-repo sessions via atomic tmp+sync_all+rename (D-10), FNV-1a filename hash as path-traversal mitigation (D-11), and a load state machine that quarantines corrupt files (D-15) and refuses newer schema_version untouched (D-16).
+- [Phase 65]: Canonical-path keying lives only in the session layer (D-11); RepoState/CommitCache keep raw-String keys
+- [Phase 65]: Three-state status merge happens in the thin command, never in _inner (_inner is disk-only and can never report Active)
+- [Phase 65]: start_review_session rejects with session_exists when a file already exists; client must Resume or End first (no silent overwrite)
 
 ### Pending Todos
 
@@ -126,7 +130,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-25
-Last session: 2026-05-25T09:26:47.293Z
-Stopped at: Completed 65-02-PLAN.md
+Last session: 2026-05-25T09:34:32.224Z
+Stopped at: Completed 65-03-PLAN.md
 Resume file: None
 Next action: /gsd:plan-phase 65

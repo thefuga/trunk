@@ -217,7 +217,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 65-03-PLAN.md — State + lifecycle commands + lib.rs/menu wiring + close hook
+- [x] 65-03-PLAN.md — State + lifecycle commands + lib.rs/menu wiring + close hook
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
