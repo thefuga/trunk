@@ -4,6 +4,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import RecentReposPicker from "./components/RecentReposPicker.svelte";
 import RepoView from "./components/RepoView.svelte";
+import ReviewPanel from "./components/ReviewPanel.svelte";
 import TabBar from "./components/TabBar.svelte";
 import Toast from "./components/Toast.svelte";
 import Toolbar from "./components/Toolbar.svelte";
@@ -51,6 +52,10 @@ let windowVisible = $state(true);
 
 // Recent-projects picker (quick-260514-356)
 let pickerOpen = $state(false);
+
+// Review panel toggle (Phase 65, D-12 throwaway stub) — flipped by the View-menu
+// "Start/End Code Review" item via the review-toggle event.
+let reviewPanelOpen = $state(false);
 
 // Tab state
 let tabs = $state<TabInfo[]>([]);
@@ -542,6 +547,21 @@ $effect(() => {
 		unlisten?.();
 	};
 });
+
+// Review panel toggle (Phase 65, D-12): the View-menu "Start/End Code Review"
+// item emits review-toggle (registered in Rust, Plan 65-03). Mirrors the
+// search-toggle listener in CommitGraph.
+$effect(() => {
+	let unlisten: (() => void) | undefined;
+	listen<void>("review-toggle", () => {
+		reviewPanelOpen = !reviewPanelOpen;
+	}).then((fn) => {
+		unlisten = fn;
+	});
+	return () => {
+		unlisten?.();
+	};
+});
 </script>
 
 <div class="flex flex-col h-screen" style="background: var(--color-bg);">
@@ -569,6 +589,9 @@ $effect(() => {
       <div style="position: absolute; inset: 0; display: flex; flex-direction: column; {tab.id !== activeTabId ? 'visibility: hidden; pointer-events: none;' : ''}">
         {#if tab.repoPath}
           {@const tabState = getOrCreateTabState(tab.id)}
+          {#if reviewPanelOpen && tab.id === activeTabId}
+            <ReviewPanel repoPath={tab.repoPath} />
+          {/if}
           <RepoView
             repoPath={tab.repoPath}
             repoName={tab.repoName}
