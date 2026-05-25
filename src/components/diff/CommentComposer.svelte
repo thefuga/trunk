@@ -2,18 +2,24 @@
 import { buildDiffAnchor } from "../../lib/diff-anchor.js";
 import { safeInvoke, type TrunkError } from "../../lib/invoke.js";
 import { showToast } from "../../lib/toast.svelte.js";
-import type { FileDiff } from "../../lib/types.js";
+import type { Anchor, FileDiff } from "../../lib/types.js";
 
 interface Props {
-	file: FileDiff;
-	hunkIdx: number;
-	selectedLineIndices: Set<number>;
+	// Diff path passes file/hunkIdx/selectedLineIndices and the composer derives
+	// the captured result via buildDiffAnchor. The full-file host instead injects
+	// a pre-built `captured` result (from buildFullFileAnchor) and omits the three
+	// diff-path props. Exactly one of the two contracts is satisfied by the caller.
+	captured?: { anchor: Anchor; cachedExcerpt: string };
+	file?: FileDiff;
+	hunkIdx?: number;
+	selectedLineIndices?: Set<number>;
 	commitOid: string;
 	repoPath: string;
 	onclose: () => void;
 }
 
 let {
+	captured,
 	file,
 	hunkIdx,
 	selectedLineIndices,
@@ -29,10 +35,12 @@ const DRAFT_DEBOUNCE_MS = 300;
 let draftTimer: ReturnType<typeof setTimeout> | null = null;
 
 // The capture-time adapter is the single source of truth for both the persisted
-// range (start_line..end_line) and the diff-format excerpt. Derive the anchor
-// reactively so the preview always reflects the current selection.
-const captured = $derived(
-	buildDiffAnchor(commitOid, file, hunkIdx, selectedLineIndices),
+// range (start_line..end_line) and the excerpt. When the host injects a captured
+// result (full-file path) use it directly; otherwise derive it from the diff-path
+// props. The `!` reflects the caller contract: the diff path always supplies all
+// three.
+const capturedResult = $derived(
+	captured ?? buildDiffAnchor(commitOid, file!, hunkIdx!, selectedLineIndices!),
 );
 
 const submitDisabled = $derived(text.trim() === "" || submitting);
@@ -50,7 +58,7 @@ async function persistDraft() {
 		await safeInvoke("save_draft_comment", {
 			path: repoPath,
 			text,
-			anchor: captured.anchor,
+			anchor: capturedResult.anchor,
 		});
 	} catch (e) {
 		const err = e as TrunkError;
@@ -73,8 +81,8 @@ async function handleSubmit() {
 		await safeInvoke("add_comment", {
 			path: repoPath,
 			text,
-			anchor: captured.anchor,
-			cachedExcerpt: captured.cachedExcerpt,
+			anchor: capturedResult.anchor,
+			cachedExcerpt: capturedResult.cachedExcerpt,
 		});
 	} catch (e) {
 		const err = e as TrunkError;
@@ -102,7 +110,7 @@ export async function confirmDiscardIfDirty(): Promise<boolean> {
 
 <div class="comment-composer">
 	<div class="composer-preview">
-		Comments on lines {captured.anchor.start_line}-{captured.anchor.end_line}
+		Comments on lines {capturedResult.anchor.start_line}-{capturedResult.anchor.end_line}
 	</div>
 	<textarea
 		class="composer-textarea"
