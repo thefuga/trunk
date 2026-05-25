@@ -14,10 +14,11 @@
 use crate::error::TrunkError;
 use crate::git::review_store::{self, LoadOutcome};
 use crate::git::types::ReviewSession;
-use crate::state::{RepoState, ReviewSessionsState};
+use crate::state::{CommitCache, RepoState, ReviewSessionsState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The three review-session states the frontend renders (D-12). Serializes
@@ -280,6 +281,213 @@ pub fn intersect_graph_order(
     }
 
     out
+}
+
+// ── Selection RMW core (Phase 66, Plan 02): mutex-serialized read-modify-write ─
+// Add/remove/seed mutate the PERSISTED session — unlike the Phase 65 create/delete
+// `_inner`s, which read no prior state. Two rapid clicks racing the read-mutate-
+// write would lose a write (Pitfall 2), so the ENTIRE
+// read→mutate→save_session→map-write runs under the `ReviewSessionsState` mutex.
+// These free functions take the raw `&Mutex<..>` (not Tauri `State`) so the
+// serialization is unit-testable without a Tauri runtime (`selection_rmw_serialized`).
+
+/// Read-modify-write the session's commit set under the sessions mutex.
+///
+/// The lock is held across read → `mutate` → `save_session` → map-write so disk
+/// and memory never diverge and no concurrent caller observes a stale set. The
+/// blocking disk write inside the critical section is fine (small atomic
+/// tmp+rename); the lock is never held across an `.await`. Returns `no_session`
+/// when there is no in-memory session for `canonical` (distinct from `not_open`).
+fn mutate_session_rmw<F>(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    mutate: F,
+) -> Result<(), TrunkError>
+where
+    F: FnOnce(&mut Vec<String>),
+{
+    let mut map = sessions.lock().unwrap();
+    let session = map.get_mut(canonical).ok_or_else(|| {
+        TrunkError::new("no_session", "No active review session for this repository")
+    })?;
+    mutate(&mut session.commits);
+    review_store::save_session(data_dir, canonical, session)?;
+    Ok(())
+}
+
+/// Union `range_oids` into the session set, deduped (SEL-01, D-03). One walk, one
+/// save, one map-write — never decomposed into N adds.
+fn seed_review_range_rmw(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    range_oids: Vec<String>,
+) -> Result<(), TrunkError> {
+    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
+        *commits = union_dedup(commits, range_oids);
+    })
+}
+
+/// Add `oid` to the session set if absent (SEL-02, idempotent).
+fn add_review_commit_rmw(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    oid: &str,
+) -> Result<(), TrunkError> {
+    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
+        apply_add(commits, oid);
+    })
+}
+
+/// Remove every occurrence of `oid` from the session set (SEL-03, no-op if absent).
+fn remove_review_commit_rmw(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    oid: &str,
+) -> Result<(), TrunkError> {
+    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
+        apply_remove(commits, oid);
+    })
+}
+
+/// Seed the session from an inclusive commit range `[base..tip]` (SEL-01, D-02/D-03).
+///
+/// git2 work (open repo, parse OIDs, validate, walk) runs in `spawn_blocking` on a
+/// cloned `RepoState` snapshot and the RAW path; the resulting range is then
+/// unioned into the session under the sessions mutex (one emit per gesture).
+#[tauri::command]
+pub async fn seed_review_range(
+    path: String,
+    base_oid: String,
+    tip_oid: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+
+    let path_for_blocking = path.clone();
+    let (canonical, range_oids) = tauri::async_runtime::spawn_blocking(
+        move || -> Result<(PathBuf, Vec<String>), TrunkError> {
+            let canonical = canonical_repo_path(&path_for_blocking, &state_map)?;
+            let repo = git2::Repository::open(&path_for_blocking).map_err(TrunkError::from)?;
+            let base = git2::Oid::from_str(&base_oid).map_err(TrunkError::from)?;
+            let tip = git2::Oid::from_str(&tip_oid).map_err(TrunkError::from)?;
+            validate_range(&repo, base, tip)?;
+            let range_oids = compute_range_oids(&repo, base, tip)?;
+            Ok((canonical, range_oids))
+        },
+    )
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    seed_review_range_rmw(&data_dir, &canonical, &sessions.0, range_oids)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Add a single hand-picked commit to the session (SEL-02).
+#[tauri::command]
+pub async fn add_review_commit(
+    path: String,
+    oid: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    add_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Remove a single commit from the session (SEL-03).
+#[tauri::command]
+pub async fn remove_review_commit(
+    path: String,
+    oid: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// List the session's commits in graph order (SEL-04). No mutation, no emit.
+///
+/// Dual path-keying (Pitfall 3): the session set is read by CANONICAL key from the
+/// in-memory map; the graph order comes from `CommitCache` by RAW path. A missing
+/// in-memory session is `no_session` (distinct from `canonical_repo_path`'s
+/// `not_open`) so the frontend can branch on session-active vs repo-not-open.
+#[tauri::command]
+pub async fn list_session_commits(
+    path: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    cache: State<'_, CommitCache>,
+) -> Result<Vec<SessionCommit>, String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    // Read the session set by CANONICAL key; a missing entry is `no_session`.
+    let commits = {
+        let map = sessions.0.lock().unwrap();
+        map.get(&canonical)
+            .ok_or_else(|| {
+                serde_json::to_string(&TrunkError::new(
+                    "no_session",
+                    "No active review session for this repository",
+                ))
+                .unwrap()
+            })?
+            .commits
+            .clone()
+    };
+
+    // Read the full graph order from CommitCache by RAW path (Pitfall 3).
+    let graph = {
+        let map = cache.0.lock().unwrap();
+        map.get(&path)
+            .ok_or_else(|| {
+                serde_json::to_string(&TrunkError::new("not_open", "Repository not open")).unwrap()
+            })?
+            .clone()
+    };
+
+    // Open the repo fresh in spawn_blocking (orphan fallback needs find_commit);
+    // never hold the RepoState lock across git2 work.
+    let result =
+        tauri::async_runtime::spawn_blocking(move || -> Result<Vec<SessionCommit>, TrunkError> {
+            let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
+            Ok(intersect_graph_order(&commits, &graph, &repo))
+        })
+        .await
+        .map_err(|e| {
+            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+        })?
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    Ok(result)
 }
 
 #[tauri::command]
