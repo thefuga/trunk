@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: verifying
-stopped_at: Completed 67-04-PLAN.md (phase 67 ready for verification)
-last_updated: "2026-05-25T16:16:58.242Z"
+status: ready_to_plan
+stopped_at: Phase 67 complete (4/4) — ready to discuss Phase 68
+last_updated: 2026-05-25T16:24:15.660Z
 last_activity: 2026-05-25
 progress:
   total_phases: 7
-  completed_phases: 3
-  total_plans: 12
+  completed_phases: 12
+  total_plans: 157
   completed_plans: 12
-  percent: 43
+  percent: 171
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 67 — diff-source-anchor-capture
+**Current focus:** Phase 68 — full file source anchor capture
 
 ## Current Position
 
-Phase: 67 (diff-source-anchor-capture) — COMPLETE (ready for verification)
-Plan: 4 of 4 complete
-Status: Phase complete — ready for verification
-Last activity: 2026-05-25 -- Phase 67 Plan 04 completed (UAT approved)
+Phase: 68
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-25
 
 Progress: [██████████] 100%
 
