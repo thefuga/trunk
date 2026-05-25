@@ -13,7 +13,7 @@
 
 use crate::error::TrunkError;
 use crate::git::review_store::{self, LoadOutcome};
-use crate::git::types::ReviewSession;
+use crate::git::types::{Comment, DraftComment, ReviewSession};
 use crate::state::{CommitCache, RepoState, ReviewSessionsState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -308,13 +308,13 @@ fn mutate_session_rmw<F>(
     mutate: F,
 ) -> Result<(), TrunkError>
 where
-    F: FnOnce(&mut Vec<String>),
+    F: FnOnce(&mut ReviewSession),
 {
     let mut map = sessions.lock().unwrap();
     let session = map.get_mut(canonical).ok_or_else(|| {
         TrunkError::new("no_session", "No active review session for this repository")
     })?;
-    mutate(&mut session.commits);
+    mutate(session);
     review_store::save_session(data_dir, canonical, session)?;
     Ok(())
 }
@@ -327,8 +327,8 @@ fn seed_review_range_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     range_oids: Vec<String>,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        *commits = union_dedup(commits, range_oids);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.commits = union_dedup(&session.commits, range_oids);
     })
 }
 
@@ -339,8 +339,8 @@ fn add_review_commit_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        apply_add(commits, oid);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        apply_add(&mut session.commits, oid);
     })
 }
 
@@ -351,8 +351,73 @@ fn remove_review_commit_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        apply_remove(commits, oid);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        apply_remove(&mut session.commits, oid);
+    })
+}
+
+// ── Comment capture (Phase 67, Plan 02): shared dumb writers ──────────────────
+// `add_comment_inner` and `save_draft_comment_inner` reuse the SAME serialized
+// `mutate_session_rmw` as the selection RMW functions — the comment writer pushes
+// a fully-formed `Comment` (the `Anchor` already carries source/side from the TS
+// adapter) and clears the single draft slot; the draft writer replaces that slot.
+
+/// Argument bundle for `add_comment_inner` (the testable core). The thin command
+/// takes flat named args off the wire and assembles this; `_inner` is the wedge so
+/// disk behavior is provable with a `TempDir` (no Tauri runtime).
+#[derive(Debug)]
+pub struct AddCommentRequest {
+    pub path: String,
+    pub text: String,
+    pub anchor: crate::git::types::Anchor,
+    pub cached_excerpt: String,
+}
+
+/// Argument bundle for `save_draft_comment_inner`. `DraftComment` has NO
+/// `cached_excerpt` (schema asymmetry, Pitfall 5) — the draft carries text+anchor.
+#[derive(Debug)]
+pub struct SaveDraftCommentRequest {
+    pub path: String,
+    pub text: String,
+    pub anchor: Option<crate::git::types::Anchor>,
+}
+
+/// Submit a comment: push the fully-formed `Comment` (the `Anchor` already carries
+/// source/side from the TS adapter — L-08 dumb writer) and clear the single draft
+/// slot so the composer never reopens with stale text. The push + clear + save run
+/// inside the serialized RMW critical section, so concurrent submits never lose a
+/// write and disk/memory never diverge.
+fn add_comment_inner(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    req: AddCommentRequest,
+) -> Result<(), TrunkError> {
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.comments.push(Comment {
+            text: req.text,
+            anchor: Some(req.anchor),
+            cached_excerpt: Some(req.cached_excerpt),
+        });
+        session.draft_comment = None;
+    })
+}
+
+/// Write/replace the single draft-comment slot (per-keystroke). `DraftComment` has
+/// NO `cached_excerpt` (schema asymmetry, Pitfall 5) — only text + anchor persist;
+/// the excerpt is computed at submit. Does NOT emit `session-changed` (drafts are
+/// not panel-visible until Phase 69; per-keystroke emits would cause reload storms).
+fn save_draft_comment_inner(
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    req: SaveDraftCommentRequest,
+) -> Result<(), TrunkError> {
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.draft_comment = Some(DraftComment {
+            text: req.text,
+            anchor: req.anchor,
+        });
     })
 }
 
@@ -432,6 +497,66 @@ pub async fn remove_review_commit(
     remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
     let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Submit a comment to the active session (ANCH-01). Dumb writer: the `Anchor`
+/// already carries source/side from the TS adapter (L-08). Emits `session-changed`
+/// because a submitted comment is panel-visible state.
+///
+/// Flat named args (not a single struct param) mirror the sibling commands and the
+/// `safeInvoke("add_comment", { path, text, anchor, cachedExcerpt })` flat wire
+/// shape; Tauri maps the camelCase JS key `cachedExcerpt` to `cached_excerpt`.
+#[tauri::command]
+pub async fn add_comment(
+    path: String,
+    text: String,
+    anchor: crate::git::types::Anchor,
+    cached_excerpt: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    let req = AddCommentRequest {
+        path,
+        text,
+        anchor,
+        cached_excerpt,
+    };
+    add_comment_inner(&data_dir, &canonical, &sessions.0, req)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Persist the in-progress draft comment on keystroke (ANCH-01). Does NOT emit
+/// `session-changed`: drafts are not panel-visible until Phase 69, and per-keystroke
+/// emits would cause needless reload storms (RESEARCH Q3).
+///
+/// Flat named args mirror `add_comment` and the
+/// `safeInvoke("save_draft_comment", { path, text, anchor })` flat wire shape.
+#[tauri::command]
+pub async fn save_draft_comment(
+    path: String,
+    text: String,
+    anchor: Option<crate::git::types::Anchor>,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    let req = SaveDraftCommentRequest { path, text, anchor };
+    save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
     Ok(())
 }
 
@@ -1013,6 +1138,298 @@ mod tests {
         let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
         // No in-memory session for `canonical` → RMW must reject with `no_session`.
         let err = add_review_commit_rmw(data_dir.path(), &canonical, &sessions, "x").unwrap_err();
+        assert_eq!(err.code, "no_session");
+    }
+
+    // ── Phase 67 Plan 02: comment capture (add_comment / save_draft_comment) ──
+    // `Comment` + `DraftComment` already come through `use super::*`.
+    use crate::git::types::{Anchor, Side, Source};
+
+    /// A `TempDir` data dir + a sessions map seeded with one empty session keyed
+    /// by a synthetic canonical path. No git repo is needed — these writers only
+    /// touch the persisted JSON store (mirrors `selection_rmw_serialized:940-952`).
+    fn seeded_sessions(data_dir: &TempDir) -> (PathBuf, Mutex<HashMap<PathBuf, ReviewSession>>) {
+        let canonical = data_dir.path().join("repo-canonical");
+        let mut map = HashMap::new();
+        map.insert(
+            canonical.clone(),
+            ReviewSession {
+                schema_version: 1,
+                commits: vec![],
+                comments: vec![],
+                draft_comment: None,
+            },
+        );
+        (canonical, Mutex::new(map))
+    }
+
+    /// A non-trivial anchor with all six fields distinct (side=Old, source=Diff).
+    fn distinct_anchor() -> Anchor {
+        Anchor {
+            commit_oid: "abc123def456".to_string(),
+            file_path: "src/lib/foo.rs".to_string(),
+            source: Source::Diff,
+            side: Side::Old,
+            start_line: 12,
+            end_line: 34,
+        }
+    }
+
+    fn loaded(data_dir: &TempDir, canonical: &Path) -> ReviewSession {
+        match review_store::load_session(data_dir.path(), canonical).unwrap() {
+            LoadOutcome::Loaded(s) => s,
+            _ => panic!("expected a loadable session on disk"),
+        }
+    }
+
+    // Test 1 (SC-1): add_comment_inner pushes a Comment with anchor+excerpt, persists.
+    #[test]
+    fn add_comment_persists_comment_with_anchor_and_excerpt() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "looks good".to_string(),
+            anchor: distinct_anchor(),
+            cached_excerpt: "let x = 1;".to_string(),
+        };
+        add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        assert_eq!(s.comments.len(), 1);
+        assert_eq!(s.comments[0].text, "looks good");
+        assert_eq!(s.comments[0].cached_excerpt.as_deref(), Some("let x = 1;"));
+        assert!(
+            s.comments[0].anchor.is_some(),
+            "comment must carry its anchor"
+        );
+    }
+
+    // Test 2: submit clears the single draft_comment slot.
+    #[test]
+    fn add_comment_clears_draft_slot() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        // Seed a pre-existing draft that submit must clear.
+        sessions
+            .lock()
+            .unwrap()
+            .get_mut(&canonical)
+            .unwrap()
+            .draft_comment = Some(DraftComment {
+            text: "half-typed".to_string(),
+            anchor: Some(distinct_anchor()),
+        });
+
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "done".to_string(),
+            anchor: distinct_anchor(),
+            cached_excerpt: "x".to_string(),
+        };
+        add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        assert!(
+            s.draft_comment.is_none(),
+            "submit must clear the draft slot so the composer never reopens with stale text"
+        );
+    }
+
+    // Test 3 (no-session): missing in-memory session → "no_session".
+    #[test]
+    fn add_comment_missing_session_is_no_session_error() {
+        let data_dir = TempDir::new().unwrap();
+        let canonical = data_dir.path().join("absent");
+        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "t".to_string(),
+            anchor: distinct_anchor(),
+            cached_excerpt: "e".to_string(),
+        };
+        let err = add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap_err();
+        assert_eq!(err.code, "no_session");
+    }
+
+    // Test 4 (L-08): a Source::FullFile anchor persists unchanged (Phase-68 contract).
+    #[test]
+    fn add_comment_persists_full_file_source_unchanged() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        let mut anchor = distinct_anchor();
+        anchor.source = Source::FullFile;
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "whole-file note".to_string(),
+            anchor,
+            cached_excerpt: "e".to_string(),
+        };
+        add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        let stored = s.comments[0].anchor.as_ref().unwrap();
+        assert_eq!(
+            stored.source,
+            Source::FullFile,
+            "add_comment must persist Source::FullFile verbatim (L-08 dumb-writer contract)"
+        );
+    }
+
+    // Test 5 (SC-2): a non-trivial anchor round-trips with every field identical.
+    #[test]
+    fn add_comment_anchor_round_trips_all_six_fields() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        let anchor = distinct_anchor();
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "t".to_string(),
+            anchor: anchor.clone(),
+            cached_excerpt: "e".to_string(),
+        };
+        add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        let stored = s.comments[0].anchor.as_ref().unwrap();
+        // Anchor derives no PartialEq (frozen schema) — assert field-by-field.
+        assert_eq!(stored.commit_oid, anchor.commit_oid);
+        assert_eq!(stored.file_path, anchor.file_path);
+        assert_eq!(stored.source, anchor.source);
+        assert_eq!(stored.side, anchor.side);
+        assert_eq!(stored.start_line, anchor.start_line);
+        assert_eq!(stored.end_line, anchor.end_line);
+    }
+
+    // Test 6 (concurrency): N concurrent submits all survive on disk.
+    #[test]
+    fn add_comment_concurrent_submits_all_survive() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let data_dir = TempDir::new().unwrap();
+        let canonical = data_dir.path().join("repo-canonical");
+        let sessions: Arc<Mutex<HashMap<PathBuf, ReviewSession>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        sessions.lock().unwrap().insert(
+            canonical.clone(),
+            ReviewSession {
+                schema_version: 1,
+                commits: vec![],
+                comments: vec![],
+                draft_comment: None,
+            },
+        );
+
+        let n = 50;
+        let mut handles = Vec::new();
+        for i in 0..n {
+            let sessions = Arc::clone(&sessions);
+            let data_dir = data_dir.path().to_path_buf();
+            let canonical = canonical.clone();
+            handles.push(thread::spawn(move || {
+                let req = AddCommentRequest {
+                    path: "ignored".to_string(),
+                    text: format!("comment-{i:04}"),
+                    anchor: distinct_anchor(),
+                    cached_excerpt: "e".to_string(),
+                };
+                add_comment_inner(&data_dir, &canonical, &sessions, req).unwrap();
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        match review_store::load_session(data_dir.path(), &canonical).unwrap() {
+            LoadOutcome::Loaded(s) => {
+                assert_eq!(s.comments.len(), n, "every concurrent submit must survive");
+            }
+            _ => panic!("expected a loadable session on disk"),
+        }
+    }
+
+    // Test 7 (T-67-02): a traversal-shaped file_path round-trips verbatim AND does
+    // not influence the on-disk session filename (filename is the FNV-1a hash).
+    #[test]
+    fn add_comment_path_traversal_round_trips_without_affecting_filename() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        let mut anchor = distinct_anchor();
+        anchor.file_path = "../../etc/passwd".to_string();
+        let req = AddCommentRequest {
+            path: "ignored".to_string(),
+            text: "t".to_string(),
+            anchor,
+            cached_excerpt: "e".to_string(),
+        };
+        add_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        // The anchor metadata round-trips verbatim.
+        let s = loaded(&data_dir, &canonical);
+        assert_eq!(
+            s.comments[0].anchor.as_ref().unwrap().file_path,
+            "../../etc/passwd",
+            "traversal-shaped file_path is metadata and must round-trip unchanged"
+        );
+
+        // The on-disk filename is the FNV-1a hash of the canonical path, never the
+        // anchor: exactly one session file, named `<16 hex>.json`, no traversal.
+        let entries: Vec<_> = std::fs::read_dir(data_dir.path().join("sessions"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries.len(), 1, "exactly one session file on disk");
+        let name = &entries[0];
+        assert!(
+            name.len() == "0123456789abcdef.json".len()
+                && name.ends_with(".json")
+                && name[..16].chars().all(|c| c.is_ascii_hexdigit()),
+            "session filename must be the 16-hex FNV-1a hash, got {name}"
+        );
+        assert!(
+            !name.contains("..") && !name.contains("etc") && !name.contains("passwd"),
+            "anchor file_path must never leak into the session filename"
+        );
+    }
+
+    // Test 8: save_draft_comment_inner writes the draft slot (no cached_excerpt).
+    #[test]
+    fn save_draft_comment_persists_text_and_anchor() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        let req = SaveDraftCommentRequest {
+            path: "ignored".to_string(),
+            text: "typing...".to_string(),
+            anchor: Some(distinct_anchor()),
+        };
+        save_draft_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        let draft = s.draft_comment.as_ref().expect("draft must be persisted");
+        assert_eq!(draft.text, "typing...");
+        assert_eq!(
+            draft.anchor.as_ref().unwrap().file_path,
+            "src/lib/foo.rs",
+            "draft must carry its anchor"
+        );
+        // No comment was added — drafts are not comments.
+        assert!(s.comments.is_empty(), "a draft does not append a comment");
+    }
+
+    // Test 9: save_draft_comment_inner no-session → "no_session".
+    #[test]
+    fn save_draft_comment_missing_session_is_no_session_error() {
+        let data_dir = TempDir::new().unwrap();
+        let canonical = data_dir.path().join("absent");
+        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let req = SaveDraftCommentRequest {
+            path: "ignored".to_string(),
+            text: "t".to_string(),
+            anchor: None,
+        };
+        let err =
+            save_draft_comment_inner(data_dir.path(), &canonical, &sessions, req).unwrap_err();
         assert_eq!(err.code, "no_session");
     }
 }
