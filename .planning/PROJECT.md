@@ -240,6 +240,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 | Anchor = (commit, file, line-range, source) (v0.13) | source ∈ {diff, full_file}; renderer branches on source for diff-fenced vs language-fenced excerpts | ✓ Schema defined + locked in Phase 65 (capture in 67/68) |
 | Session storage in app data dir, keyed by repo (v0.13) | Not `.git/`, not the working tree — review drafts are private working state, not shared artifacts | ✓ Realized in Phase 65 (atomic per-repo JSON, canonical-path keyed) |
 | Single comment per anchor, no threading (v0.13) | Edit/delete supported; optional commit-level comment with no code anchor; threading is overkill for personal AI-review use | — Pending |
+| Review session is a flat commit SET (v0.13) | Range-seed unions + hand-pick adds into one deduped set rendered in graph order; "range" is an input gesture, not stored state; merges are selectable | ✓ Realized in Phase 66 (revwalk range + add/remove commands, mutex-serialized RMW) |
 
 ## Evolution
 
@@ -259,4 +260,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 after Phase 65 (Data Model + Persistence + Session Lifecycle) completed*
+*Last updated: 2026-05-25 after Phase 66 (Commit Selection) completed*
