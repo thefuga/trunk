@@ -119,6 +119,13 @@ Resume-signal expectation: human types "approved" or describes any mismatch (wro
 - Diff-source-on-merge restriction is deliberately deferred to Phase 67 (D-08).
 - No blockers. The human-verify checkpoint is the only outstanding confirmation; under --auto it was auto-approved and the gesture steps above are queued for the phase verifier as HUMAN-UAT.
 
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/66-commit-selection/66-04-SUMMARY.md`
+- FOUND: commit `4e468ae` (Task 1)
+- FOUND: commit `6ca3d38` (Task 2)
+- FOUND: commit `dcd8792` (SUMMARY)
+
 ---
 *Phase: 66-commit-selection*
 *Completed: 2026-05-25*
