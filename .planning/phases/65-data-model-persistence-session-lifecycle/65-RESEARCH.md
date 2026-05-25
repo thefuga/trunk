@@ -200,7 +200,8 @@ pub async fn start_review_session(
 Note: `use tauri::Manager;` is required to call `app.path()` on an `AppHandle`.
 
 ### Pattern 3: Atomic write — tmp in same dir + sync_all + rename (D-10)
-**What:** Write to `<final>.tmp` in the **same directory** (rename is only atomic within a filesystem), `sync_all()` to flush data to disk before the rename, then `std::fs::rename` to replace the target.
+**What:** Write to `<final>.tmp` in the **same directory** (rename is only atomic within a filesystem), `sync_all()` to flush data to disk before the rename, then `std::fs::rename` to replace the target. Serialize with `serde_json::to_string_pretty` (not `to_string`) — session files are tiny (~KB) and a human *will* `cat` one when debugging an anchor that won't resolve.
+**Mutation ordering (important):** On any successful mutation, do disk first: **atomic write succeeds → THEN insert/update `ReviewSessionsState` → THEN `app.emit`.** If you update in-memory state before the disk write and the write fails, memory and disk diverge silently.
 **When to use:** Every `save_session`. See Code Examples for the full function.
 
 ### Pattern 4: Live coordination via Tauri event broadcast (DP-01 — RECOMMENDED)
@@ -485,6 +486,7 @@ The inputs contain a constraint that forces this: **ROADMAP Phase 67 notes state
    - What we know: D-14 makes resume an explicit user action distinct from start; D-15/D-16 recovery applies on the resume/load path.
    - What's unclear: whether "start" on a repo that already has a file should be blocked (forcing the user to Resume or End-and-clear first) — this is a UX call.
    - Recommendation: separate `start` (creates fresh; if a file exists, surface resume-available instead of silently overwriting), `resume` (loads existing via the D-15/D-16 state machine), `end` (deletes), `get_review_session_status` (drives the stub's 3 states). Let the planner confirm the "start when file exists" UX.
+   - Precondition: `start_review_session` must require the repo be open (present in `RepoState`) — SESS-01 says "for the currently open repository." Return a `not_open` `TrunkError` otherwise, matching the existing precondition pattern (`stash.rs:17` `open_repo` helper). Do not let a lifecycle command operate on a closed repo.
 
 ## Environment Availability
 
