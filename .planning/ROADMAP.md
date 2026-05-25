@@ -244,10 +244,19 @@ Plans:
 
 **Plans**: 4 plans
 Plans:
+**Wave 1**
+
 - [ ] 66-01-PLAN.md — Rust selection core: revwalk range + validation + set ops + graph-order intersect (TDD)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 66-02-PLAN.md — Four thin commands (seed/add/remove/list) with mutex-serialized RMW + lib.rs registration
 - [ ] 66-03-PLAN.md — CommitRow in-session/pending-base markers + ReviewPanel minimal commit list with per-row remove
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 66-04-PLAN.md — CommitGraph two-right-click range gesture + Add/Remove toggle + session-active gating
+
 **UI hint**: yes
 **Notes:**
 
