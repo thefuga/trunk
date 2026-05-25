@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SessionState, SessionStatus } from "../lib/types";
+import type { SessionCommit, SessionState, SessionStatus } from "../lib/types";
 import ReviewPanel from "./ReviewPanel.svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -27,10 +27,13 @@ function makeStatus(state: SessionState): SessionStatus {
 	};
 }
 
-function setStatus(state: SessionState) {
+function setStatus(state: SessionState, commits: SessionCommit[] = []) {
 	mockInvoke.mockImplementation((cmd: string) => {
 		if (cmd === "get_review_session_status") {
 			return Promise.resolve(makeStatus(state));
+		}
+		if (cmd === "list_session_commits") {
+			return Promise.resolve(commits);
 		}
 		return Promise.resolve(undefined);
 	});
@@ -66,7 +69,7 @@ describe("ReviewPanel", () => {
 		setStatus("active");
 		render(ReviewPanel, { props: { repoPath: "/test/repo" } });
 		expect(await screen.findByText("End Review")).toBeInTheDocument();
-		expect(screen.getByText("No comments yet")).toBeInTheDocument();
+		expect(screen.getByText("No commits selected yet")).toBeInTheDocument();
 	});
 
 	it("invokes start_review_session with the repo path when Start is clicked", async () => {
@@ -102,5 +105,53 @@ describe("ReviewPanel", () => {
 			expect(statusCallsAfter).toBeGreaterThan(statusCallsBefore);
 		});
 		expect(await screen.findByText("End Review")).toBeInTheDocument();
+	});
+
+	const sampleCommits: SessionCommit[] = [
+		{ oid: "aaaaaaaa1111", short_oid: "aaaaaaa", summary: "first commit" },
+		{ oid: "bbbbbbbb2222", short_oid: "bbbbbbb", summary: "second commit" },
+	];
+
+	it("renders short SHA + summary for each in-session commit when active", async () => {
+		setStatus("active", sampleCommits);
+		render(ReviewPanel, { props: { repoPath: "/test/repo" } });
+		expect(await screen.findByText("first commit")).toBeInTheDocument();
+		expect(screen.getByText("aaaaaaa")).toBeInTheDocument();
+		expect(screen.getByText("second commit")).toBeInTheDocument();
+		expect(screen.getByText("bbbbbbb")).toBeInTheDocument();
+	});
+
+	it("invokes remove_review_commit with the row's oid when × is clicked", async () => {
+		setStatus("active", sampleCommits);
+		render(ReviewPanel, { props: { repoPath: "/test/repo" } });
+		const removeButton = await screen.findByLabelText("Remove commit aaaaaaa");
+		removeButton.click();
+		await waitFor(() => {
+			expect(mockInvoke).toHaveBeenCalledWith("remove_review_commit", {
+				path: "/test/repo",
+				oid: "aaaaaaaa1111",
+			});
+		});
+	});
+
+	it("reloads the commit list when a matching session-changed event arrives", async () => {
+		setStatus("active", sampleCommits);
+		render(ReviewPanel, { props: { repoPath: "/test/repo" } });
+		await screen.findByText("first commit");
+
+		const listCallsBefore = mockInvoke.mock.calls.filter(
+			(c) => c[0] === "list_session_commits",
+		).length;
+
+		for (const handler of sessionChangedHandlers) {
+			handler({ payload: "/canonical/repo" });
+		}
+
+		await waitFor(() => {
+			const listCallsAfter = mockInvoke.mock.calls.filter(
+				(c) => c[0] === "list_session_commits",
+			).length;
+			expect(listCallsAfter).toBeGreaterThan(listCallsBefore);
+		});
 	});
 });
