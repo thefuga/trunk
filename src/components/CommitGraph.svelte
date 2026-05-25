@@ -677,11 +677,80 @@ async function showCommitContextMenu(e: MouseEvent, commit: GraphCommit) {
 		);
 	}
 
+	// Review selection items (D-01 range gesture + D-06 Add/Remove toggle).
+	// Injected ONLY when a review session is active (sessionActive, sourced from
+	// get_review_session_status — NOT the panel-open flag, A1). NO `enabled:
+	// !commit.is_merge` gate — merges ARE selectable (D-08), unlike the
+	// Cherry-pick/Revert items below.
+	const reviewItems: (
+		| Awaited<ReturnType<typeof MenuItem.new>>
+		| Awaited<ReturnType<typeof PredefinedMenuItem.new>>
+	)[] = [];
+	if (sessionActive) {
+		const inSession = sessionOids.has(commit.oid);
+		reviewItems.push(
+			await MenuItem.new({
+				text: inSession ? "Remove from review" : "Add to review",
+				action: async () => {
+					try {
+						await safeInvoke(
+							inSession ? "remove_review_commit" : "add_review_commit",
+							{ path: repoPath, oid: commit.oid },
+						);
+					} catch (e) {
+						const err = e as TrunkError;
+						showToast(err.message ?? "Failed to update review", "error");
+					}
+				},
+			}),
+		);
+		if (pendingBase === null) {
+			reviewItems.push(
+				await MenuItem.new({
+					text: "Set as review base",
+					action: () => {
+						pendingBase = commit.oid;
+					},
+				}),
+			);
+		} else {
+			reviewItems.push(
+				await MenuItem.new({
+					text: "Add range to review",
+					action: async () => {
+						try {
+							await safeInvoke("seed_review_range", {
+								path: repoPath,
+								baseOid: pendingBase,
+								tipOid: commit.oid,
+							});
+						} catch (e) {
+							const err = e as TrunkError;
+							showToast(err.message ?? "Failed to seed range", "error");
+						} finally {
+							// The gesture is done either way — success or an invalid
+							// range (bad_range / unrelated_history) both clear the base.
+							pendingBase = null;
+						}
+					},
+				}),
+				await MenuItem.new({
+					text: "Clear review base",
+					action: () => {
+						pendingBase = null;
+					},
+				}),
+			);
+		}
+		reviewItems.push(await PredefinedMenuItem.new({ item: "Separator" }));
+	}
+
 	const menu = await Menu.new({
 		items: [
 			...mergeRebaseItems,
 			...fastForwardItems,
 			...interactiveRebaseItems,
+			...reviewItems,
 			await MenuItem.new({
 				text: "Copy SHA",
 				action: () => {
