@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Phase 67 context gathered
-last_updated: "2026-05-25T14:49:05.005Z"
-last_activity: 2026-05-25 -- Phase 67 execution started
+stopped_at: Phase 67 Plan 04 — awaiting human UAT (Task 3 checkpoint)
+last_updated: "2026-05-25T15:27:21Z"
+last_activity: 2026-05-25 -- Phase 67 Plan 04 tasks 1-2 done; paused at human-verify checkpoint
 progress:
   total_phases: 7
   completed_phases: 2
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 ## Current Position
 
 Phase: 67 (diff-source-anchor-capture) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 67
-Last activity: 2026-05-25 -- Phase 67 execution started
+Plan: 4 of 4 (tasks 1-2 complete, paused at Task 3 human-verify checkpoint)
+Status: Executing Phase 67 — awaiting human UAT on Plan 04
+Last activity: 2026-05-25 -- Phase 67 Plan 04 composer + affordance built; awaiting human UAT
 
 Progress: [██████████] 100%
 
@@ -133,7 +133,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-25
-Last session: 2026-05-25T13:54:14.102Z
-Stopped at: Phase 67 context gathered
-Resume file: .planning/phases/67-diff-source-anchor-capture/67-CONTEXT.md
-Next action: /gsd:plan-phase 65
+Last session: 2026-05-25T15:27:21Z
+Stopped at: Phase 67 Plan 04 — Task 3 human-verify checkpoint (UAT)
+Resume file: .planning/phases/67-diff-source-anchor-capture/67-04-PLAN.md
+Next action: Human runs `just dev` and verifies the attach flow (steps 1-8); type "approved" to resume Plan 04 completion (SUMMARY + state advance)
