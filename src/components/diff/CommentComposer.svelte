@@ -37,8 +37,8 @@ let draftTimer: ReturnType<typeof setTimeout> | null = null;
 // The capture-time adapter is the single source of truth for both the persisted
 // range (start_line..end_line) and the excerpt. When the host injects a captured
 // result (full-file path) use it directly; otherwise derive it from the diff-path
-// props. The `!` reflects the caller contract: the diff path always supplies all
-// three.
+// props. The diff-path caller always supplies file/hunkIdx/selectedLineIndices,
+// so the non-null assertions document that contract rather than guard it.
 const capturedResult = $derived(
 	captured ?? buildDiffAnchor(commitOid, file!, hunkIdx!, selectedLineIndices!),
 );

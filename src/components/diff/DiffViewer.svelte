@@ -45,6 +45,10 @@ interface Props {
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
 	oncommentlines: (filePath: string, hunkIndex: number) => void;
+	commitOid: string;
+	repoPath: string;
+	oncommentfullfile: (filePath: string, selectedIndices: Set<number>) => void;
+	fullFileView?: import("./FullFileView.svelte").default | null;
 }
 
 let {
@@ -74,6 +78,10 @@ let {
 	onunstagelines,
 	ondiscardlines,
 	oncommentlines,
+	commitOid,
+	repoPath,
+	oncommentfullfile,
+	fullFileView = $bindable(null),
 }: Props = $props();
 </script>
 
@@ -115,7 +123,17 @@ let {
       oncommentlines={oncommentlines}
     />
   {:else if layoutMode === "inline" && contentMode === "full"}
-    <FullFileView {fileDiffs} {showInvisibles} {wordWrap} />
+    <FullFileView
+      bind:this={fullFileView}
+      {fileDiffs}
+      {showInvisibles}
+      {wordWrap}
+      {commitOid}
+      {repoPath}
+      {diffKind}
+      {isMerge}
+      {oncommentfullfile}
+    />
   {:else}
     <SplitView {contentMode} {fileDiffs} {selectedPath} {diffKind}
       {hunkOperationInFlight} {ignoreWhitespace} {showInvisibles} {wordWrap}

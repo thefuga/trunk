@@ -1,4 +1,5 @@
 <script lang="ts">
+import { buildFullFileAnchor } from "../lib/full-file-anchor.js";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
 import {
 	getDiffContentMode,
@@ -29,6 +30,7 @@ import type {
 import CommentComposer from "./diff/CommentComposer.svelte";
 import DiffToolbar from "./diff/DiffToolbar.svelte";
 import DiffViewer from "./diff/DiffViewer.svelte";
+import type FullFileView from "./diff/FullFileView.svelte";
 
 interface Props {
 	fileDiffs: FileDiff[];
@@ -93,10 +95,34 @@ const composerFile = $derived(
 		: null,
 );
 
+// Full-file capture host state (Phase 68). The selection lives in FullFileView;
+// the host receives the chosen flat indices on the Comment affordance click and
+// builds the captured FullFile anchor + plain excerpt via the 68-01 adapter,
+// then reuses CommentComposer with that injected result. Merge commits ARE valid
+// here (L-05) — no isMerge guard, unlike the diff path.
+let fullFileView = $state<FullFileView | null>(null);
+let fullFileComposerOpen = $state(false);
+let fullFileComposerPath = $state<string | null>(null);
+let fullFileSelectedIndices = $state<Set<number>>(new Set());
+
+const fullFileCaptured = $derived(
+	fullFileComposerPath
+		? (() => {
+				const fd = fileDiffs.find((f) => f.path === fullFileComposerPath);
+				return fd
+					? buildFullFileAnchor(commitOid, fd, fullFileSelectedIndices)
+					: null;
+			})()
+		: null,
+);
+
 function closeComposer() {
 	composerOpen = false;
 	composerFilePath = null;
 	composerHunkIdx = null;
+	fullFileComposerOpen = false;
+	fullFileComposerPath = null;
+	fullFileSelectedIndices = new Set();
 	clearSelection();
 }
 
@@ -146,6 +172,16 @@ async function handleCommentLines(filePath: string, hunkIndex: number) {
 	composerFilePath = filePath;
 	composerHunkIdx = hunkIndex;
 	composerOpen = true;
+}
+
+// Full-file analog of handleCommentLines. NO isMerge guard — merge commits are
+// valid for full-file capture (L-05). Reuses the same ensureActiveSession().
+async function handleCommentFullFile(filePath: string, indices: Set<number>) {
+	const ready = await ensureActiveSession();
+	if (!ready) return;
+	fullFileComposerPath = filePath;
+	fullFileSelectedIndices = indices;
+	fullFileComposerOpen = true;
 }
 
 $effect(() => {
@@ -213,6 +249,9 @@ function clearSelection() {
 	selectedHunkKey = null;
 	selectedLineIndices = new Set();
 	lastClickedIndex = null;
+	// Reset the full-file view's own selection state so it never goes stale across
+	// mode/layout toggles or Escape (null when not mounted in full-file mode).
+	fullFileView?.clearSelection();
 }
 
 function scrollToHunk(index: number) {
@@ -543,6 +582,10 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 		onunstagelines={handleUnstageLines}
 		ondiscardlines={handleDiscardLines}
 		oncommentlines={handleCommentLines}
+		{commitOid}
+		{repoPath}
+		oncommentfullfile={handleCommentFullFile}
+		bind:fullFileView
 	/>
 	{#if composerOpen && composerFile && composerHunkIdx !== null}
 		<CommentComposer
@@ -550,6 +593,14 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 			file={composerFile}
 			hunkIdx={composerHunkIdx}
 			{selectedLineIndices}
+			{commitOid}
+			{repoPath}
+			onclose={closeComposer}
+		/>
+	{:else if fullFileComposerOpen && fullFileCaptured}
+		<CommentComposer
+			bind:this={composer}
+			captured={fullFileCaptured}
 			{commitOid}
 			{repoPath}
 			onclose={closeComposer}

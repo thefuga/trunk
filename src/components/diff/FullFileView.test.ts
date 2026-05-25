@@ -64,7 +64,7 @@ const modifiedFile: FileDiff = {
 
 const emptyFile: FileDiff = {
 	path: "src/empty.ts",
-	status: "Unmodified",
+	status: "Unknown",
 	is_binary: false,
 	hunks: [],
 };
@@ -136,13 +136,18 @@ describe("FullFileView", () => {
 		expect(sorted).toEqual([1, 2, 3, 4]);
 	});
 
-	it("V6/D-02: clicking a Delete line (new_lineno=null) is not a valid endpoint", async () => {
+	it("V6/D-02: a Delete line (new_lineno=null) is not selectable and not an endpoint", async () => {
 		render(FullFileView, { props: defaultProps() });
 
-		await fireEvent.click(lineRow("removed one"));
+		// The Delete line renders, but is not a selectable row (no role="button").
+		const deleteContent = screen.getByText("removed one");
+		expect(deleteContent.closest('[role="button"]')).toBeNull();
+
+		// Clicking its row directly must not open a selection / affordance.
+		const deleteRow = deleteContent.closest(".diff-line") as HTMLElement;
+		await fireEvent.click(deleteRow);
 		await tick();
 
-		// A Delete-line click must not open a selection / affordance.
 		expect(screen.queryByRole("button", { name: /comment/i })).toBeNull();
 	});
 

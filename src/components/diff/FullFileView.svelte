@@ -3,17 +3,86 @@ import {
 	splitInvisibles,
 	trailingWhitespaceStart,
 } from "../../lib/diff-utils.js";
-import type { FileDiff } from "../../lib/types.js";
+import type { DiffLine, FileDiff } from "../../lib/types.js";
 
 interface Props {
 	fileDiffs: FileDiff[];
 	showInvisibles: boolean;
 	wordWrap: boolean;
+	commitOid: string;
+	repoPath: string;
+	diffKind: "unstaged" | "staged" | "commit";
+	isMerge: boolean;
+	// Bubbles the chosen file path + the flat selected indices (into the file's
+	// hunks.flatMap(h => h.lines)) up to the DiffPanel host when the user clicks
+	// the Comment affordance.
+	oncommentfullfile: (filePath: string, selectedIndices: Set<number>) => void;
 }
 
-let { fileDiffs, showInvisibles, wordWrap }: Props = $props();
+let {
+	fileDiffs,
+	showInvisibles,
+	wordWrap,
+	diffKind,
+	isMerge,
+	oncommentfullfile,
+}: Props = $props();
 
-function lineBackground(origin: string): string {
+// Net-new contiguous selection state (D-01): a click sets a single-line anchor;
+// shift-click extends the focus, and the selected span is the inclusive range
+// anchorIndex..focusIndex over the active file's flat line list. Only new-side
+// lines (new_lineno != null) are valid endpoints (D-02). Scoped to one file at a
+// time via selectedPath.
+let selectedPath = $state<string | null>(null);
+let anchorIndex = $state<number | null>(null);
+let focusIndex = $state<number | null>(null);
+
+// The contiguous span as flat indices into the active file's line list.
+const selectedIndices = $derived(computeSpan(anchorIndex, focusIndex));
+
+function computeSpan(anchor: number | null, focus: number | null): Set<number> {
+	if (anchor === null || focus === null) return new Set();
+	const start = Math.min(anchor, focus);
+	const end = Math.max(anchor, focus);
+	const span = new Set<number>();
+	for (let i = start; i <= end; i++) span.add(i);
+	return span;
+}
+
+function selectLine(
+	path: string,
+	lines: DiffLine[],
+	index: number,
+	shift: boolean,
+) {
+	// D-02: only new-side lines are valid selection endpoints. A click on a Delete
+	// line (new_lineno === null) is a no-op.
+	if (lines[index].new_lineno === null) return;
+
+	if (shift && selectedPath === path && anchorIndex !== null) {
+		focusIndex = index;
+		return;
+	}
+
+	selectedPath = path;
+	anchorIndex = index;
+	focusIndex = index;
+}
+
+// Called by the DiffPanel host (via bind:this) on mode/layout toggle and Escape
+// so the selection never goes stale.
+export function clearSelection() {
+	selectedPath = null;
+	anchorIndex = null;
+	focusIndex = null;
+}
+
+function lineBackground(origin: string, isSelected: boolean): string {
+	if (isSelected) {
+		if (origin === "Add") return "var(--color-diff-add-bg-selected)";
+		if (origin === "Delete") return "var(--color-diff-delete-bg-selected)";
+		return "var(--color-accent-bg)";
+	}
 	if (origin === "Add") return "var(--color-diff-add-bg)";
 	if (origin === "Delete") return "var(--color-diff-delete-bg)";
 	return "transparent";
@@ -47,6 +116,7 @@ function gutterWidth(maxNum: number): string {
 {#each fileDiffs as fd (fd.path)}
   {@const gutterW = gutterWidth(maxLineNumber(fd))}
   {@const allLines = fd.hunks.flatMap(h => h.lines)}
+  {@const fileSelected = selectedPath === fd.path && selectedIndices.size > 0}
   <div style="min-width: 100%; width: {wordWrap ? '100%' : 'max-content'};">
     {#if fd.is_binary}
       <div style="
@@ -57,21 +127,52 @@ function gutterWidth(maxNum: number): string {
         Binary file — no diff available
       </div>
     {:else}
-      {#each allLines as line}
+      <!-- Full-file Comment affordance (L-05: no isMerge disable). Appears only for
+           commit diffs once a selection exists. -->
+      {#if diffKind === 'commit' && fileSelected}
+        <div style="display: flex; justify-content: flex-end; padding: 4px 8px;">
+          <button
+            style="
+              background: var(--color-accent-bg, var(--color-surface));
+              border: 1px solid var(--color-border);
+              border-radius: 3px;
+              color: var(--color-accent);
+              font-size: 11px;
+              font-family: var(--font-sans, sans-serif);
+              padding: 2px 8px;
+              cursor: pointer;
+              white-space: nowrap;
+            "
+            onclick={() => oncommentfullfile(fd.path, selectedIndices)}
+          >
+            Comment ({selectedIndices.size})
+          </button>
+        </div>
+      {/if}
+      {#each allLines as line, lineIdx}
+        {@const isSelectable = line.new_lineno !== null}
+        {@const isSelected = selectedPath === fd.path && selectedIndices.has(lineIdx)}
         {@const trailStart = showInvisibles ? trailingWhitespaceStart(line.content) : line.content.length}
         <div
           class="diff-line {line.origin === 'Add' ? 'diff-line-add' : line.origin === 'Delete' ? 'diff-line-delete' : 'diff-line-context'}"
+          role={isSelectable ? 'button' : undefined}
           style="
             font-family: monospace;
             font-size: 12px;
             line-height: 1.5;
             padding: 0 8px;
             white-space: {wordWrap ? 'pre-wrap' : 'pre'};
-            background: {lineBackground(line.origin)};
+            background: {lineBackground(line.origin, isSelected)};
             color: {lineColor(line.origin)};
+            cursor: {isSelectable ? 'pointer' : 'default'};
+            -webkit-user-select: {isSelectable ? 'none' : 'text'};
+            user-select: {isSelectable ? 'none' : 'text'};
             display: flex;
             align-items: flex-start;
           "
+          onmousedown={(e) => { if (isSelectable && e.shiftKey) e.preventDefault(); }}
+          onclick={(e) => isSelectable && selectLine(fd.path, allLines, lineIdx, e.shiftKey)}
+          onkeydown={(e) => { if (isSelectable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectLine(fd.path, allLines, lineIdx, e.shiftKey); } }}
         ><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0;">{line.old_lineno ?? ''}</span><span style="min-width: {gutterW}; text-align: right; color: var(--color-text-muted); padding-right: 8px; user-select: none; flex-shrink: 0;">{line.new_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{line.content}{/if}{/if}</span></div>
       {/each}
     {/if}
