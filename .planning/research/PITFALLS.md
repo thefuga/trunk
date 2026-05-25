@@ -1,242 +1,278 @@
 # Pitfalls Research
 
-**Domain:** Adding diff viewer improvements (split view, syntax highlighting, word-level diff, whitespace options, context lines, display options) to an existing Tauri 2 + Svelte 5 + Rust desktop Git GUI
-**Researched:** 2026-03-28
-**Confidence:** HIGH (verified against existing codebase analysis, libgit2/git2 API docs, Shiki documentation, Zed's split diff post-mortem, GitHub Desktop issues, and established editor patterns)
+**Domain:** Persisted, line-anchored review-comment + AI-targeted markdown export in a Tauri 2 + Svelte 5 + git2 desktop Git GUI (Trunk v0.13 Code Review Mode)
+**Researched:** 2026-05-25
+**Confidence:** HIGH (grounded in the actual Trunk source: `src-tauri/src/commands/diff.rs`, `staging.rs`, `src/components/diff/*.svelte`, `src/lib/store.ts`, `src-tauri/capabilities/default.json`, verified against Tauri 2 docs)
+
+> **Build-phase vocabulary used below:** `foundation` (session model, schema, persistence, repo keying), `selection` (anchor capture from diff/full-file views), `render` (resolve anchors → excerpts → markdown), `output` (clipboard + save-to-file). These map to the four obvious phase groupings the roadmapper will create.
 
 ---
 
-## Context: What Is Changing in v0.12
+## The one finding that reframes everything
 
-The existing DiffPanel.svelte renders a unified hunk-based diff with line-level selection and hunk staging. It uses a flat `<div>` per line with inline styles for `+`/`-`/context coloring via CSS custom properties. No syntax highlighting, no split view, no word-level highlighting. The Rust backend produces `Vec<FileDiff>` via git2's `diff_index_to_workdir` / `diff_tree_to_index` / `diff_tree_to_tree` with default 3-line context.
+**The existing v0.7 line selection is `(hunk_index, Set<line_index_within_hunk>)` — a position in the in-memory diff array, NOT a source line number.** (`src/components/diff/DiffViewer.svelte:27` `selectedLineIndices: Set<number>`; `HunkView.svelte:305` keys on `selectedHunkKey === hunkKey && selectedLineIndices.has(lineIdx)`; backend `stage_lines(hunk_index, line_indices: Vec<u32>)` at `staging.rs:776`.)
 
-v0.12 adds:
-1. **View modes:** hunk view (current), full file view, split (side-by-side)
-2. **Syntax highlighting** with auto language detection
-3. **Word-level (intra-line) diff** highlighting
-4. **Whitespace toggle** (ignore whitespace changes) + show invisible characters
-5. **Configurable context lines** with incremental expand
-6. **Display options:** word wrap toggle, line numbers in gutter, scrollbar minimap
+**The existing "full file at commit" view is NOT a blob read — it is a diff against the first parent with `context_lines(100_000)`** (`diff.rs:33-38` `if req.show_full_file { 100_000 }`; `FullFileView.svelte:49` `fd.hunks.flatMap(h => h.lines)`). Line numbers shown are `old_lineno`/`new_lineno` **from the diff**, which are **nullable** (`HunkView.svelte:327` `{line.new_lineno ?? ''}`) and **do not include context past the last change** (libgit2 only emits context around hunks). An unchanged file produces zero hunks and renders nothing.
 
-Each feature has pitfalls on its own. The interactions between them create compounding failure modes.
+Both selection sources therefore hand you **diff-relative, option-dependent, ephemeral coordinates**. If you persist those directly as anchors, every anchor breaks the moment the diff is re-fetched with different `context_lines`/`ignore_whitespace`, on restart, or for full-file views of large/binary files. **The foundation phase must define an anchor schema that converts diff-relative selection into a stable `(commit_oid, file_path, side, start_line, end_line, source)` tuple at capture time, and the render phase must re-derive excerpts from git2 — never trust the in-memory diff array to still exist.**
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Syntax highlighting DOM explosion freezes the webview on large files
+### Pitfall 1: Persisting the diff-array index instead of a stable source-line anchor
 
 **What goes wrong:**
-Traditional syntax highlighters (Shiki, Prism, Highlight.js) wrap every token -- keywords, strings, operators, punctuation -- in individual `<span>` elements. A 2,000-line file with syntax highlighting can produce 30,000-50,000 DOM nodes just for the highlighted tokens. The current DiffPanel renders one `<div>` per diff line (cheap). Adding syntax highlighting naively multiplies DOM node count by 10-20x. In Tauri's WKWebView (macOS) or WebKitGTK (Linux), this causes visible jank: layout reflow takes 100ms+, scrolling stutters, and the UI feels frozen for 1-2 seconds when switching files.
-
-The full-file view mode makes this worse because it renders the entire file, not just changed hunks with 3 lines of context.
+An anchor is saved as `(hunk_index, line_index)` (the only thing v0.7 selection currently produces). After restart, an option change, or a re-fetch, the diff array is regenerated with different length/ordering, and the anchor points at the wrong line or out of bounds — silently mis-attributing every comment.
 
 **Why it happens:**
-Developers prototype syntax highlighting on a 50-line test file where performance is invisible. The DOM node count scales linearly with file size but rendering cost scales super-linearly (each reflow touches more nodes, each paint covers more area). The problem only manifests with real-world files: 500+ line source files, minified bundles, generated code.
-
-Shiki's full bundle is 6.4 MB minified (1.2 MB gzip). Even the web bundle is 3.8 MB (695 KB gzip). Loading this at startup adds perceptible delay to tab opening.
+The path of least resistance is to reuse v0.7's `selectedLineIndices: Set<number>` verbatim. It works in the same session because the array is identical. The breakage only appears across re-fetch/restart.
 
 **How to avoid:**
-1. **Do syntax highlighting in Rust, not JS.** Use `syntect` (the same engine as Sublime Text / bat) in the Rust backend. It is fast (single-threaded, no WASM overhead), produces inline style annotations that map directly to CSS, and adds zero frontend bundle size. Compute highlighting during diff generation so IPC sends pre-highlighted lines.
-2. **If doing it in JS:** Use Shiki with fine-grained imports (`shiki/core` + only needed languages) and the JavaScript engine (not Oniguruma/WASM). Create one singleton `Highlighter` instance. Lazy-load grammars per file extension. Use `codeToTokens` (not `codeToHtml`) to get token arrays, then render with your own Svelte template to avoid Shiki generating its own DOM.
-3. **Cap highlighting:** Skip syntax highlighting for files over a threshold (e.g., 10,000 lines or 500 KB). Show a "File too large for syntax highlighting" notice. Every professional tool does this.
-4. **Virtualize the full-file view.** The current hunk view renders all lines in DOM (acceptable because hunks are small). Full-file view MUST use virtual scrolling -- render only visible lines plus a buffer. The MergeEditor already has a virtualization pattern (`getVisibleRange` + `OVERSCAN`) that should be reused.
+At capture time, translate the selected diff-array positions into source line numbers via the `DiffLine.old_lineno`/`new_lineno` already carried in each line. Persist `(commit_oid, file_path, side, start_line, end_line, source)`. Never persist `hunk_index`/`line_index`. Diff options (`context_lines`, `ignore_whitespace`) must not appear in the anchor.
 
 **Warning signs:**
-- Prototype works on small files but stutters on real projects
-- `document.querySelectorAll('span')` returns 20,000+ nodes in the diff panel
-- File switching takes more than 200ms perceived delay
-- Bundle size grows by more than 200 KB gzip after adding syntax highlighting
+Anchor struct contains `hunk_index` or `line_index`. A comment "jumps" to a different line after toggling whitespace-ignore or context-line count. Out-of-bounds panics when re-opening a session.
 
-**Phase to address:**
-Syntax highlighting phase -- MUST decide Rust-side (`syntect`) vs. JS-side (Shiki) in the first plan. The architecture choice cascades through every subsequent phase. If choosing Shiki, fine-grained bundle configuration must be the first implementation task, not an optimization afterthought.
+**Phase to address:** foundation (schema), selection (capture/translation)
 
 ---
 
-### Pitfall 2: Split view sync scroll infinite loop or visible desync
+### Pitfall 2: Off-by-one and null `lineno` — collapsing a mixed selection to one line range
 
 **What goes wrong:**
-Split (side-by-side) diff has two scrollable panes. When the user scrolls the left pane, the right pane must follow, and vice versa. The naive implementation -- `leftPane.onscroll = () => rightPane.scrollTop = leftPane.scrollTop` and the mirror -- creates an infinite feedback loop: setting `scrollTop` on the right pane fires its `onscroll`, which sets `scrollTop` on the left pane, which fires its `onscroll`, and so on. Even with a guard flag (`let scrolling = false`), timing issues cause visible oscillation where panes bounce back and forth by 1-2 pixels.
-
-A subtler variant: the two sides have different heights because deleted lines appear only on the left and added lines only on the right. Naive `scrollTop` mirroring causes the shorter side to hit its scroll limit before the longer side, and then they desync permanently for the rest of the scroll range.
+A selection spanning Add + Delete + Context lines is collapsed to a single `(start, end)` tuple, but Delete lines have `new_lineno = null` and Add lines have `old_lineno = null` (`HunkView.svelte:327` renders `?? ''`). Picking the wrong side yields `null`, an off-by-one, or a range that doesn't exist in the blob you later read.
 
 **Why it happens:**
-The browser's `onscroll` event fires asynchronously after the scroll position is set programmatically. The guard flag (`scrolling = true` before setting, reset after) can be cleared before the programmatic scroll event fires, depending on browser event loop timing. Additionally, `scrollTop` assignment is clamped by the browser to the element's actual scroll range, so if the two sides have different `scrollHeight` values, setting `scrollTop = X` on the shorter side actually sets it to `min(X, maxScroll)`, which does not equal the source scroll position.
+Developers assume every line has both numbers. git2 diff lines are origin-tagged: `Context` has both, `Add` has only `new_lineno`, `Delete` has only `old_lineno` (`diff.rs:222-238`).
 
 **How to avoid:**
-1. **Use the MergeEditor pattern already in the codebase.** The existing `MergeEditor.svelte` has a working synchronized scroll implementation: a `scrolling` guard flag combined with `requestAnimationFrame` to defer the guard reset. This pattern works because rAF fires after the browser has processed the programmatic scroll event. Port this pattern directly.
-2. **Insert spacer rows for alignment.** When the left side has a deleted block of N lines, insert N blank spacer rows on the right side (and vice versa for additions). This ensures both sides have identical total height, making `scrollTop` mirroring trivially correct. Zed uses this approach ("empty visual regions rendered with a subtle checkerboard"). The MergeEditor's `flattenAligned()` function already implements exactly this pattern -- padding conflict regions to equal height.
-3. **Never use percentage-based scroll sync.** Some implementations try to sync scroll position as a percentage (`right.scrollTop = right.scrollHeight * (left.scrollTop / left.scrollHeight)`). This breaks because the correspondence between left and right lines is not uniform -- a large deletion block on the left has no corresponding content on the right, so the percentage mapping creates visual jumps.
+Add a `side ∈ {old, new}` discriminator to the anchor (in addition to `source ∈ {diff, full_file}`). Derive line numbers from the matching side only: `new` side uses `new_lineno`, skipping Delete lines; `old` side uses `old_lineno`, skipping Add lines. For diff selections that mix both, default the anchor to the **new** side (the post-change state the AI should act on) and drop pure-Delete lines from the line range, but keep them in the rendered excerpt as `-` context. Reject/clamp empty ranges. Full-file selections are always `new` side.
 
 **Warning signs:**
-- Panes visibly oscillate (jitter) by 1-2 pixels when scrolling slowly
-- Scrolling to the bottom of one pane does not reach the bottom of the other
-- Fast scrolling causes the two sides to drift apart by several lines
-- A `console.warn` or counter on `onscroll` shows 10+ events per frame
+Anchor has a single line range with no `side`. Excerpt at render time is off by one or empty. Crash on `null` lineno. AI feedback references a line number that doesn't exist in the file.
 
-**Phase to address:**
-Split view phase. The spacer/alignment strategy and scroll sync must be designed together as a single unit, not separately. Reuse the MergeEditor's `flattenAligned()` + scroll sync pattern.
+**Phase to address:** foundation (schema: `side`), selection (capture logic)
 
 ---
 
-### Pitfall 3: Whitespace-ignored diff breaks hunk staging line numbers
+### Pitfall 3: Treating "full file at commit" as a complete blob
 
 **What goes wrong:**
-The user toggles "ignore whitespace" to review a diff without noise. They see a clean 3-line hunk showing only the meaningful change. They click "Stage Hunk." The backend receives the hunk index, but the hunk index and line numbers were computed from a whitespace-ignored diff, while `stage_hunk` applies a patch against the actual working tree content (which includes the whitespace changes). The patch fails to apply, or worse, applies to the wrong lines, silently corrupting the staging area.
-
-This is the single most dangerous pitfall in this milestone because it causes data loss (wrong lines staged) rather than just a UI bug.
+The full-file view is a 100k-context diff, so (a) files with no changes vs. parent render nothing, (b) `new_lineno` skips at the boundary if a hunk is dropped, (c) very large files may be emitted as Binary by libgit2 and produce no lines, (d) content is `String::from_utf8_lossy` (`diff.rs:228`) — non-UTF8 bytes are already replacement chars, so byte-exact excerpts are impossible from this path. Anchors captured here can reference lines that the render-time blob read won't match.
 
 **Why it happens:**
-The current backend computes diffs and applies hunks using the same `DiffOptions`. When you add `opts.ignore_whitespace(true)`, the diff output changes: hunks merge differently, line numbers shift, whitespace-only lines that were `+`/`-` become context lines. But `git2::apply` uses the actual file content, not the whitespace-ignored view. The hunk index from the whitespace-ignored diff does not correspond to the same hunk in the non-ignored diff.
-
-git2's `DiffOptions` exposes `ignore_whitespace()`, `ignore_whitespace_change()`, and `ignore_whitespace_eol()`, but these affect diff generation only. The apply machinery uses the literal patch text, which must match the actual file content.
+The name "full file view" implies the whole file is present. It isn't — it's a diff with a big context window, optimized for display, not for stable line addressing.
 
 **How to avoid:**
-1. **Whitespace ignore is display-only.** Generate TWO diffs from the backend: one with the user's whitespace settings (for display) and one with default settings (for staging operations). The frontend shows the display diff but sends the staging command with the original hunk index from the non-ignored diff.
-2. **Alternatively, disable hunk/line staging when whitespace ignore is active.** Show a tooltip: "Hunk staging is not available when whitespace changes are hidden. Turn off whitespace ignore to stage individual hunks." This is what GitHub Desktop does -- it grays out the staging checkboxes when whitespace settings are non-default.
-3. **Never pass whitespace-ignored hunk indices to staging commands.** If you must allow staging with whitespace ignore, you need a mapping layer: for each hunk in the display diff, find the corresponding hunk(s) in the real diff by matching line content. This is complex and error-prone; option 1 or 2 is safer.
+Decide the render strategy in foundation and write it down: **render-time excerpts come from a NEW git2 tree→blob read** (`commit.tree()?.get_path(path)?.to_object()?.as_blob()`), NOT from re-issuing the 100k diff. The blob is the source of truth for `full_file` line numbers. The diff view at capture time is only used to *let the user pick* lines; the persisted anchor stores absolute blob line numbers on the `new` side. At render, read the blob at `commit_oid`, split on `\n`, slice `[start..=end]`. This decouples excerpts from diff-option drift entirely. (Trade-off of the rejected alternative — re-issuing the diff — is exactly the drift in Pitfall 1 plus the Binary/empty-file gaps above.)
 
 **Warning signs:**
-- `stage_hunk` error "patch does not apply" after toggling whitespace ignore
-- Lines appear in the wrong position after staging with whitespace ignore on
-- Staging succeeds but the staged content differs from what was shown in the diff
-- No test covers staging with whitespace ignore enabled
+Render reuses `diff_commit_file_inner` to get excerpt text. Full-file anchors on an unchanged file resolve to nothing. Excerpt line count doesn't match the file. No new blob-read command in `commands/`.
 
-**Phase to address:**
-Whitespace options phase. The very first design decision must be: does whitespace ignore coexist with staging, or is staging disabled when whitespace ignore is active? This must be decided before writing any whitespace-related code.
+**Phase to address:** foundation (decide blob-read strategy), render (implement git2 blob read)
 
 ---
 
-### Pitfall 4: Syntax highlighting and diff background colors create unreadable visual soup
+### Pitfall 4: Non-UTF8, CRLF, and no-newline-at-EOF in excerpt extraction
 
 **What goes wrong:**
-Diff lines have background colors: green tint for additions, red tint for deletions, transparent for context. Syntax highlighting adds foreground colors: blue for keywords, green for strings, orange for numbers, etc. When a syntax-highlighted string literal (green foreground) appears on an added line (green background), the text becomes invisible. When a keyword (blue foreground) appears on a deletion line (red background), the contrast ratio drops below WCAG thresholds. Word-level diff highlighting adds a THIRD layer: a brighter background on the specific changed words within a line. Three overlapping color systems create visual chaos.
+Blob bytes are decoded assuming UTF-8 (corrupt output on Latin-1/binary-ish files); CRLF files get `\r` embedded in every excerpt line (visible junk in the markdown, throws off line counts if you split on `\r\n` vs `\n`); a final line with no trailing newline is dropped or mis-counted, shifting the end of the range.
 
 **Why it happens:**
-Each color system is designed independently: diff colors assume plain text, syntax highlighting assumes neutral background, word-level highlighting assumes it is the only background. Nobody tests the three together across all combinations of syntax token types and diff line types.
+git2 blobs are raw `&[u8]`. Naive `String::from_utf8(content).unwrap()` panics or `from_utf8_lossy` silently mangles. Splitting strategy for line counting is rarely thought through.
 
 **How to avoid:**
-1. **Design a layered color system upfront.** Define CSS custom properties for all combinations: `--color-diff-add-token-keyword`, `--color-diff-delete-token-string`, etc. This is impractical for every combination. Instead:
-2. **Use opacity-based layering.** Diff background is the base layer (set on the line `<div>`). Syntax colors are foreground-only (no background from syntax tokens). Word-level diff is an additional semi-transparent background on `<span>` elements within the line. This means:
-   - Line background: `var(--color-diff-add-bg)` or `var(--color-diff-delete-bg)` or `transparent`
-   - Token foreground: syntax color (adjusted for readability on both add/delete backgrounds)
-   - Word-level highlight: `var(--color-diff-word-add)` or `var(--color-diff-word-delete)` -- a slightly more saturated version of the line background
-3. **Desaturate syntax colors on diff lines.** On added/deleted lines, reduce syntax color saturation by 30-40% to prevent clashing with the background tint. GitHub does this: syntax colors on diff lines are muted compared to the same tokens in a non-diff code view.
-4. **Test the 6 critical combinations:** (add/delete/context) x (keyword/string) at minimum. Print them out and check contrast ratios.
+At blob read: detect binary up front (reuse the existing `is_binary` signal pattern from `FileDiff`, or git2 `Blob::is_binary()`) and refuse to excerpt binary blobs — emit a `[binary file, no excerpt]` placeholder. For text, decode with `from_utf8_lossy` but flag if replacement chars were introduced. Split lines on `\n` after stripping a single trailing `\r` per line (normalize CRLF→LF for display). Count lines consistently: N `\n` characters → N or N+1 lines depending on trailing newline — pick "lines = split('\n'), drop trailing empty if blob ends in \n" and use that everywhere (capture gutter, render slice). Preserve a no-final-newline file by not appending one.
 
 **Warning signs:**
-- Text that is hard to read on colored backgrounds
-- Two adjacent colors that look identical (green string on green add background)
-- Word-level diff highlights that are invisible against the line background
-- Users reporting "I can't see what changed"
+`.unwrap()` on `String::from_utf8`. `\r` visible in copied markdown. Last-line comments render one line short. Replacement chars (U+FFFD) in excerpts with no warning.
 
-**Phase to address:**
-Syntax highlighting phase AND word-level diff phase must coordinate. Define the color layering system as a shared design document before implementing either feature. Add the CSS custom properties for all diff+syntax combinations in the first phase that touches colors.
+**Phase to address:** render (blob decode + line-split helper), with the line-counting convention fixed in foundation so capture and render agree
 
 ---
 
-### Pitfall 5: Line number alignment breaks in split view with unequal sides
+### Pitfall 5: Code excerpts containing ``` fences break the markdown code block
 
 **What goes wrong:**
-In split view, the left pane shows old line numbers and the right pane shows new line numbers. Deleted lines appear only on the left (with a blank spacer on the right). Added lines appear only on the right (with a blank spacer on the left). If spacers are not precisely the same height as real lines, the two sides drift out of alignment progressively -- by the bottom of a 500-line diff, the left and right panes can be off by 20+ pixels, making it impossible to visually compare corresponding lines.
-
-A related failure: line numbers in the gutter must track the actual file line numbers, not the visual row index. The left gutter shows the old file's line numbers (skipping numbers for added lines that do not exist in the old file). The right gutter shows the new file's line numbers (skipping numbers for deleted lines). Getting this wrong produces nonsensical line numbers that confuse users.
+The reviewed code contains a fenced block (common in markdown files, docstrings, this very planning repo). Emitting it inside a 3-backtick fence terminates the block early; the AI sees broken structure and the rest of the excerpt leaks as prose.
 
 **Why it happens:**
-Spacer rows must have exactly `line-height` height (currently 1.5 * 12px = 18px in the DiffPanel). If a spacer is an empty `<div>` without explicit height, the browser may collapse it to 0px. If a real line wraps (because word wrap is enabled), it becomes taller than 18px, but the spacer on the opposite side stays at 18px. This is the fundamental conflict between word wrap and split view alignment -- and the reason most diff tools disable word wrap in split view mode.
+Hardcoding three backticks. Works until the first excerpt that itself contains ```` ``` ````.
 
 **How to avoid:**
-1. **Fixed line height, no word wrap in split view.** Use `overflow-x: auto` (horizontal scroll) on each line in split view. This guarantees every row is exactly one line height. Word wrap is only available in unified view. This is what VS Code, GitHub Desktop, and GitKraken do.
-2. **If allowing word wrap in split view:** Each row must be a flex container whose height is determined by the taller side. When the left side wraps to 3 visual lines, the right side's spacer (or non-wrapping line) must also expand to 3 visual lines. This requires measuring each row's rendered height and setting `min-height` on the opposite side -- expensive and complex.
-3. **Line numbers:** Track `old_lineno` and `new_lineno` from the `DiffLine` struct (already provided by git2). For spacer rows, show no line number (empty gutter). Never compute line numbers from the visual row index.
-4. **Use a CSS grid for the split layout.** Each row is a grid row containing [left-gutter | left-content | right-gutter | right-content]. The grid ensures all four cells in a row have the same height automatically. Do NOT use two independent scrollable containers with separate row heights.
+Scan each excerpt for the longest run of consecutive backticks; use `max(3, longest_run + 1)` backticks for the opening and closing fence. Choose the info string by source: `diff` selections → ```` ```diff ````; `full_file` selections → the language id from the existing v0.12 language detection (`syntax::extension_from_path`). Never indent the fence (indented fences are interpreted as code spans). Preserve exact indentation of the code inside — do not trim or re-indent.
 
 **Warning signs:**
-- Lines at the bottom of a long diff are visibly misaligned between left and right
-- Line numbers show sequential integers instead of actual file line numbers
-- Blank spacer rows appear with 0 height (collapsed)
-- Word wrap enabled in split view causes the two sides to drift
+Fence length is a constant `"```"`. Copy a review of a markdown/docstring-heavy file and the output renders half as prose. Indentation lost in excerpts.
 
-**Phase to address:**
-Split view phase. The layout strategy (grid vs. two containers) and the word-wrap-in-split-view decision must be made in the first plan. These are architectural choices that cannot be retrofitted.
+**Phase to address:** render (markdown generation)
 
 ---
 
-### Pitfall 6: Context line expansion silently invalidates cached hunk indices
+### Pitfall 6: Stale anchors that no longer resolve — crash or silent drop instead of graceful surface
 
 **What goes wrong:**
-The user expands context lines from 3 to 10 (or clicks "Show 20 more lines"). The diff is re-fetched from the backend with the new `context_lines` parameter. The hunks merge differently: two previously separate hunks may now overlap and become one hunk because the expanded context fills the gap between them. The frontend's hunk indices are now stale. If the user had selected lines in hunk 2, the selection now refers to what used to be hunk 2 but is now part of the merged hunk 0. Clicking "Stage Hunk" stages the wrong content.
+By explicit design there is NO re-anchoring. So at render time a `commit_oid` may be gone (history rewritten/GC'd), a `file_path` may not exist in that tree (rename/delete), or `start_line..end_line` may exceed the blob length. Naive code either panics (`.unwrap()` on `find_commit`/`get_path`) or silently omits the comment, losing review feedback the user wrote.
 
 **Why it happens:**
-git2's `DiffOptions::context_lines()` changes how hunks are split. With `context_lines(3)` (default), two changes separated by 7 unchanged lines produce two hunks. With `context_lines(10)`, they merge into one hunk because the context overlaps. `DiffOptions::interhunk_lines()` also affects merging. The frontend caches hunk indices for selection state, keyboard navigation (`[`/`]`), and staging commands. When the backend returns a different hunk structure, all cached indices are invalid.
+The happy path (session built and rendered in one sitting on a stable range) always resolves. The unresolvable case only appears after a rebase/amend/branch-switch between session creation and render, which is easy to never hit in dev.
 
 **How to avoid:**
-1. **Clear all selection and navigation state on context change.** When `context_lines` changes, clear `selectedHunkKey`, `selectedLineIndices`, `focusedHunkIndex`, and `hunkElements`. The existing `$effect` that clears state when `fileDiffs` changes should cover this, but verify it fires on context-line-triggered re-fetches.
-2. **Increment context on the frontend, not by re-fetching.** Instead of calling the backend with a different `context_lines` parameter, fetch the full file content once and reconstruct the expanded view on the frontend by inserting additional context lines from the full file into the existing hunk structure. This preserves hunk identity. The "expand context" button adds lines from the surrounding file content, not from a re-generated diff.
-3. **If re-fetching from backend:** The re-fetch is a complete replacement. Treat it as if the user selected a different file. Reset all UI state. Do not try to preserve selection across hunk re-generation.
+Split the concern across two phases. **Foundation:** the schema must carry enough to *attempt* resolution and to *describe* a failure — store the resolved `file_path` at the anchored commit (post-rename), `commit_oid` (full, not short), `side`, line range, `source`, and the comment text independent of resolvability. **Render:** every resolution step returns `Result`; on failure, emit the comment into the markdown with an explicit `> [!warning] Unresolvable anchor: <reason>` block (commit not found / file not in tree / line range out of bounds) plus the original comment text and best-known location. Never `unwrap`. Never drop. A render must always succeed and always include every comment.
 
 **Warning signs:**
-- "Stage Hunk" error after expanding context lines
-- Hunk navigation (`[`/`]`) jumps to unexpected positions after context change
-- Selected lines visually shift position after context expansion
-- Tests pass with default context (3) but fail with expanded context
+`find_commit(...).unwrap()` or `get_path(...).unwrap()` in render. Rendered doc has fewer comments than the session panel shows. Render throws instead of producing a doc. No "unresolvable" branch in tests.
 
-**Phase to address:**
-Context lines phase. The approach (frontend expansion vs. backend re-fetch) must be decided in the first plan. Frontend expansion is more complex but preserves user state; backend re-fetch is simpler but requires full state reset.
+**Phase to address:** foundation (schema carries resolution inputs + comment independence), render (graceful degradation + warning blocks)
 
 ---
 
-### Pitfall 7: Word-level diff algorithm quadratic blowup on large changed lines
+### Pitfall 7: Merge commits silently lose second-parent changes
 
 **What goes wrong:**
-Word-level (intra-line) diff compares a deleted line against the subsequent added line to find which specific words or characters changed. The standard approach is a character-level or word-level Myers diff. Myers diff is O(ND) where N is the total characters and D is the edit distance. For two similar lines of 200 characters with 5 changed characters, this is fast (O(200*5) = O(1000)). But for a completely rewritten line (common with reformatted code, moved function arguments, or minified files), D approaches N and the algorithm becomes O(N^2). A single pair of 10,000-character minified lines takes seconds to diff.
-
-When many lines are completely rewritten (e.g., a file was reformatted), word-level diff runs on every line pair and the total time becomes unacceptable.
+`diff_commit_inner` diffs against `parent(0)` only (`diff.rs:410-414`). A comment anchored to a merge commit captures the first-parent diff exclusively; changes brought in from the second parent are invisible in selection and in the rendered excerpt — the AI reviews an incomplete picture.
 
 **Why it happens:**
-Developers test word-level diff on typical source code lines (50-120 characters) where it is instant. The quadratic case only triggers on pathological inputs: minified JavaScript, base64-encoded data, long JSON single-line values, or lines where most content changed.
+First-parent diff is the standard simplification; it's correct for linear history and quietly wrong for merges.
 
 **How to avoid:**
-1. **Set line-length and edit-distance thresholds.** If a line exceeds 500 characters, skip word-level diff and show the whole line as changed. If the edit distance exceeds 60% of the line length (i.e., most of the line changed), show the whole line as changed rather than highlighting 60% of it in word-level markers.
-2. **Do word-level diff in Rust, not JS.** The `similar` crate provides high-quality word/character diff with good performance characteristics. Running in Rust via `spawn_blocking` prevents blocking the UI thread. The result can be pre-computed alongside the line diff and included in the `DiffLine` struct as optional `inline_changes: Option<Vec<InlineSpan>>`.
-3. **Diff words, not characters.** Split each line by whitespace/punctuation into tokens, then diff the token sequences. Token-level diff is O(T*D_t) where T is token count (much smaller than character count). Fall back to character-level only when two adjacent tokens differ and you want sub-token granularity.
-4. **Limit the number of word-diffed line pairs per hunk.** If a hunk has 200 changed lines, do not word-diff all 200 pairs. Word-diff the first 50 pairs and mark the rest as "fully changed." Users scrolling through 200 changed lines are not reading word-by-word anyway.
+Decide policy in selection phase and surface it: either (a) exclude merge commits from the seed/hand-pick selection (simplest, matches "single user reviewing AI-written code" where merges are rare), or (b) allow them but render-time blob excerpts still come from the merge commit's own tree (Pitfall 3 path sidesteps the parent-diff problem entirely, since blob read at the merge commit is complete). Option (b) is nearly free given the blob-read strategy — recommend (b) for full-file source and exclude merges only for `diff` source.
 
 **Warning signs:**
-- Diff rendering takes more than 500ms on files with long lines
-- The UI freezes when viewing minified files or base64 data
-- Word-level highlighting marks 80%+ of a line, providing no useful information
-- CPU spikes when switching to a file with heavy reformatting
+Selection lets the user pick a merge commit with `>1` parent and shows a first-parent-only diff with no indication. Excerpt for a merge omits second-parent hunks.
 
-**Phase to address:**
-Word-level diff phase. Threshold configuration must be part of the initial implementation, not added after performance problems are discovered.
+**Phase to address:** selection (policy + UI constraint), render (blob read sidesteps it for full_file)
 
 ---
 
-### Pitfall 8: Bundle size explosion from syntax highlighting grammars
+### Pitfall 8: Renamed / added / deleted files within the reviewed range
 
 **What goes wrong:**
-Shiki's full bundle is 6.4 MB minified (1.2 MB gzip). Even importing the "web" bundle adds 3.8 MB (695 KB gzip). Each TextMate grammar is 50-200 KB. A Git GUI needs to highlight many languages (users open repos containing JS, TS, Python, Rust, Go, C++, Java, Ruby, YAML, JSON, Markdown, CSS, HTML, SQL, Shell, Dockerfile, etc.). Loading 30+ grammars adds 3-6 MB to the bundle.
-
-For a Tauri desktop app, the bundle is embedded in the binary. The current Trunk app is likely under 5 MB. Adding syntax highlighting could double the binary size.
+For a Renamed file, `delta.old_file().path() != delta.new_file().path()` — anchoring on the wrong path makes the render-time blob lookup fail. For an Added file there is no old-side content; for a Deleted file there is no new-side content. Selecting the impossible side yields an unresolvable anchor or empty excerpt.
 
 **Why it happens:**
-Developers start with a few grammars ("I only need JS and Rust"), then add more as they encounter files without highlighting. Each grammar is small individually, but they accumulate. The WASM Oniguruma engine adds another 500 KB+.
+A single `path` field assumes the file has one stable name and both sides. git2 deltas carry separate old/new paths and a `DiffStatus` (already modeled: `diff.rs:191-199`, `DiffStatus::{Added,Deleted,Renamed,Copied}`).
 
 **How to avoid:**
-1. **Use `syntect` in Rust (strongest recommendation).** `syntect` is compiled into the Rust binary. Grammar files are embedded at build time. The `syntect` default bundle (all common languages) adds approximately 2 MB to the binary -- less than Shiki's web bundle -- and requires zero JavaScript bundle impact. It also avoids the WASM overhead.
-2. **If using Shiki:** Import from `shiki/core` (not the main entry). Use the JavaScript engine (not Oniguruma/WASM). Import only the 10-15 most common languages statically. Lazy-load additional grammars on demand when a file with an uncommon extension is opened. Use `import()` with the specific grammar path: `import('@shikijs/langs/rust')`.
-3. **Never import `shiki` or `shiki/bundle/full` or `shiki/bundle/web`.** These include all grammars/themes upfront. Use fine-grained imports exclusively.
-4. **Measure after every grammar addition.** Add a CI check or build-time log that reports total bundle size. Set a budget (e.g., 2 MB gzip for syntax highlighting contribution).
+Store the path **as it exists at the anchored commit on the anchor's `side`** — for `new` side, `delta.new_file().path()`; for `old` side, `delta.old_file().path()`. Constrain selection by `DiffStatus`: Added files allow only `new`-side anchors; Deleted files allow only `old`-side; Renamed files store the new path with `new` side by default. Render reads the blob at `(commit, stored_path)` and falls back to the Pitfall-6 warning if absent.
 
 **Warning signs:**
-- Build output size increases by more than 1 MB after adding syntax highlighting
-- `import 'shiki'` appears anywhere in the codebase (should be `shiki/core`)
-- More than 20 grammar imports in a single file
-- WASM files appear in the build output
+Anchor has one `path` with no awareness of rename. Render fails on a file that was renamed in the range. UI lets you anchor the `old` side of an Added file.
 
-**Phase to address:**
-Syntax highlighting phase -- the first task. Technology choice (syntect vs. Shiki) determines bundle size strategy for the entire milestone.
+**Phase to address:** foundation (path-at-commit + side in schema), selection (DiffStatus constraints)
+
+---
+
+### Pitfall 9: Session persistence — lost updates, corrupt JSON, and repo keying
+
+**What goes wrong:**
+Three failures: (a) **Lost update** — the existing LazyStore pattern is read-modify-write (`store.ts:16-19` `addRecentRepo`: get → spread → set → save). Two tabs on the same repo (the v0.13 decision is *one session per repo*, and tabs can duplicate a repo — v0.9) racing this lose one tab's comments. (b) **Corrupt/partial JSON** — a crash mid-`save()` leaves a truncated file; next load throws and the whole session is gone. (c) **Repo keying** — `RepoState` keys by `PathBuf` as opened; symlinks, trailing slashes, and `..` segments produce different key strings for the same repo, so the session "disappears" when the repo is opened via a different path.
+
+**Why it happens:**
+LazyStore is convenient and already in use; its read-modify-write and non-atomic save are invisible until concurrency or a crash hits. Path canonicalization is easy to forget.
+
+**How to avoid:**
+(a) Serialize session writes through a **Rust command holding a mutex** (matches the existing `RepoState`/`RunningOp` managed-state pattern) rather than racing LazyStore from multiple tabs; or, if staying in LazyStore, reload-before-write and merge by anchor id. Coordinate live updates across tabs via the existing filesystem-watcher/event pattern or a `session-changed` event. (b) **Atomic write**: serialize to a temp file, then rename over the target (`std::fs::rename` is atomic on same volume). (c) **Canonicalize the repo path** (`std::fs::canonicalize` / `dunce` on Windows) before using it as the session key; store sessions in the app data dir keyed by the canonical path hash, per the v0.13 decision ("app data dir, keyed by repo — not `.git/`, not the working tree").
+
+**Warning signs:**
+Session writes go straight to LazyStore from Svelte with no merge. No temp-file+rename. Key derived from raw `path` string. Comments vanish when the same repo is opened twice or via a symlink.
+
+**Phase to address:** foundation (storage location, keying, atomic write, write-serialization)
+
+---
+
+### Pitfall 10: Schema with no version field
+
+**What goes wrong:**
+The anchor/comment format will evolve (you'll add `side`, then maybe a category, then a resolved-path cache). Without a version field, the loader can't tell v1 from v2 and either crashes on old sessions or silently misreads fields.
+
+**Why it happens:**
+"It's just JSON, I'll add versioning later." Later is after users (you) have persisted v1 sessions.
+
+**How to avoid:**
+Put `schema_version: 1` in the session file from the first commit, even with zero migrations. On load, switch on the version; unknown future version → refuse gracefully with a message, never partial-parse. serde `#[serde(default)]` on new optional fields eases additive migrations.
+
+**Warning signs:**
+Session JSON has no version. Adding a field breaks loading old sessions in testing.
+
+**Phase to address:** foundation
+
+---
+
+### Pitfall 11: Save-to-file uses a capability/permission that isn't granted
+
+**What goes wrong:**
+`capabilities/default.json` currently grants only `dialog:allow-open`, `dialog:allow-ask`, and `clipboard-manager:allow-write-text` — **no `dialog:allow-save` and no `fs:` write permission**. Calling the save dialog or writing the file fails at runtime with a permission error that's easy to misread as a logic bug.
+
+**Why it happens:**
+Tauri 2's capability model denies by default; the missing permission only surfaces when the new code path runs, not at build time.
+
+**How to avoid:**
+Pick ONE save strategy and grant exactly its permissions:
+- **Recommended (matches Trunk's "git2/std for local writes, plugins for UI" pattern):** `dialog:allow-save` to pick the path (returns `null` on cancel — verified against Tauri 2 dialog docs), then write via a **custom Rust command using `std::fs`** with atomic temp+rename. This needs only `dialog:allow-save` added to capabilities — no `fs:` plugin scope to configure.
+- Alternative: `dialog:allow-save` + `@tauri-apps/plugin-fs` `writeTextFile` with an explicit fs scope. Two permissions plus scope config; rejected as more surface area for no benefit.
+
+Add `dialog:allow-save` to `capabilities/default.json` in the output phase and verify the dialog actually opens in a built (not just dev) binary.
+
+**Warning signs:**
+Save throws a permissions/denied error. Code calls `save()` or `writeTextFile` with no matching capability entry. Works in dev with `withGlobalTauri` but fails in release.
+
+**Phase to address:** output
+
+---
+
+### Pitfall 12: Save-dialog cancel and clipboard failure handled as success
+
+**What goes wrong:**
+(a) Save dialog cancel returns `null`; code that doesn't check writes to `null`/empty path or shows a false "Saved!" toast. (b) Clipboard `writeText` is fire-and-forget across the codebase (`.catch(() => {})` — `CommitGraph.svelte:651`, `CommitDetail.svelte:72`). For an *artifact the user intends to paste into an AI*, a silent clipboard failure means they paste stale content and never know.
+
+**Why it happens:**
+The existing pattern copies low-stakes strings (a SHA, a path) where silent failure is fine. The review artifact is the product — silence is a trap.
+
+**How to avoid:**
+After `save()`, branch on `null` → no-op (user cancelled), do not toast success. For clipboard, await `writeText` and toast success on resolve / **error toast on reject** (use the existing v0.6 toast system) — do not copy the fire-and-forget `.catch(() => {})` pattern here.
+
+**Warning signs:**
+"Saved" toast appears after cancelling the dialog. Clipboard call is `writeText(doc).catch(() => {})`. No success/failure feedback on copy.
+
+**Phase to address:** output
+
+---
+
+### Pitfall 13: Losing in-progress comments and selection on diff re-fetch
+
+**What goes wrong:**
+(a) A comment being typed is lost when the user clicks another file/commit, switches view mode, or the filesystem watcher fires a `repo-changed` re-fetch (Trunk auto-refreshes on fs changes — v0.1). (b) The diff re-fetch replaces the in-memory array, clearing `selectedLineIndices` (it's transient Svelte `$state`), so an in-progress selection vanishes before the user attaches a comment.
+
+**Why it happens:**
+Selection and draft text live in component-local `$state`, which is reset on remount/refetch. The watcher and view-mode toggles trigger refetch underneath the user.
+
+**How to avoid:**
+Persist the draft comment to the session (or a transient draft slot) on blur/change, not only on explicit save. Once a selection is converted to an anchor, it is persisted immediately and survives refetch (it no longer depends on the diff array — Pitfall 1). Guard destructive refetches while a comment editor is open, or re-open the editor with its draft after refetch. Confirm before discarding an unsaved draft.
+
+**Warning signs:**
+Typing a comment, an external file change fires, and the text is gone. Selection clears on view-mode toggle. No draft persistence.
+
+**Phase to address:** selection (anchor-immediately + draft persistence), foundation (draft slot in schema)
+
+---
+
+### Pitfall 14: No delete confirmation; no jump-to-anchor when anchor is stale
+
+**What goes wrong:**
+(a) Comment delete with no confirmation (the codebase has a confirmation pattern for discard — v0.6/v0.7 — so its absence here would be inconsistent and destructive). (b) "Jump to anchor" assumes the anchor resolves; if the commit/file is gone (Pitfall 6) the jump throws or navigates nowhere.
+
+**Why it happens:**
+Delete is a one-liner; confirmation is extra work. Jump-to-anchor is written for the happy path.
+
+**How to avoid:**
+Reuse the existing confirmation-dialog pattern for delete. Jump-to-anchor must check resolvability first and, when unresolvable, show the comment in a read-only "orphaned" state in the panel instead of navigating.
+
+**Warning signs:**
+One-click irreversible delete. Jump-to-anchor errors on a rewritten range.
+
+**Phase to address:** selection/management (delete confirm), render+management (orphaned-anchor handling)
 
 ---
 
@@ -244,112 +280,109 @@ Syntax highlighting phase -- the first task. Technology choice (syntect vs. Shik
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Inline styles on diff lines (current pattern) | Quick to implement, dynamic per-line | Cannot use CSS pseudo-elements, harder to theme, verbose markup | Current state is acceptable for v0.12, but syntax highlighting + word-level diff should migrate to CSS classes |
-| Rendering all lines in DOM (no virtualization) for full-file view | Simple implementation | UI freezes on files over 1,000 lines | Never for full-file view. The MergeEditor virtualizes; full-file must too. |
-| Single diff fetch (no separate display-diff / staging-diff) | Simpler backend, one IPC call | Cannot safely stage hunks when whitespace ignore is active | Acceptable if whitespace ignore disables staging. Not acceptable if staging must work with whitespace ignore. |
-| Hardcoded 3-line context (current behavior) | No UI for context configuration needed | Users cannot see more context without opening the file separately | Acceptable for v0.12 initial phases, but context configuration should be added before milestone close. |
-| Word-level diff computed on the frontend in JS | No backend changes needed | Blocks the main thread on large diffs, cannot be cached | Acceptable for prototype. Must move to Rust backend for production. |
-| Loading all syntax grammars at startup | Simple initialization, no lazy-loading code | 1-3 second startup delay, wasted memory for unused grammars | Never. Lazy-load grammars by file extension. |
+| Persist `(hunk_index, line_index)` directly from v0.7 selection | Reuses existing selection state as-is | Every anchor breaks on re-fetch/restart/option change | **Never** — this is the core correctness bug (Pitfall 1) |
+| Extract excerpts by re-running the 100k-context diff | Reuses `diff_commit_file_inner`, no new command | Drift, empty unchanged files, Binary gaps, lossy UTF-8 (Pitfall 3/4) | **Never** for excerpts — diff is fine for *display during capture* only |
+| Single `path` field on the anchor (no side/rename awareness) | Simpler struct | Renamed/added/deleted files resolve wrong or empty (Pitfall 8) | Never |
+| Write session JSON directly via LazyStore from Svelte | Matches existing `store.ts` pattern | Lost updates across same-repo tabs; corrupt-partial on crash (Pitfall 9) | Acceptable only if single-tab-per-repo is enforced AND atomic write is added |
+| Hardcode 3-backtick fences | Trivial | Breaks on code containing fences (Pitfall 5) | Only if you guarantee no fenced content ever — you can't |
+| Omit `schema_version` | One less field | No clean migration path; old sessions crash loader (Pitfall 10) | Never — costs nothing to add |
+| `find_commit(...).unwrap()` in render | Shorter code | Render crashes on rewritten history (Pitfall 6) | Never in render |
+| Fire-and-forget clipboard `.catch(() => {})` for the artifact | Consistent with existing copy-SHA code | User pastes stale content unknowingly (Pitfall 12) | Never for the review artifact (fine for copy-SHA) |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| git2 `DiffOptions` + whitespace ignore | Passing whitespace-ignored hunk indices to `stage_hunk` / `stage_lines` | Generate display diff (with ignore) and staging diff (without ignore) separately. Or disable staging when whitespace ignore is on. |
-| git2 `context_lines` + hunk staging | Assuming hunk indices are stable across context-line changes | Clear all selection state when context lines change. Hunk indices from different context settings are not comparable. |
-| Syntax highlighting + diff line rendering | Using Shiki's `codeToHtml` which generates its own DOM structure | Use `codeToTokens` to get token arrays. Render tokens inside existing diff line structure to preserve click handlers, selection, and line-level styling. |
-| Split view + existing hunk keyboard navigation | `[`/`]` navigation assumes a single scrollable container | Update keyboard navigation to work within the active pane of a split view. Track which pane has focus. |
-| Word wrap + line numbers | Line numbers rendered per visual line instead of per source line | Line numbers must be per source line only (one number per actual line, not per wrapped segment). Use CSS `position: sticky` or a fixed-width gutter column. |
-| Minimap + virtual scrolling | Minimap tries to render all lines for the overview but diff panel virtualizes | Minimap must render from the data model (line count + change types), not from the DOM. Use a canvas element, not DOM nodes. |
-| `syntect` (Rust) + Tauri IPC | Sending fully highlighted HTML over IPC (large payload) | Send token spans with style indices, not HTML strings. Frontend maps indices to CSS classes. Reduces IPC payload by 60-80%. |
-| Full-file view + hunk actions | Full-file view loses hunk boundaries, so "Stage Hunk" has no target | In full-file view, show hunk boundaries as visual separators. Map each line back to its original hunk index for staging. Or disable hunk staging in full-file view and only allow line staging. |
+| v0.7 line selection (`selectedLineIndices: Set<number>` + `hunk_index`) | Persisting the index as the anchor | Translate to `(commit, file, side, start_line, end_line)` at capture via `old/new_lineno` |
+| v0.12 full-file view (100k-context diff, not a blob) | Treating it as the whole file / stable line numbers | Capture for selection only; render excerpts from a NEW git2 tree→blob read |
+| git2 `diff_commit_inner` (first-parent only, `diff.rs:410`) | Anchoring merge commits and trusting the diff | Blob-read at the commit's own tree; constrain or document merge handling (Pitfall 7) |
+| git2 blob bytes (`&[u8]`, may be non-UTF8 / CRLF / no trailing `\n`) | `String::from_utf8(...).unwrap()` and split naively | Binary-check, `from_utf8_lossy` with flag, normalize CRLF, fixed line-count convention |
+| Tauri 2 capabilities (deny-by-default; only open/ask/clipboard granted today) | Calling `save()`/fs write with no permission | Add `dialog:allow-save`; write file via custom Rust `std::fs` command (Pitfall 11) |
+| Tauri 2 `dialog.save()` | Treating `null` (cancel) as a path | Branch on `null`; no success toast on cancel (Pitfall 12) |
+| Tauri 2 IPC for excerpts | Returning huge per-line span-enriched payloads for the whole render | Render builds the markdown string in Rust and returns one string, not a giant struct |
+| LazyStore (`store.ts` read-modify-write, non-atomic save) | Multi-tab same-repo writes | Serialize through a mutex-held Rust command + atomic temp+rename |
+| `RepoState` PathBuf keying | Keying session by raw opened path | Canonicalize path before keying (symlinks/`..`/trailing slash) |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Syntax highlighting all lines on every diff re-render | 200ms+ delay when switching files, visible flash of unstyled text | Cache highlighted tokens per file path + content hash. Only re-highlight when file content changes. | At 500+ line files |
-| Word-level diff on every changed line without thresholds | UI freezes on files with many changes or long lines | Skip lines over 500 chars. Skip if edit distance exceeds 60% of line length. Cap at 50 word-diffed line pairs per hunk. | At files with 100+ changed lines or any line over 1,000 chars |
-| Split view rendering both sides' full DOM | Double the DOM nodes, double the layout/paint cost | Virtual-scroll both panes from a single shared scroll position. Render only visible rows. | At 500+ line diffs |
-| Canvas minimap re-rendering on every scroll event | Visible jank during fast scrolling, high CPU usage | Render minimap once on diff load. Only update the viewport indicator overlay on scroll. Re-render full minimap only when diff data changes. | Immediately on any non-trivial file |
-| Re-generating diff on every context-line increment | Multiple sequential IPC round-trips as user clicks "show more context" | Debounce context expansion requests (300ms). Or fetch the full file once and expand context on the frontend. | When user clicks expand 3+ times quickly |
-| Shiki highlighter created per file | Highlighter instantiation is expensive (100ms+); creating per file adds up | Create one singleton highlighter. Load grammars lazily. Reuse across all files and tabs. | At 3+ files opened in sequence |
+| Rendering excerpts with full syntax/word-span enrichment (the v0.12 `enrich_file_diffs` path) | Slow render, huge payload | Excerpts are plain text in a fenced block; AI doesn't need spans. Skip enrichment entirely for export | Any session with many anchors |
+| Re-reading the blob per line instead of per file | O(lines) tree lookups | Read each `(commit, file)` blob once, cache, slice all its anchors' ranges | Files with many anchors |
+| Including full file content per anchor in the markdown | Doc balloons past clipboard/AI context limits | Excerpt only the anchored line range (+ small fixed context, e.g. 2 lines); summarize commit refs once at top | Large files / many anchors |
+| Loading every repo's session at startup | Slow launch | Lazy-load the session only for the active repo (matches LazyStore lazy pattern) | Many repos with saved sessions |
+| Unbounded doc size copied to clipboard | Copy silently truncated/failed on very large docs | Show doc size; warn past a threshold; offer save-to-file as the path for large docs | Reviews spanning many commits/files |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Save-to-file path not validated / fs scope too broad | Write outside intended dir if using broad `fs:` scope | Use `dialog:allow-save` to get a user-chosen path + custom Rust write; avoid a wide `fs:scope` |
+| Session files in the working tree or `.git/` | Private review drafts leak into commits / shared repo | Store in app data dir per v0.13 decision; never in repo |
+| Reading arbitrary blob path from anchor without bounding to the repo | Path traversal via crafted session file | Resolve paths only through `commit.tree().get_path()` (tree-relative); never `std::fs` the working tree by anchor path |
+| Trusting persisted session JSON without schema/version validation | Malformed/old file crashes or mis-parses | Version + serde validation on load (Pitfall 10) |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Word-level diff highlights 90% of a reformatted line | User sees almost the entire line highlighted, providing no useful information about what actually changed | If word-level diff covers more than 60% of a line, fall back to showing the entire line as changed (no word-level markers). Show word-level only when it narrows down to a small portion. |
-| Invisible whitespace characters shown by default | Visual noise overwhelms the actual diff content; users cannot focus on meaningful changes | Whitespace visualization must be off by default. Toggle it on explicitly. Even when on, only show trailing whitespace and mixed tabs/spaces, not every single space. |
-| Context expansion has no visual boundary | After expanding context, users lose track of where the original hunk boundaries were | Keep a subtle visual marker (thin line, background change) at the original hunk boundary positions even after context expansion. |
-| No keyboard shortcut to toggle between view modes | Users must reach for the mouse to switch between unified/split/full-file view | Assign keyboard shortcuts: Cmd+Shift+1/2/3 or similar. Show in tooltip on the toggle buttons. |
-| Split view makes each side too narrow on smaller screens | At 1280px width, each split pane is ~500px after gutters -- barely enough for 80-char lines | Set a minimum window width for split view (e.g., 1400px). Below that, show a notice suggesting unified view. Or allow independent horizontal scrolling per pane. |
-| Word wrap toggle has no visual indicator of current state | User does not know whether word wrap is on or off without looking carefully at line behavior | Use a toggle button with pressed/unpressed state and a tooltip showing the current mode. |
+| In-progress comment lost on file switch / fs refresh | Lost work, frustration | Persist drafts on change; anchor-immediately so selection survives refetch (Pitfall 13) |
+| Selection cleared by view-mode toggle / re-fetch | Have to re-select before commenting | Convert selection to a persisted anchor at attach time, independent of diff array |
+| No confirmation on comment delete | Accidental loss of written feedback | Reuse existing confirmation dialog (Pitfall 14) |
+| Silent clipboard / false save-success | User pastes stale or saves nothing, unaware | Await + toast success/failure; handle cancel as no-op (Pitfall 12) |
+| Orphaned anchor jump throws / goes nowhere | Confusing dead UI | Show orphaned comments read-only with a reason badge (Pitfall 6/14) |
+| Markdown unreadable to AI (broken fences, wrong/absent line numbers) | AI can't act on feedback — defeats the feature's purpose | Dynamic fence length, correct file path + line numbers per excerpt, diff vs language info-string (Pitfall 5) |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Syntax highlighting:** Handles files with no recognized language (shows plain text, no crash, no missing colors)
-- [ ] **Syntax highlighting:** Works with binary detection -- binary files still show "Binary file -- no diff available" (not garbled highlighted bytes)
-- [ ] **Split view:** Spacer rows are exactly the same height as content rows across ALL zoom levels (Cmd+/Cmd-)
-- [ ] **Split view:** Horizontal scroll works independently per pane (scrolling right in left pane does not scroll right pane)
-- [ ] **Split view:** The three-way state (unified/split/full-file) persists across file switches within the same session
-- [ ] **Word-level diff:** Handles no-newline-at-EOF marker lines (should not word-diff the "\ No newline at end of file" git marker)
-- [ ] **Word-level diff:** Adjacent add/delete line pairing handles cases with unequal counts (3 deletions, 5 additions -- which pairs to word-diff?)
-- [ ] **Whitespace toggle:** Does not break the diff when the file contains only whitespace changes (all hunks disappear, UI shows "No changes" not an empty broken panel)
-- [ ] **Context lines:** Expanding to maximum context shows the full file content without gaps or duplicated lines
-- [ ] **Context lines:** Hunk staging still works after context expansion (indices are valid)
-- [ ] **Line numbers:** Gutter numbers match `git diff` output exactly for a given file (verify manually)
-- [ ] **Line numbers:** New file (all additions) shows line numbers starting at 1, not 0
-- [ ] **Minimap:** Renders correctly for files with 1-2 changed lines (not just large diffs)
-- [ ] **Minimap:** Click-to-scroll on minimap navigates to the correct position in the diff
-- [ ] **View mode toggle:** Switching from split to unified and back preserves scroll position (approximately)
-- [ ] **Full-file view:** Does not re-fetch the entire file content when already available from the diff data
+- [ ] **Anchor schema:** Often missing `side` and `source` discriminators and the path-at-commit — verify a Renamed-file and a Delete-line-only selection both round-trip.
+- [ ] **Render resolution:** Often missing the unresolvable branch — verify rendering a session after `git commit --amend`/rebase still produces a doc with warning blocks for every orphaned comment, and never panics.
+- [ ] **Full-file source:** Often silently reuses the diff path — verify excerpts come from a git2 blob read and match the file exactly (including an unchanged file and a file with no trailing newline).
+- [ ] **Fence escaping:** Often hardcoded — verify a review of a file containing a ```` ``` ```` fence renders intact.
+- [ ] **Capabilities:** Often missing — verify `dialog:allow-save` is in `capabilities/default.json` and save works in a *release* build, not just dev.
+- [ ] **Cancel/failure paths:** Verify cancelling the save dialog shows no success, and a forced clipboard failure shows an error toast.
+- [ ] **Persistence robustness:** Verify a session survives restart, the same repo opened via symlink/different path resolves the same session, and a kill mid-save doesn't corrupt the file (atomic write).
+- [ ] **Schema version:** Verify the file has `schema_version` and loading a hand-edited "future version" file degrades gracefully.
+- [ ] **Binary files:** Verify a binary file in the range can't be anchored / renders a placeholder, reusing the existing `is_binary` signal.
+- [ ] **Merge commits:** Verify the chosen policy (exclude or blob-read) actually holds for a merge commit in the range.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| DOM explosion from syntax highlighting | LOW | Add virtualization to the affected view. If using Shiki, switch to `codeToTokens` + custom rendering. If architectural, switch to `syntect` in Rust. |
-| Sync scroll infinite loop | LOW | Copy the MergeEditor's `scrolling` + `requestAnimationFrame` pattern. Takes 30 minutes to fix. |
-| Whitespace ignore corrupts staging | HIGH | Audit all staged changes for correctness. If data was silently corrupted, users may have committed wrong content. Add a dual-diff architecture (display vs. staging). |
-| Syntax + diff color conflict | MEDIUM | Define a CSS custom property layer. Requires touching all diff line rendering but is purely visual (no data changes). |
-| Split view line misalignment | MEDIUM | Retrofit spacer row insertion. Requires refactoring split view layout from two containers to a single grid. |
-| Context expansion breaks staging | MEDIUM | Add state-clearing logic on context change. If using frontend expansion, must build a line-to-hunk mapping. |
-| Word-level diff quadratic blowup | LOW | Add threshold checks (line length, edit distance). Takes 1 hour to add guards. |
-| Bundle size explosion | MEDIUM | If caught early: switch to fine-grained imports. If architectural (committed to Shiki full bundle): migration to `syntect` requires backend work. |
+| Persisted diff-index anchors (Pitfall 1) | HIGH | Schema change + migration; existing sessions' anchors are unrecoverable to exact lines — must re-anchor manually. Avoid by getting foundation right first. |
+| Corrupt session JSON (Pitfall 9b) | MEDIUM | Atomic write prevents it; if it happens, keep a `.bak` of the last good save and offer restore on load failure |
+| Wrong repo key after path change (Pitfall 9c) | LOW | Canonicalize and, on miss, scan for a session whose stored canonical path matches the now-canonical path |
+| Broken fences in output (Pitfall 5) | LOW | Dynamic fence length is a localized render fix; regenerate the doc |
+| Missing `dialog:allow-save` (Pitfall 11) | LOW | Add the permission, rebuild |
+| Orphaned anchors crashing render (Pitfall 6) | LOW–MEDIUM | Wrap resolution in `Result`, emit warning blocks; no data loss since comment text is stored independently |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Syntax highlighting DOM explosion | Syntax highlighting (first plan: technology choice) | Open a 2,000-line file; rendering completes in under 200ms. DOM node count under 5,000. |
-| Split view sync scroll bugs | Split view (reuse MergeEditor pattern) | Scroll both panes rapidly; no jitter, no desync, panes stay aligned to bottom. |
-| Whitespace ignore breaks staging | Whitespace options (first decision: staging compatibility) | Stage a hunk with whitespace ignore on; verify staged content matches display. Or verify staging is disabled with whitespace ignore. |
-| Syntax + diff color conflict | Syntax highlighting + word-level diff (shared color design) | Screenshot all 6 combinations (add/delete/context x keyword/string). All text readable, contrast ratio above 4.5:1. |
-| Split view line number alignment | Split view (layout architecture decision) | Scroll to bottom of a 500-line diff; left and right panes are aligned within 1px. Line numbers match `git diff` output. |
-| Context expansion invalidates hunks | Context lines (approach decision: frontend vs. backend) | Expand context from 3 to 10; verify hunk staging still works or verify selection is cleared. |
-| Word-level diff quadratic blowup | Word-level diff (threshold implementation) | Open a minified 10,000-char file; word-level diff completes or falls back within 100ms. |
-| Bundle size explosion | Syntax highlighting (first task: technology + bundle strategy) | Build output size increase is under 2 MB after syntax highlighting is added. |
+| 1. Diff-index vs stable anchor | foundation (schema) + selection (translate) | Anchor struct has no `hunk_index`; comment stays put after toggling whitespace/context and after restart |
+| 2. Off-by-one / null lineno / mixed side | foundation (`side`) + selection | Delete-only and Add+Delete+Context selections round-trip to correct new-side lines |
+| 3. Full-file ≠ blob | foundation (strategy) + render (blob read) | New git2 blob-read command exists; full-file excerpt matches an unchanged file exactly |
+| 4. Encoding / CRLF / EOF | foundation (line convention) + render | CRLF file has no `\r` in output; last-line comment renders complete |
+| 5. Fence breakage | render | File containing ```` ``` ```` renders intact with longer fence |
+| 6. Stale anchors | foundation (schema carries inputs + comment) + render (degrade) | Post-rebase render produces doc with warning blocks, no panic, no dropped comment |
+| 7. Merge first-parent loss | selection (policy) + render (blob sidesteps) | Merge-commit anchor behaves per chosen policy |
+| 8. Rename/add/delete files | foundation (path-at-commit) + selection (status constraint) | Renamed-file anchor resolves; can't anchor old side of Added file |
+| 9. Persistence (lost update / corrupt / keying) | foundation | Same-repo two-tab writes don't lose data; kill-mid-save leaves valid file; symlink path resolves same session |
+| 10. No schema version | foundation | File has `schema_version`; future-version file degrades gracefully |
+| 11. Missing save capability | output | `dialog:allow-save` present; save works in release build |
+| 12. Cancel/failure as success | output | Cancel → no success toast; clipboard failure → error toast |
+| 13. Lost drafts / selection | foundation (draft slot) + selection | Draft survives fs-refresh; selection survives view-mode toggle once attached |
+| 14. No delete confirm / stale jump | selection/management + render | Delete confirms; jump on orphaned anchor shows read-only state |
 
 ## Sources
 
-- [Shiki Best Performance Practices](https://shiki.style/guide/best-performance) -- singleton pattern, fine-grained bundles, worker offloading, JS vs Oniguruma engine
-- [Shiki Bundle Guide](https://shiki.style/guide/bundles) -- full bundle 6.4 MB, web bundle 3.8 MB, fine-grained import patterns
-- [Split Diffs in Zed](https://zed.dev/blog/split-diffs) -- spacer approach for alignment, block map architecture, cascading misalignment risk, performance optimization discoveries
-- [GitHub Desktop Split Diffs announcement](https://github.blog/news-insights/product-news/introducing-split-diffs-in-github-desktop/) -- split view implementation in a desktop Git GUI
-- [GitHub Desktop diff scroll jumping issue #17776](https://github.com/desktop/desktop/issues/17776) -- real-world sync scroll bugs in production
-- [GitLab split view alignment bug #450248](https://gitlab.com/gitlab-org/gitlab/-/issues/450248) -- side-by-side alignment failures
-- [VS Code manual alignment issue #113357](https://github.com/microsoft/vscode/issues/113357) -- split diff alignment challenges
-- [libgit2 DiffOptions v0.19](https://libgit2.org/docs/reference/v0.19.0/diff/git_diff_option_t.html) -- whitespace ignore flags, context line configuration
-- [git2 crate DiffOptions](https://docs.rs/git2/latest/git2/struct.DiffOptions.html) -- `context_lines()`, `interhunk_lines()`, `ignore_whitespace()` methods
-- [Git diff-options documentation](https://git-scm.com/docs/diff-options) -- context expansion, inter-hunk lines, whitespace options
-- [GitHub Blog: Expanding context in diffs](https://github.com/blog/1705-expanding-context-in-diffs) -- UI pattern for context expansion
-- [CSS Highlights API for syntax highlighting](https://pavi2410.com/blog/high-performance-syntax-highlighting-with-css-highlights-api/) -- DOM-free highlighting alternative
-- [Shiki diff syntax + CSS variables issue #697](https://github.com/shikijs/shiki/issues/697) -- known conflict between diff highlighting and CSS variable themes
-- [Tauri webview freezing issue #13498](https://github.com/tauri-apps/tauri/issues/13498) -- WKWebView freezes under heavy DOM load
-- [codediff.nvim](https://github.com/esmuellert/codediff.nvim) -- VSCode-style two-tier highlighting (line + character level) implementation reference
-- Existing codebase analysis: DiffPanel.svelte (line rendering, selection, staging), MergeEditor.svelte (sync scroll pattern, spacer alignment, virtualization), diff.rs (git2 diff generation), staging.rs (hunk/line staging via git2 apply)
+- Trunk source (primary, HIGH): `src-tauri/src/commands/diff.rs` (full-file = 100k-context diff `:33-38`, first-parent diff `:410-414`, `from_utf8_lossy` `:228`, `is_binary` `:190`), `src-tauri/src/commands/staging.rs` (`stage_lines(hunk_index, line_indices)` `:776`), `src/components/diff/{DiffViewer,HunkView,FullFileView,SplitView}.svelte` (`selectedLineIndices: Set<number>`, nullable `?? ''` linenos, `flatMap` over hunks), `src/lib/store.ts` (LazyStore read-modify-write `addRecentRepo` `:16-19`), `src-tauri/capabilities/default.json` (granted permissions), `src/components/{CommitGraph,CommitDetail}.svelte` (fire-and-forget `writeText().catch(() => {})`).
+- Tauri 2 dialog plugin docs (HIGH): `dialog:allow-save` permission identifier; `save()` returns `null`/`None` on cancel — https://v2.tauri.app/plugin/dialog/
+- `.planning/PROJECT.md` v0.13 key decisions (anchor = `(commit, file, line-range, source)`; one session per repo; no re-anchoring; app-data-dir storage; single comment per anchor).
+- CommonMark fenced-code-block rules (fence length = longest inner run + 1; indented fences become code spans) — established markdown behavior, MEDIUM.
 
 ---
-*Pitfalls research for: Trunk v0.12 Better Diffs -- split view, syntax highlighting, word-level diff, whitespace options, context lines, display options*
-*Researched: 2026-03-28*
+*Pitfalls research for: persisted line-anchored review-comment + AI-markdown-export in Trunk (Tauri 2 + Svelte 5 + git2)*
+*Researched: 2026-05-25*
