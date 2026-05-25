@@ -146,6 +146,61 @@ fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     })
 }
 
+// ── Selection core (Phase 66, Plan 01): pure, testable helpers ───────────────
+// These take a `&git2::Repository` (no Tauri state) so the range/validation logic
+// is provable against an in-process test repo. Plan 02 wraps them in commands.
+
+/// Validate that `[base..tip]` is a meaningful inclusive range (SEL-01).
+///
+/// Order matters: `graph_descendant_of(x, x)` is `false`, so the `base == tip`
+/// case (valid under D-02 inclusive semantics → set `{base}`) MUST short-circuit
+/// before the descendant check. Unrelated histories surface as a `merge_base`
+/// error; a base that is not an ancestor of the tip is a `bad_range`.
+pub fn validate_range(
+    repo: &git2::Repository,
+    base: git2::Oid,
+    tip: git2::Oid,
+) -> Result<(), TrunkError> {
+    if base == tip {
+        return Ok(());
+    }
+    repo.merge_base(base, tip)
+        .map_err(|_| TrunkError::new("unrelated_history", "These commits share no history"))?;
+    if !repo.graph_descendant_of(tip, base).map_err(TrunkError::from)? {
+        return Err(TrunkError::new("bad_range", "Base is not an ancestor of tip"));
+    }
+    Ok(())
+}
+
+/// Compute the OIDs in the inclusive range `[base..tip]` (SEL-01, D-02).
+///
+/// Walks `push(tip)` then `hide(base.parent(0))` so `base` itself stays in the
+/// set. A root-commit base (`parent_count() == 0`) hides nothing, mirroring the
+/// verified `interactive_rebase.rs` fallback, so it never panics on `parent_id(0)`.
+pub fn compute_range_oids(
+    repo: &git2::Repository,
+    base: git2::Oid,
+    tip: git2::Oid,
+) -> Result<Vec<String>, TrunkError> {
+    let mut revwalk = repo.revwalk().map_err(TrunkError::from)?;
+    revwalk
+        .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+        .map_err(TrunkError::from)?;
+    revwalk.push(tip).map_err(TrunkError::from)?;
+
+    let base_commit = repo.find_commit(base).map_err(TrunkError::from)?;
+    if base_commit.parent_count() > 0 {
+        revwalk
+            .hide(base_commit.parent_id(0).map_err(TrunkError::from)?)
+            .map_err(TrunkError::from)?;
+    }
+    // Root commit base: hide nothing — the whole ancestry through tip is included.
+
+    revwalk
+        .map(|oid| oid.map(|o| o.to_string()).map_err(TrunkError::from))
+        .collect()
+}
+
 #[tauri::command]
 pub async fn start_review_session(
     path: String,
