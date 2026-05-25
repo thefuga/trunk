@@ -284,3 +284,53 @@ pub struct RebaseTodoItem {
     pub author_name: String,
     pub author_timestamp: i64,
 }
+
+// ── Review session schema (Phase 65 keystone) ────────────────────────────────
+// Persisted to disk and read back, so every type derives Deserialize (unlike the
+// write-only DTOs above — mirrors DiffStatus). Enums serialize as PascalCase
+// strings with NO rename_all (mirrors RefType). Struct fields stay snake_case.
+// The Anchor NEVER carries hunk_index/line_index/context_lines/ignore_whitespace
+// (D-01): it stores source coordinates only, never diff-array positions.
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum Source {
+    Diff,
+    FullFile,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum Side {
+    Old,
+    New,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Anchor {
+    pub commit_oid: String,
+    pub file_path: String,
+    pub source: Source,
+    pub side: Side,
+    pub start_line: u32,
+    pub end_line: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Comment {
+    pub text: String,
+    pub anchor: Option<Anchor>,
+    pub cached_excerpt: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DraftComment {
+    pub text: String,
+    pub anchor: Option<Anchor>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReviewSession {
+    pub schema_version: u32,
+    pub commits: Vec<String>,
+    pub comments: Vec<Comment>,
+    pub draft_comment: Option<DraftComment>,
+}

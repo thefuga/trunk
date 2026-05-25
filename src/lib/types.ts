@@ -281,3 +281,36 @@ export interface RebaseTodoItem {
 	author_name: string;
 	author_timestamp: number;
 }
+
+// Review session schema (mirrors src-tauri/src/git/types.rs Phase 65 keystone)
+// String-for-string with the Rust on-wire shape: PascalCase enum strings,
+// snake_case fields, nullable optionals for Rust Option<T>.
+export type Source = "Diff" | "FullFile";
+export type Side = "Old" | "New";
+
+export interface Anchor {
+	commit_oid: string;
+	file_path: string;
+	source: Source;
+	side: Side;
+	start_line: number;
+	end_line: number;
+}
+
+export interface Comment {
+	text: string;
+	anchor: Anchor | null;
+	cached_excerpt: string | null;
+}
+
+export interface DraftComment {
+	text: string;
+	anchor: Anchor | null;
+}
+
+export interface ReviewSession {
+	schema_version: number;
+	commits: string[];
+	comments: Comment[];
+	draft_comment: DraftComment | null;
+}
