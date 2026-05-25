@@ -360,21 +360,24 @@ if (!confirmed) return;
 
 **Note:** No `[ASSUMED]` factual claims about library behavior remain — all schema shapes, line numbers, and round-trips were verified against live code this session.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Non-A/D/M/R file statuses (Copied/Untracked/Unknown) in a commit diff**
    - What we know: commit diffs are produced by `diff_commit_file` (diff.rs); status maps from `git2::Delta`. Renamed/Copied detection depends on diff find-options.
    - What's unclear: whether the affordance should be enabled for `Copied` (treat as Renamed?) or disabled for `Unknown`.
    - Recommendation: Treat `Copied` like `Renamed` (new side, new path) and `Untracked`/`Unknown` like `Modified`; cover with an adapter test. Low risk; planner can tighten.
+   - **RESOLVED:** Plan 01 adopts this — truth #3 and adapter Tests 8/9 lock `Copied`→Renamed (new side + new path) and `Untracked`/`Unknown`→Modified.
 
 2. **Draft persist cadence (every keystroke vs. debounced)**
    - What we know: L-05 mandates persist-on-change, not only on submit. Each persist is an atomic disk write + emit.
    - What's unclear: literal every-keystroke writes could be chatty (one fsync per keypress).
    - Recommendation: Persist on change but allow a short debounce (e.g., on input idle ~300ms) — still satisfies "survives re-fetch/restart" while avoiding per-keypress fsync. Planner's call; note the `session-changed` emit on every draft write will also reload the panel, so consider whether draft writes should emit at all (likely **not** — drafts are not panel-visible until Phase 69).
+   - **RESOLVED:** Plan 04 Task 1 chooses ~300ms input-idle debounce for the draft persist.
 
 3. **Should `save_draft_comment` emit `session-changed`?**
    - What we know: every other mutation emits; the ReviewPanel reloads on it.
    - Recommendation: Probably **omit** the emit for draft writes — the draft is not rendered anywhere in Phase 67/69-stub, and emitting per keystroke causes needless reloads. `add_comment` (submit) does emit. Confirm at plan time.
+   - **RESOLVED:** Plan 02 omits the emit for `save_draft_comment` (truth #5, action step 4); only `add_comment` emits `session-changed`.
 
 ## Validation Architecture
 
