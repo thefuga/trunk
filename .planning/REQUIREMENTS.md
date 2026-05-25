@@ -110,4 +110,4 @@ Which phases cover which requirements. Phase numbers continue from v0.12 (last p
 
 ---
 *Requirements defined: 2026-05-25*
-*Last updated: 2026-05-25 after initial definition*
+*Last updated: 2026-05-25 — traceability finalized by roadmapper (Phases 65-71); all 20 v1 requirements mapped*
