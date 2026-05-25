@@ -4,8 +4,8 @@ milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
 stopped_at: Phase 67 context gathered
-last_updated: "2026-05-25T14:39:46.588Z"
-last_activity: 2026-05-25 -- Phase 67 planning complete
+last_updated: "2026-05-25T14:49:05.005Z"
+last_activity: 2026-05-25 -- Phase 67 execution started
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 67 — diff source anchor capture
+**Current focus:** Phase 67 — diff-source-anchor-capture
 
 ## Current Position
 
-Phase: 67
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 67 planning complete
+Phase: 67 (diff-source-anchor-capture) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 67
+Last activity: 2026-05-25 -- Phase 67 execution started
 
 Progress: [██████████] 100%
 
