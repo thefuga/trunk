@@ -129,6 +129,8 @@ pub fn run() {
             commands::review::add_review_commit,
             commands::review::remove_review_commit,
             commands::review::list_session_commits,
+            commands::review::add_comment,
+            commands::review::save_draft_comment,
             commands::commit_actions::checkout_commit,
             commands::commit_actions::create_tag,
             commands::commit_actions::delete_tag,

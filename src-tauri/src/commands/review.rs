@@ -13,7 +13,7 @@
 
 use crate::error::TrunkError;
 use crate::git::review_store::{self, LoadOutcome};
-use crate::git::types::ReviewSession;
+use crate::git::types::{Comment, DraftComment, ReviewSession};
 use crate::state::{CommitCache, RepoState, ReviewSessionsState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -308,13 +308,13 @@ fn mutate_session_rmw<F>(
     mutate: F,
 ) -> Result<(), TrunkError>
 where
-    F: FnOnce(&mut Vec<String>),
+    F: FnOnce(&mut ReviewSession),
 {
     let mut map = sessions.lock().unwrap();
     let session = map.get_mut(canonical).ok_or_else(|| {
         TrunkError::new("no_session", "No active review session for this repository")
     })?;
-    mutate(&mut session.commits);
+    mutate(session);
     review_store::save_session(data_dir, canonical, session)?;
     Ok(())
 }
@@ -327,8 +327,8 @@ fn seed_review_range_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     range_oids: Vec<String>,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        *commits = union_dedup(commits, range_oids);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.commits = union_dedup(&session.commits, range_oids);
     })
 }
 
@@ -339,8 +339,8 @@ fn add_review_commit_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        apply_add(commits, oid);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        apply_add(&mut session.commits, oid);
     })
 }
 
@@ -351,8 +351,8 @@ fn remove_review_commit_rmw(
     sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |commits| {
-        apply_remove(commits, oid);
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        apply_remove(&mut session.commits, oid);
     })
 }
 
@@ -383,27 +383,43 @@ pub struct SaveDraftCommentRequest {
     pub anchor: Option<crate::git::types::Anchor>,
 }
 
-/// STUB (RED) — submit a comment, persisting it and clearing the draft slot.
+/// Submit a comment: push the fully-formed `Comment` (the `Anchor` already carries
+/// source/side from the TS adapter — L-08 dumb writer) and clear the single draft
+/// slot so the composer never reopens with stale text. The push + clear + save run
+/// inside the serialized RMW critical section, so concurrent submits never lose a
+/// write and disk/memory never diverge.
 fn add_comment_inner(
-    _data_dir: &Path,
-    _canonical: &Path,
-    _sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
-    _req: AddCommentRequest,
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    req: AddCommentRequest,
 ) -> Result<(), TrunkError> {
-    Err(TrunkError::new("todo", "add_comment_inner not implemented"))
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.comments.push(Comment {
+            text: req.text,
+            anchor: Some(req.anchor),
+            cached_excerpt: Some(req.cached_excerpt),
+        });
+        session.draft_comment = None;
+    })
 }
 
-/// STUB (RED) — write/replace the single draft-comment slot.
+/// Write/replace the single draft-comment slot (per-keystroke). `DraftComment` has
+/// NO `cached_excerpt` (schema asymmetry, Pitfall 5) — only text + anchor persist;
+/// the excerpt is computed at submit. Does NOT emit `session-changed` (drafts are
+/// not panel-visible until Phase 69; per-keystroke emits would cause reload storms).
 fn save_draft_comment_inner(
-    _data_dir: &Path,
-    _canonical: &Path,
-    _sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
-    _req: SaveDraftCommentRequest,
+    data_dir: &Path,
+    canonical: &Path,
+    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    req: SaveDraftCommentRequest,
 ) -> Result<(), TrunkError> {
-    Err(TrunkError::new(
-        "todo",
-        "save_draft_comment_inner not implemented",
-    ))
+    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+        session.draft_comment = Some(DraftComment {
+            text: req.text,
+            anchor: req.anchor,
+        });
+    })
 }
 
 /// Seed the session from an inclusive commit range `[base..tip]` (SEL-01, D-02/D-03).
@@ -482,6 +498,47 @@ pub async fn remove_review_commit(
     remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
     let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Submit a comment to the active session (ANCH-01). Dumb writer: the `Anchor` in
+/// `req` already carries source/side from the TS adapter (L-08). Emits
+/// `session-changed` because a submitted comment is panel-visible state.
+#[tauri::command]
+pub async fn add_comment(
+    req: AddCommentRequest,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical = canonical_repo_path(&req.path, &state_map)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    add_comment_inner(&data_dir, &canonical, &sessions.0, req)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// Persist the in-progress draft comment on keystroke (ANCH-01). Does NOT emit
+/// `session-changed`: drafts are not panel-visible until Phase 69, and per-keystroke
+/// emits would cause needless reload storms (RESEARCH Q3).
+#[tauri::command]
+pub async fn save_draft_comment(
+    req: SaveDraftCommentRequest,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let data_dir = resolve_data_dir(&app)?;
+    let canonical = canonical_repo_path(&req.path, &state_map)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req)
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
     Ok(())
 }
 
@@ -1067,7 +1124,8 @@ mod tests {
     }
 
     // ── Phase 67 Plan 02: comment capture (add_comment / save_draft_comment) ──
-    use crate::git::types::{Anchor, DraftComment, Side, Source};
+    // `Comment` + `DraftComment` already come through `use super::*`.
+    use crate::git::types::{Anchor, Side, Source};
 
     /// A `TempDir` data dir + a sessions map seeded with one empty session keyed
     /// by a synthetic canonical path. No git repo is needed — these writers only
@@ -1123,7 +1181,10 @@ mod tests {
         assert_eq!(s.comments.len(), 1);
         assert_eq!(s.comments[0].text, "looks good");
         assert_eq!(s.comments[0].cached_excerpt.as_deref(), Some("let x = 1;"));
-        assert!(s.comments[0].anchor.is_some(), "comment must carry its anchor");
+        assert!(
+            s.comments[0].anchor.is_some(),
+            "comment must carry its anchor"
+        );
     }
 
     // Test 2: submit clears the single draft_comment slot.
