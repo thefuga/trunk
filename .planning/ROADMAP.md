@@ -185,7 +185,7 @@ Full details: [milestones/v0.12-ROADMAP.md](milestones/v0.12-ROADMAP.md)
 
 Built in strict dependency order: lock the anchor schema and persistence first (every later phase reads/writes it), then commit selection, then the two independent anchor-capture surfaces, then comment management, then render, then output. Phases 67 and 68 are independent and parallelizable.
 
-- [ ] **Phase 65: Data Model + Persistence + Session Lifecycle** — Anchor schema, per-repo JSON store, start/resume/end a session
+- [x] **Phase 65: Data Model + Persistence + Session Lifecycle** — Anchor schema, per-repo JSON store, start/resume/end a session (completed 2026-05-25)
 - [ ] **Phase 66: Commit Selection** — Seed from a baseâtip range and hand-pick commits from the graph
 - [ ] **Phase 67: Diff-Source Anchor Capture** — Comment on a diff line selection with a stable source-line anchor
 - [ ] **Phase 68: Full-File-Source Anchor Capture** — Comment on a full-file-at-commit line selection
@@ -221,7 +221,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 65-04-PLAN.md — Throwaway 3-state ReviewPanel stub + session-changed listener
+- [x] 65-04-PLAN.md — Throwaway 3-state ReviewPanel stub + session-changed listener
 
 **Notes:**
 
