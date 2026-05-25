@@ -362,10 +362,10 @@ fn remove_review_commit_rmw(
 // a fully-formed `Comment` (the `Anchor` already carries source/side from the TS
 // adapter) and clears the single draft slot; the draft writer replaces that slot.
 
-/// Frontend-facing request DTO for `add_comment` (camelCase wire keys). The
-/// persisted `Anchor`/`Comment` keep snake_case + PascalCase enums (frozen).
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// Argument bundle for `add_comment_inner` (the testable core). The thin command
+/// takes flat named args off the wire and assembles this; `_inner` is the wedge so
+/// disk behavior is provable with a `TempDir` (no Tauri runtime).
+#[derive(Debug)]
 pub struct AddCommentRequest {
     pub path: String,
     pub text: String,
@@ -373,10 +373,9 @@ pub struct AddCommentRequest {
     pub cached_excerpt: String,
 }
 
-/// Frontend-facing request DTO for `save_draft_comment` (camelCase wire keys).
-/// `DraftComment` has NO `cached_excerpt` (schema asymmetry, Pitfall 5).
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// Argument bundle for `save_draft_comment_inner`. `DraftComment` has NO
+/// `cached_excerpt` (schema asymmetry, Pitfall 5) — the draft carries text+anchor.
+#[derive(Debug)]
 pub struct SaveDraftCommentRequest {
     pub path: String,
     pub text: String,
@@ -501,21 +500,34 @@ pub async fn remove_review_commit(
     Ok(())
 }
 
-/// Submit a comment to the active session (ANCH-01). Dumb writer: the `Anchor` in
-/// `req` already carries source/side from the TS adapter (L-08). Emits
-/// `session-changed` because a submitted comment is panel-visible state.
+/// Submit a comment to the active session (ANCH-01). Dumb writer: the `Anchor`
+/// already carries source/side from the TS adapter (L-08). Emits `session-changed`
+/// because a submitted comment is panel-visible state.
+///
+/// Flat named args (not a single struct param) mirror the sibling commands and the
+/// `safeInvoke("add_comment", { path, text, anchor, cachedExcerpt })` flat wire
+/// shape; Tauri maps the camelCase JS key `cachedExcerpt` to `cached_excerpt`.
 #[tauri::command]
 pub async fn add_comment(
-    req: AddCommentRequest,
+    path: String,
+    text: String,
+    anchor: crate::git::types::Anchor,
+    cached_excerpt: String,
     state: State<'_, RepoState>,
     sessions: State<'_, ReviewSessionsState>,
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&req.path, &state_map)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
 
+    let req = AddCommentRequest {
+        path,
+        text,
+        anchor,
+        cached_excerpt,
+    };
     add_comment_inner(&data_dir, &canonical, &sessions.0, req)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
     let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
@@ -525,18 +537,24 @@ pub async fn add_comment(
 /// Persist the in-progress draft comment on keystroke (ANCH-01). Does NOT emit
 /// `session-changed`: drafts are not panel-visible until Phase 69, and per-keystroke
 /// emits would cause needless reload storms (RESEARCH Q3).
+///
+/// Flat named args mirror `add_comment` and the
+/// `safeInvoke("save_draft_comment", { path, text, anchor })` flat wire shape.
 #[tauri::command]
 pub async fn save_draft_comment(
-    req: SaveDraftCommentRequest,
+    path: String,
+    text: String,
+    anchor: Option<crate::git::types::Anchor>,
     state: State<'_, RepoState>,
     sessions: State<'_, ReviewSessionsState>,
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&req.path, &state_map)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
 
+    let req = SaveDraftCommentRequest { path, text, anchor };
     save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
     Ok(())
