@@ -23,7 +23,7 @@ Requirements for v0.13. Each maps to a roadmap phase. Recipient of the generated
 
 ### Anchor Capture
 
-- [ ] **ANCH-01**: User can select a line range in the diff view and attach a comment, anchored to commit + file + diff line range with a side discriminator
+- [x] **ANCH-01**: User can select a line range in the diff view and attach a comment, anchored to commit + file + diff line range with a side discriminator
 - [ ] **ANCH-02**: User can select a line range in the full-file-at-commit view and attach a comment, anchored to commit + file + source line range
 - [ ] **ANCH-03**: User can attach a commit-level comment with no code anchor
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Phase numbers continue from v0.12 (last p
 | SEL-02 | Phase 66 | Complete |
 | SEL-03 | Phase 66 | Complete |
 | SEL-04 | Phase 66 | Complete |
-| ANCH-01 | Phase 67 | Pending |
+| ANCH-01 | Phase 67 | Complete |
 | ANCH-02 | Phase 68 | Pending |
 | ANCH-03 | Phase 69 | Pending |
 | CMT-01 | Phase 69 | Pending |

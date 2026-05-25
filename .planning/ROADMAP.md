@@ -187,7 +187,7 @@ Built in strict dependency order: lock the anchor schema and persistence first (
 
 - [x] **Phase 65: Data Model + Persistence + Session Lifecycle** — Anchor schema, per-repo JSON store, start/resume/end a session (completed 2026-05-25)
 - [x] **Phase 66: Commit Selection** — Seed from a baseâtip range and hand-pick commits from the graph (completed 2026-05-25)
-- [ ] **Phase 67: Diff-Source Anchor Capture** — Comment on a diff line selection with a stable source-line anchor
+- [x] **Phase 67: Diff-Source Anchor Capture** — Comment on a diff line selection with a stable source-line anchor (completed 2026-05-25)
 - [ ] **Phase 68: Full-File-Source Anchor Capture** — Comment on a full-file-at-commit line selection
 - [ ] **Phase 69: Comment Management UI** — Review panel: list, edit, delete, jump-to-anchor, commit-level comments
 - [ ] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts
@@ -278,7 +278,7 @@ Plans:
 - [x] 67-01-PLAN.md — Pure TS capture-time adapter (indices -> {anchor, cachedExcerpt})
 - [x] 67-02-PLAN.md — Shared add_comment + save_draft_comment Tauri commands
 - [x] 67-03-PLAN.md — Thread commitDetail, lift 3 commit-diff selection guards, request DTOs
-- [ ] 67-04-PLAN.md — Inline CommentComposer + Comment affordance (D-01..D-04) + UAT
+- [x] 67-04-PLAN.md — Inline CommentComposer + Comment affordance (D-01..D-04) + UAT
 **UI hint**: yes
 **Notes:**
 

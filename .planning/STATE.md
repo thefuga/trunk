@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: executing
-stopped_at: Phase 67 Plan 04 — awaiting human UAT (Task 3 checkpoint)
-last_updated: "2026-05-25T15:27:21Z"
-last_activity: 2026-05-25 -- Phase 67 Plan 04 tasks 1-2 done; paused at human-verify checkpoint
+status: verifying
+stopped_at: Completed 67-04-PLAN.md (phase 67 ready for verification)
+last_updated: "2026-05-25T16:16:58.242Z"
+last_activity: 2026-05-25
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 8
-  percent: 29
+  completed_plans: 12
+  percent: 43
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 ## Current Position
 
-Phase: 67 (diff-source-anchor-capture) — EXECUTING
-Plan: 4 of 4 (tasks 1-2 complete, paused at Task 3 human-verify checkpoint)
-Status: Executing Phase 67 — awaiting human UAT on Plan 04
-Last activity: 2026-05-25 -- Phase 67 Plan 04 composer + affordance built; awaiting human UAT
+Phase: 67 (diff-source-anchor-capture) — COMPLETE (ready for verification)
+Plan: 4 of 4 complete
+Status: Phase complete — ready for verification
+Last activity: 2026-05-25 -- Phase 67 Plan 04 completed (UAT approved)
 
 Progress: [██████████] 100%
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 65 P02 | 5min | 3 tasks | 4 files |
 | Phase 65 P03 | ~12min | 3 tasks | 6 files |
 | Phase 65 P04 | ~10min | 2 tasks | 3 files |
+| Phase 67 P04 | 25min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,7 @@ Progress: [██████████] 100%
 - [Phase 65]: start_review_session rejects with session_exists when a file already exists; client must Resume or End first (no silent overwrite)
 - [Phase 65]: ReviewPanel is a D-12 throwaway 3-state lifecycle stub (Start/Resume/Discard/End), replaced by the real panel in Phase 69.
 - [Phase 65]: Derived state var renamed to sessionState — naming it 'state' shadows the Svelte $state rune and breaks svelte-check.
+- [Phase 67]: Auto-start a review session at the comment chokepoint (DiffPanel.ensureActiveSession) when none is active; add_comment/save_draft_comment stay dumb writers (L-08), the Comment affordance stays enabled, only merge commits disable it (D-04)
 
 ### Pending Todos
 
@@ -133,7 +135,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-25
-Last session: 2026-05-25T15:27:21Z
-Stopped at: Phase 67 Plan 04 — Task 3 human-verify checkpoint (UAT)
-Resume file: .planning/phases/67-diff-source-anchor-capture/67-04-PLAN.md
+Last session: 2026-05-25T16:16:58.235Z
+Stopped at: Completed 67-04-PLAN.md (phase 67 ready for verification)
+Resume file: None
 Next action: Human runs `just dev` and verifies the attach flow (steps 1-8); type "approved" to resume Plan 04 completion (SUMMARY + state advance)
