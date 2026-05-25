@@ -101,6 +101,12 @@ None — plan executed exactly as written. All six Task-1 tests, three Task-2 te
 - `SessionCommit`'s field shape (`oid`/`short_oid`/`summary`) is frozen for Plan 03's `src/lib/types.ts` interface.
 - Note for Plan 02: these helpers are currently exercised only by tests, so they may surface `dead_code` warnings until the commands consume them — wiring the commands resolves that.
 
+## Self-Check: PASSED
+
+- `66-01-SUMMARY.md` exists at `.planning/phases/66-commit-selection/`.
+- All task commits verified in `git log`: `ff04c61`, `85bc10f`, `ced9aab`, `3ae2a5e`, `659aa59`, `6f0f08a`, `7f9feed`.
+- Working tree clean; no shared orchestrator artifacts (STATE.md/ROADMAP.md) modified.
+
 ---
 *Phase: 66-commit-selection*
 *Completed: 2026-05-25*
