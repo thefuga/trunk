@@ -60,7 +60,7 @@ completed: 2026-05-25
 - Range computed from the chosen side's line numbers only, naturally dropping Delete linenos from a New-side range (L-03).
 - `cachedExcerpt` assembled over the contiguous min..max index span with origin prefixes (`+`/`-`/space), so dropped `-` lines and in-between context survive (L-06).
 - Anchor carries exactly the 6 frozen schema fields — no `hunk_index`/`line_index`/`context_lines`/`ignore_whitespace` leakage (L-01).
-- 11 no-mock Vitest cases covering SC-1, SC-3, D-03, and L-01/04/06.
+- 12 no-mock Vitest cases covering SC-1, SC-3, D-03, and L-01/04/06.
 
 ## Task Commits
 
@@ -68,8 +68,11 @@ Each step was committed atomically (TDD):
 
 1. **RED: failing test for the adapter** - `0b7159b` (test)
 2. **GREEN: implement buildDiffAnchor** - `4aeb0f3` (feat)
+3. **Strengthen L-03 test discrimination + split origin cases** - `985c4fd` (test)
 
-_No REFACTOR commit: the GREEN implementation was already clean (small private `resolveSide`/`prefixLine` helpers); a no-op refactor would have been kabuki._
+**Plan metadata:** `37a20e1` (docs: complete plan)
+
+_No REFACTOR commit: the GREEN implementation was already clean (small private `resolveSide`/`prefixLine` helpers); a no-op refactor would have been kabuki. Commit 3 is a post-review test-strength improvement (see Issues Encountered), not a behavior change._
 
 ## Files Created/Modified
 - `src/lib/diff-anchor.ts` - Pure capture-time adapter (`buildDiffAnchor` + private `resolveSide`/`prefixLine`); reuses `Anchor`/`Side`/`DiffLine`/`DiffStatus`/`FileDiff` from `types.ts`.
@@ -105,9 +108,10 @@ _No REFACTOR commit: the GREEN implementation was already clean (small private `
 
 ## Issues Encountered
 - Biome `ci` flagged import ordering in the test file (`import` value before `import type`); resolved with `biome check --write` per the TS coding-style rule. Folded into the GREEN commit since it was a formatting fix on the new code.
+- Post-GREEN review found Test 3's mixed-selection fixture did not discriminate L-03: the Delete's `old_lineno` (16) was already inside the Add range (16..17), so a buggy `new_lineno ?? old_lineno` impl would still produce 16..17. Tightened by moving the Delete to `old_lineno=99` so the test would fail (16..99) under a buggy impl. Also split the combined Untracked/Unknown case into one behavior per test. Committed as `985c4fd`.
 
 ## Verification Results
-- `bunx vitest run src/lib/diff-anchor.test.ts` → 11 passed.
+- `bunx vitest run src/lib/diff-anchor.test.ts` → 12 passed.
 - `bunx biome ci src/lib/diff-anchor.ts src/lib/diff-anchor.test.ts` → clean.
 - `bun run check` (svelte-check) → 0 errors, 0 warnings.
 - L-01 source assertion (`grep -E "hunk_index|line_index|context_lines|ignore_whitespace" ... | grep -v '//' | wc -l`) → 0.
