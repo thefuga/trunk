@@ -475,17 +475,17 @@ The inputs contain a constraint that forces this: **ROADMAP Phase 67 notes state
 
 **Note:** Items A2/A3 are design-internal assumptions, not user-facing decisions. A1 is the one to verify empirically on Windows.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Exact `app_data_dir` subfolder name (`sessions/`) and filename hash algorithm**
    - What we know: layout `app_data_dir/sessions/<hash>.json` is sound; FNV-1a is stable and dependency-free.
    - What's unclear: nothing blocking — this is Claude's-discretion (CONTEXT.md). Planner just needs to pick and lock it.
-   - Recommendation: use `sessions/` + FNV-1a hex as in Code Examples; store the canonical path inside the JSON.
+   - RESOLVED: Planner locked `app_data_dir/sessions/<FNV-1a hex>.json` with the canonical path stored inside the JSON for collision detection (Plan 65-02).
 
 2. **Should `resume_review_session` and `start_review_session` be one command or two?**
    - What we know: D-14 makes resume an explicit user action distinct from start; D-15/D-16 recovery applies on the resume/load path.
    - What's unclear: whether "start" on a repo that already has a file should be blocked (forcing the user to Resume or End-and-clear first) — this is a UX call.
-   - Recommendation: separate `start` (creates fresh; if a file exists, surface resume-available instead of silently overwriting), `resume` (loads existing via the D-15/D-16 state machine), `end` (deletes), `get_review_session_status` (drives the stub's 3 states). Let the planner confirm the "start when file exists" UX.
+   - RESOLVED: Planner locked four separate commands — `start_review_session` (creates fresh; rejects with a `session_exists` TrunkError when a file already exists, forcing the user to Resume or End-and-clear first rather than silently overwriting), `resume_review_session` (loads via the D-15/D-16 recovery state machine), `end_review_session` (deletes), `get_review_session_status` (drives the stub's 3 states). `start_review_session` requires the repo be open (`not_open` TrunkError otherwise). (Plan 65-03.)
    - Precondition: `start_review_session` must require the repo be open (present in `RepoState`) — SESS-01 says "for the currently open repository." Return a `not_open` `TrunkError` otherwise, matching the existing precondition pattern (`stash.rs:17` `open_repo` helper). Do not let a lifecycle command operate on a closed repo.
 
 ## Environment Availability
