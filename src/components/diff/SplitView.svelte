@@ -24,6 +24,7 @@ interface Props {
 	selectedHunkKey: string | null;
 	selectedLineIndices: Set<number>;
 	selectedCount: number;
+	isMerge: boolean;
 	collapsedFiles: Set<string>;
 	hunkElements: Record<string, HTMLDivElement>;
 	onfilecollapsetoggle: (path: string) => void;
@@ -41,6 +42,7 @@ interface Props {
 	onstagelines: (filePath: string, hunkIndex: number) => void;
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
+	oncommentlines: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
@@ -55,6 +57,7 @@ let {
 	selectedHunkKey,
 	selectedLineIndices,
 	selectedCount,
+	isMerge,
 	collapsedFiles,
 	hunkElements,
 	onfilecollapsetoggle,
@@ -65,6 +68,7 @@ let {
 	onstagelines,
 	onunstagelines,
 	ondiscardlines,
+	oncommentlines,
 }: Props = $props();
 
 const syncedCols: Set<HTMLElement> = new Set();
@@ -288,6 +292,18 @@ const pairedData = $derived(
                   onclick={() => onunstagehunk(fd.path, section.hunkIdx)}
                 >Unstage Hunk</button>
               {/if}
+            {:else if diffKind === 'commit'}
+              {@const hunkKey = `${fd.path}-${section.hunkIdx}`}
+              {@const hasSelection = selectedHunkKey === hunkKey && selectedCount > 0}
+              {#if hasSelection}
+                <button
+                  disabled={isMerge}
+                  title={isMerge ? "Diff comments aren't available on merge commits" : ""}
+                  class="staging-btn accent-btn"
+                  style="cursor: {isMerge ? 'not-allowed' : 'pointer'}; opacity: {isMerge ? 0.4 : 1};"
+                  onclick={() => oncommentlines(fd.path, section.hunkIdx)}
+                >Comment ({selectedCount})</button>
+              {/if}
             {/if}
           </div>
         {:else}
@@ -435,6 +451,12 @@ const pairedData = $derived(
     background: var(--color-warning-bg);
     border: 1px solid var(--color-warning-border);
     color: var(--color-warning);
+  }
+
+  .accent-btn {
+    background: var(--color-accent-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-accent);
   }
 
   :global(.hunk-highlight) {

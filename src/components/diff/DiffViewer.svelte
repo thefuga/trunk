@@ -26,6 +26,7 @@ interface Props {
 	selectedHunkKey: string | null;
 	selectedLineIndices: Set<number>;
 	selectedCount: number;
+	isMerge: boolean;
 	collapsedFiles: Set<string>;
 	hunkElements: Record<string, HTMLDivElement>;
 	onfilecollapsetoggle: (path: string) => void;
@@ -43,6 +44,7 @@ interface Props {
 	onstagelines: (filePath: string, hunkIndex: number) => void;
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
+	oncommentlines: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
@@ -60,6 +62,7 @@ let {
 	selectedHunkKey,
 	selectedLineIndices,
 	selectedCount,
+	isMerge,
 	collapsedFiles,
 	hunkElements,
 	onfilecollapsetoggle,
@@ -70,6 +73,7 @@ let {
 	onstagelines,
 	onunstagelines,
 	ondiscardlines,
+	oncommentlines,
 }: Props = $props();
 </script>
 
@@ -97,6 +101,7 @@ let {
       {selectedHunkKey}
       {selectedLineIndices}
       {selectedCount}
+      {isMerge}
       {collapsedFiles}
       {hunkElements}
       {onfilecollapsetoggle}
@@ -107,16 +112,18 @@ let {
       onstagelines={onstagelines}
       onunstagelines={onunstagelines}
       ondiscardlines={ondiscardlines}
+      oncommentlines={oncommentlines}
     />
   {:else if layoutMode === "inline" && contentMode === "full"}
     <FullFileView {fileDiffs} {showInvisibles} {wordWrap} />
   {:else}
     <SplitView {contentMode} {fileDiffs} {selectedPath} {diffKind}
       {hunkOperationInFlight} {ignoreWhitespace} {showInvisibles} {wordWrap}
-      {selectedHunkKey} {selectedLineIndices} {selectedCount}
+      {selectedHunkKey} {selectedLineIndices} {selectedCount} {isMerge}
       {collapsedFiles} {hunkElements}
       {onfilecollapsetoggle} {onlineclick}
       onstagehunk={onstagehunk} onunstagehunk={onunstagehunk} ondiscardhunk={ondiscardhunk}
-      onstagelines={onstagelines} onunstagelines={onunstagelines} ondiscardlines={ondiscardlines} />
+      onstagelines={onstagelines} onunstagelines={onunstagelines} ondiscardlines={ondiscardlines}
+      oncommentlines={oncommentlines} />
   {/if}
 </div>

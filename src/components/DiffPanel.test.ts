@@ -6,7 +6,7 @@ import {
 	splitInvisibles,
 	trailingWhitespaceStart,
 } from "../lib/diff-utils.js";
-import type { DiffLine, FileDiff } from "../lib/types.js";
+import type { CommitDetail, DiffLine, FileDiff } from "../lib/types.js";
 import DiffPanel from "./DiffPanel.svelte";
 
 // Shared Tauri mock
@@ -1398,5 +1398,170 @@ describe("VIEW-05: Staging in split view", () => {
 			const style = wrapper?.getAttribute("style") ?? "";
 			expect(style).toContain("min-width: 100%");
 		});
+	});
+});
+
+const nonMergeCommit: CommitDetail = {
+	oid: "abc123def456",
+	short_oid: "abc123d",
+	summary: "a normal commit",
+	body: null,
+	author_name: "A",
+	author_email: "a@example.com",
+	author_timestamp: 0,
+	committer_name: "A",
+	committer_email: "a@example.com",
+	committer_timestamp: 0,
+	parent_oids: ["parent1"],
+};
+
+const mergeCommit: CommitDetail = {
+	...nonMergeCommit,
+	oid: "merge999",
+	short_oid: "merge99",
+	parent_oids: ["parent1", "parent2"],
+};
+
+const addedFileDiff: FileDiff = {
+	path: "src/new-file.ts",
+	status: "Added",
+	is_binary: false,
+	hunks: [
+		{
+			header: "@@ -0,0 +1,2 @@",
+			old_start: 0,
+			old_lines: 0,
+			new_start: 1,
+			new_lines: 2,
+			lines: [
+				{
+					origin: "Add",
+					content: "export const a = 1;",
+					old_lineno: null,
+					new_lineno: 1,
+					spans: [],
+				},
+				{
+					origin: "Add",
+					content: "export const b = 2;",
+					old_lineno: null,
+					new_lineno: 2,
+					spans: [],
+				},
+			],
+		},
+	],
+};
+
+describe("DiffPanel comment affordance (commit diffs)", () => {
+	it("shows an enabled Comment affordance on a non-merge commit selection", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: nonMergeCommit,
+				onclose: vi.fn(),
+				diffKind: "commit",
+				repoPath: "/repo",
+			},
+		});
+		await flushPrefs();
+
+		// Select an Add line to surface the on-selection action row.
+		await fireEvent.click(screen.getByText("const x = 2;"));
+		await tick();
+
+		const commentBtn = screen.getByRole("button", {
+			name: /^Comment \(/,
+		}) as HTMLButtonElement;
+		expect(commentBtn).toBeTruthy();
+		expect(commentBtn.disabled).toBe(false);
+	});
+
+	it("disables the Comment affordance with a tooltip on a merge commit", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: mergeCommit,
+				onclose: vi.fn(),
+				diffKind: "commit",
+				repoPath: "/repo",
+			},
+		});
+		await flushPrefs();
+
+		await fireEvent.click(screen.getByText("const x = 2;"));
+		await tick();
+
+		const commentBtn = screen.getByRole("button", {
+			name: /^Comment \(/,
+		}) as HTMLButtonElement;
+		expect(commentBtn.disabled).toBe(true);
+		expect(commentBtn.getAttribute("title")).toBe(
+			"Diff comments aren't available on merge commits",
+		);
+	});
+
+	it("keeps the Comment affordance enabled on an Added file (status forces side, does not disable)", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [addedFileDiff],
+				commitDetail: nonMergeCommit,
+				onclose: vi.fn(),
+				diffKind: "commit",
+				repoPath: "/repo",
+			},
+		});
+		await flushPrefs();
+
+		await fireEvent.click(screen.getByText("export const a = 1;"));
+		await tick();
+
+		const commentBtn = screen.getByRole("button", {
+			name: /^Comment \(/,
+		}) as HTMLButtonElement;
+		expect(commentBtn.disabled).toBe(false);
+	});
+
+	it("confirms via plugin-dialog ask before switching to a new range with a dirty composer; cancel keeps the selection", async () => {
+		const { ask } = await import("@tauri-apps/plugin-dialog");
+		const askMock = vi.mocked(ask);
+		askMock.mockClear();
+		askMock.mockResolvedValue(false);
+
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: nonMergeCommit,
+				onclose: vi.fn(),
+				diffKind: "commit",
+				repoPath: "/repo",
+			},
+		});
+		await flushPrefs();
+
+		// Select a line, open the composer.
+		await fireEvent.click(screen.getByText("const x = 2;"));
+		await tick();
+		await fireEvent.click(screen.getByRole("button", { name: /^Comment \(/ }));
+		await tick();
+
+		// Dirty the composer draft.
+		const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+		await fireEvent.input(textarea, { target: { value: "unsaved note" } });
+		await tick();
+
+		// Attempt to switch to a different range -> ask must fire; false blocks it.
+		// handleLineClick is async (awaits a dynamic plugin-dialog import), so flush
+		// microtasks before asserting.
+		await fireEvent.click(screen.getByText("const y = 3;"));
+		await new Promise((r) => setTimeout(r, 0));
+		await tick();
+
+		expect(askMock).toHaveBeenCalledTimes(1);
+		// Composer stays open because the switch was cancelled.
+		expect(screen.getByRole("textbox")).toBeTruthy();
+		expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+			"unsaved note",
+		);
 	});
 });

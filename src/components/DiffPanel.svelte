@@ -25,6 +25,7 @@ import type {
 	FileDiff,
 	LayoutMode,
 } from "../lib/types.js";
+import CommentComposer from "./diff/CommentComposer.svelte";
 import DiffToolbar from "./diff/DiffToolbar.svelte";
 import DiffViewer from "./diff/DiffViewer.svelte";
 
@@ -74,6 +75,36 @@ let lastClickedIndex = $state<number | null>(null);
 let selectedCount = $derived(selectedLineIndices.size);
 
 let collapsedFiles = $state<Set<string>>(new Set());
+
+// Commit-diff comment composer host state (Phase 67). `commitOid` and `isMerge`
+// derive from the threaded commitDetail; the composer opens for a specific
+// (file, hunk) when the user clicks the Comment affordance.
+const commitOid = $derived(commitDetail?.oid ?? "");
+const isMerge = $derived((commitDetail?.parent_oids.length ?? 0) > 1);
+let composerOpen = $state(false);
+let composerFilePath = $state<string | null>(null);
+let composerHunkIdx = $state<number | null>(null);
+let composer = $state<CommentComposer | null>(null);
+
+const composerFile = $derived(
+	composerFilePath
+		? (fileDiffs.find((f) => f.path === composerFilePath) ?? null)
+		: null,
+);
+
+function closeComposer() {
+	composerOpen = false;
+	composerFilePath = null;
+	composerHunkIdx = null;
+	clearSelection();
+}
+
+function handleCommentLines(filePath: string, hunkIndex: number) {
+	if (isMerge) return;
+	composerFilePath = filePath;
+	composerHunkIdx = hunkIndex;
+	composerOpen = true;
+}
 
 $effect(() => {
 	Promise.all([
@@ -295,7 +326,7 @@ async function handleDiscardHunk(filePath: string, hunkIndex: number) {
 	}
 }
 
-function handleLineClick(
+async function handleLineClick(
 	filePath: string,
 	hunkIdx: number,
 	lineIndex: number,
@@ -304,6 +335,17 @@ function handleLineClick(
 	e: MouseEvent,
 ) {
 	if (origin === "Context") return;
+
+	// D-02: switching to a new range while an open composer holds a dirty draft
+	// prompts a discard confirmation. On cancel, keep the current selection and
+	// composer; on confirm (or empty draft), close the composer and proceed.
+	if (composerOpen && composer) {
+		const proceed = await composer.confirmDiscardIfDirty();
+		if (!proceed) return;
+		composerOpen = false;
+		composerFilePath = null;
+		composerHunkIdx = null;
+	}
 
 	const hunkKey = `${filePath}-${hunkIdx}`;
 
@@ -447,6 +489,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 		{selectedHunkKey}
 		{selectedLineIndices}
 		{selectedCount}
+		{isMerge}
 		{collapsedFiles}
 		{hunkElements}
 		onfilecollapsetoggle={toggleFileCollapsed}
@@ -457,5 +500,17 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 		onstagelines={handleStageLines}
 		onunstagelines={handleUnstageLines}
 		ondiscardlines={handleDiscardLines}
+		oncommentlines={handleCommentLines}
 	/>
+	{#if composerOpen && composerFile && composerHunkIdx !== null}
+		<CommentComposer
+			bind:this={composer}
+			file={composerFile}
+			hunkIdx={composerHunkIdx}
+			{selectedLineIndices}
+			{commitOid}
+			{repoPath}
+			onclose={closeComposer}
+		/>
+	{/if}
 </div>

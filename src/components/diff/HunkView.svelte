@@ -16,6 +16,7 @@ interface Props {
 	selectedHunkKey: string | null;
 	selectedLineIndices: Set<number>;
 	selectedCount: number;
+	isMerge: boolean;
 	collapsedFiles: Set<string>;
 	hunkElements: Record<string, HTMLDivElement>;
 	onfilecollapsetoggle: (path: string) => void;
@@ -33,6 +34,7 @@ interface Props {
 	onstagelines: (filePath: string, hunkIndex: number) => void;
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
+	oncommentlines: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
@@ -46,6 +48,7 @@ let {
 	selectedHunkKey,
 	selectedLineIndices,
 	selectedCount,
+	isMerge,
 	collapsedFiles,
 	hunkElements,
 	onfilecollapsetoggle,
@@ -56,6 +59,7 @@ let {
 	onstagelines,
 	onunstagelines,
 	ondiscardlines,
+	oncommentlines,
 }: Props = $props();
 
 const stagingDisabled = $derived(hunkOperationInFlight || ignoreWhitespace);
@@ -293,6 +297,30 @@ function gutterWidth(maxNum: number): string {
                 onclick={() => onunstagehunk(fd.path, hunkIdx)}
               >
                 Unstage Hunk
+              </button>
+            {/if}
+          {:else if diffKind === 'commit'}
+            {@const hunkKey = `${fd.path}-${hunkIdx}`}
+            {@const hasSelection = selectedHunkKey === hunkKey && selectedCount > 0}
+            {#if hasSelection}
+              <button
+                disabled={isMerge}
+                title={isMerge ? "Diff comments aren't available on merge commits" : ""}
+                style="
+                  background: var(--color-accent-bg, var(--color-surface));
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-accent);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: {isMerge ? 'not-allowed' : 'pointer'};
+                  opacity: {isMerge ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => oncommentlines(fd.path, hunkIdx)}
+              >
+                Comment ({selectedCount})
               </button>
             {/if}
           {/if}
