@@ -4,8 +4,8 @@ milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
 stopped_at: Phase 66 context gathered
-last_updated: "2026-05-25T12:31:37.460Z"
-last_activity: 2026-05-25 -- Phase 66 planning complete
+last_updated: "2026-05-25T12:33:26.740Z"
+last_activity: 2026-05-25 -- Phase 66 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 66 — commit selection
+**Current focus:** Phase 66 — commit-selection
 
 ## Current Position
 
-Phase: 66
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 66 planning complete
+Phase: 66 (commit-selection) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 66
+Last activity: 2026-05-25 -- Phase 66 execution started
 
 Progress: [██████████] 100%
 

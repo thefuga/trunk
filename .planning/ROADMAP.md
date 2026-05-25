@@ -246,7 +246,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 66-01-PLAN.md — Rust selection core: revwalk range + validation + set ops + graph-order intersect (TDD)
+- [x] 66-01-PLAN.md — Rust selection core: revwalk range + validation + set ops + graph-order intersect (TDD)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
