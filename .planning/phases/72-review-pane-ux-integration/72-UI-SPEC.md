@@ -1,10 +1,11 @@
 ---
 phase: 72
 slug: review-pane-ux-integration
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-27
+reviewed_at: 2026-05-27
 ---
 
 # Phase 72 — UI Design Contract
