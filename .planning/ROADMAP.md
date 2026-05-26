@@ -352,7 +352,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 70-02-PLAN.md — Tauri command generate_review_doc with D-11 zero-comment gate
+- [x] 70-02-PLAN.md — Tauri command generate_review_doc with D-11 zero-comment gate
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
