@@ -915,6 +915,51 @@ pub async fn list_session_comments(
     Ok(comments)
 }
 
+/// Eagerly resolve every comment's anchor against the live repo (CMT-04, D-06):
+/// one `CommentResolution` per comment so the panel shows orphan badges at load
+/// without a click. Read-only — no `save_session`, no emit (RESEARCH Pitfall 5).
+///
+/// Clones `.comments` out of the in-memory map under the lock (a missing session is
+/// `no_session`, mirroring `list_session_comments`), then opens the repo FRESH inside
+/// `spawn_blocking` and runs the pure `resolve_all` — the `ReviewSessionsState` lock
+/// is never held across git2 work (mirrors `list_session_commits:830-882`).
+#[tauri::command]
+pub async fn resolve_session_comments(
+    path: String,
+    state: State<'_, RepoState>,
+    sessions: State<'_, ReviewSessionsState>,
+) -> Result<Vec<CommentResolution>, String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let canonical =
+        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    let comments = {
+        let map = sessions.0.lock().unwrap();
+        map.get(&canonical)
+            .ok_or_else(|| {
+                serde_json::to_string(&TrunkError::new(
+                    "no_session",
+                    "No active review session for this repository",
+                ))
+                .unwrap()
+            })?
+            .comments
+            .clone()
+    };
+
+    let result = tauri::async_runtime::spawn_blocking(
+        move || -> Result<Vec<CommentResolution>, TrunkError> {
+            let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
+            Ok(resolve_all(&comments, &repo))
+        },
+    )
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    Ok(result)
+}
+
 #[tauri::command]
 pub async fn start_review_session(
     path: String,
