@@ -100,10 +100,17 @@ function handleReviewJump(comment: Comment) {
 		selectCommit: handleCommitSelect,
 		selectFile: handleCommitFileSelect,
 		scrollToRange: (startLine, endLine) => {
-			// Wait for the diff to render after commit/file selection before scrolling.
-			requestAnimationFrame(() =>
-				diffPanelRef?.scrollToLine(startLine, endLine),
-			);
+			// The panel→diff swap destroys ReviewPanel and mounts a fresh DiffPanel;
+			// diffPanelRef is bound during that render. Poll a few frames until it's
+			// available before scrolling, so the jump never silently no-ops.
+			const tryScroll = (retries = 3) => {
+				if (diffPanelRef) {
+					diffPanelRef.scrollToLine(startLine, endLine);
+				} else if (retries > 0) {
+					requestAnimationFrame(() => tryScroll(retries - 1));
+				}
+			};
+			requestAnimationFrame(() => tryScroll());
 		},
 	});
 }
@@ -782,7 +789,7 @@ function startRightResize(e: MouseEvent) {
               fileDiffs={currentDiffFiles}
               commitDetail={commitDetail}
               selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-              diffKind={selectedCommitFile ? 'commit' : 'commit'}
+              diffKind="commit"
               {repoPath}
               loading={stagingDiffLoading}
               onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
