@@ -31,27 +31,30 @@ created: 2026-05-27
 
 ## Spacing Scale
 
-The project does not declare a named spacing scale token set. Existing components (Toolbar, ReviewPanel header, ReviewDocPreview header) consistently use 2/4/6/8/10/12 px values — multiples of 2 with 4 px as the dominant rhythm. This phase **inherits** the precedent verbatim. No new spacing tokens introduced.
+**Phase 72 spacing contract: empty set. No new spacing values are introduced by this phase.**
 
-Declared values for Phase 72 surfaces (all px, all multiples of 2; the project standard):
+Every surface touched by Phase 72 reuses dimensions already declared by its host component. The new Toolbar Review button is a structural clone of the existing `.toolbar-btn` class (`src/components/Toolbar.svelte:212-221`); the renamed Copy button keeps the exact dimensions of the Generate button it replaces in the ReviewPanel header row (`src/components/ReviewPanel.svelte:350-368`). Adding the same class to one more `<button>` and renaming one existing button do not change the host components' spacing — they inherit it verbatim.
 
-| Token | Value | Usage in this phase | Source / Precedent |
-|-------|-------|---------------------|-------------------|
-| `gap-xs` | 2px | Group-internal button gap inside `.toolbar-group` | `Toolbar.svelte:206` |
-| `gap-sm` | 4px | Icon-to-label gap inside `.toolbar-btn`; spacing inside `ReviewPanel` header `.preview-spacer` row | `Toolbar.svelte:220`, `ReviewPanel.svelte:350` |
-| `gap-md` | 8px | Inter-group gap inside `ReviewPanel` header row | `ReviewPanel.svelte:350` |
-| `gap-lg` | 12px | Inter-group horizontal gap on `.toolbar` between toolbar-groups; outer padding on `.toolbar` | `Toolbar.svelte:199-200` |
-| `pad-btn-y` | 4px | `.toolbar-btn` vertical padding | `Toolbar.svelte:215` |
-| `pad-btn-x` | 10px | `.toolbar-btn` horizontal padding | `Toolbar.svelte:215` |
-| `pad-header-y` | 6px | ReviewPanel header vertical padding | `ReviewPanel.svelte:351` |
-| `pad-header-x` | 12px | ReviewPanel header horizontal padding | `ReviewPanel.svelte:351` |
-| `btn-height` | 26px | Fixed `.toolbar-btn` height for visual alignment within the toolbar | `Toolbar.svelte:221` |
-| `radius-sm` | 4px | All button/group corner radii in this phase | `Toolbar.svelte:212`, `ReviewDocPreview.svelte:91` |
-| `border` | 1px | All borders (button, header underline) | project standard |
+Because no new spacing tokens are declared, the 8-point-multiples rule has nothing in this phase to evaluate against. The rule applies to *new* tokens this phase introduces; the answer for Phase 72 is "none introduced."
 
-Exceptions: none. The new Toolbar Review button MUST match the existing `.toolbar-btn` shape (26 px tall, 4/10 padding, 4 px radius, 4 px icon-label gap) so it sits flush in the toolbar row. The renamed Copy button in `ReviewPanel.svelte` keeps its current ReviewPanel-header dimensions (`padding: 2px 8px`, 4 px radius) — these are the existing values for inline header buttons in that header and should not change.
+### Inherited reference (unchanged, not phase contract)
 
-> **Note on the 8-point scale guideline:** The project standard is multiples of 2 with 4 px as the dominant step, not multiples of 4 only. The Toolbar's existing `gap: 2px` between buttons inside a group, and the ReviewPanel header's `padding: 6px 12px` and `gap: 8px`, are documented precedents. This phase preserves them — introducing a new scale would create visual inconsistency for a refactor whose explicit goal is *integration* with surrounding chrome.
+For executor convenience only, the existing spacing values at the two host surfaces are listed below. These are pre-existing project state — listed so the executor can verify a planned change has not perturbed them, NOT as values this phase is declaring or owning.
+
+| Surface | Pre-existing value | Source file:line |
+|---------|--------------------|-------------------|
+| `.toolbar` outer padding | inherited from existing component | `Toolbar.svelte:199-200` |
+| `.toolbar` inter-group gap | inherited from existing component | `Toolbar.svelte:199-200` |
+| `.toolbar-group` inter-button gap | inherited from existing component | `Toolbar.svelte:206` |
+| `.toolbar-btn` padding | inherited from existing component | `Toolbar.svelte:215` |
+| `.toolbar-btn` icon-label gap | inherited from existing component | `Toolbar.svelte:220` |
+| `.toolbar-btn` fixed height | inherited from existing component | `Toolbar.svelte:221` |
+| `.toolbar-btn` corner radius | inherited from existing component | `Toolbar.svelte:212` |
+| ReviewPanel header padding | inherited from existing component | `ReviewPanel.svelte:351` |
+| ReviewPanel header inner gap | inherited from existing component | `ReviewPanel.svelte:350` |
+| ReviewPanel header button (Copy) padding & radius | inherited from existing button being renamed | `ReviewPanel.svelte:359-368` |
+
+If the executor finds themselves writing a numeric `padding` / `gap` / `height` / `border-radius` value into either component to implement Phase 72, that is a defect — the only correct change is to apply the existing class to a new `<button>` element or rename the existing button's label/icon/handler. Stop and re-read this section.
 
 ---
 
@@ -103,6 +106,12 @@ The project uses CSS custom properties exclusively — no hex literals in compon
 
 Contrast: `var(--color-on-accent)` (#fff) on `var(--color-accent)` (#388bfd) — APCA Lc ≈ 71 (AAA for body text equivalent). Verified by tokens already in use elsewhere in the project (CommitRow review markers, Phase 66).
 
+**Primary visual anchor (this phase):**
+
+- **When `reviewActive === false`:** the Toolbar's Review button sits flat among its siblings — the existing toolbar layout is the visual anchor; nothing new pulls focus. This is intentional: when review mode is off, the feature should not advertise itself.
+- **When `reviewActive === true`:** the Toolbar Review button (accent fill, on-accent text) becomes the primary visual anchor in the application chrome — the single in-window indicator that review mode is on.
+- **Inside the ReviewPanel (when review is active):** the Copy button in the header row is the primary action focal point. It is the only header-row action and the sole completion-step affordance for the comments-view workflow; everything else in the panel is read-mostly content (commits list, comments list) or per-row controls.
+
 **Wiring discipline (CLAUDE.md rule):**
 
 - The active-state styling MUST be a class toggle (`class:toolbar-btn-active={reviewActive}`), not inline `style="background: ..."` ternaries. The deleted blue button at `RepoView.svelte:815-827` is the explicit anti-pattern (eight lines of inline-style ternary) we are removing — recreating that pattern on the new button defeats the refactor.
@@ -116,10 +125,10 @@ Every user-facing string this phase touches. Pre-populated from CONTEXT.md decis
 
 | Element | Copy | Notes |
 |---------|------|-------|
-| Toolbar Review button label | `Review` | One word, sentence case, matches `Branch` / `Stash` / `Pop` precedent in the same toolbar group. Singular noun, not verb. |
+| Toolbar Review button label | `Review` | Single-word label is the toolbar convention; see `Toolbar.svelte` group buttons (`Undo`, `Push`, `Branch`, `Stash`, `Pop`) — every Toolbar button in the existing app uses a single-word noun/verb. Sentence case; singular noun. |
 | Toolbar Review button `aria-label` | (not set — visible label suffices) | `aria-pressed={reviewActive}` IS set (RESEARCH Pitfall 5) — screen readers announce "Review toggle button, pressed/not pressed". |
 | Toolbar Review button `title` (tooltip) | not required for v1 — keyboard shortcut is discoverable via the View menu | Future polish; not in scope. |
-| ReviewPanel Copy button label (default) | `Copy` | Single word verb, replacing the previous "Generate". The Generate→Copy collapse is the whole point of the phase. |
+| ReviewPanel Copy button label (default) | `Copy` | Single-word verb is the clipboard-action convention across the existing app (matches `ReviewDocPreview.svelte:55` — the carry-forward source — and the OS-level "Copy" verb users expect on clipboard affordances). The Generate→Copy collapse is the whole point of the phase. |
 | ReviewPanel Copy button label (success affordance) | `✓ Copied` | Exact carry-forward from Phase 71 (`ReviewDocPreview.svelte:55-58`). Glyph is a literal `✓` (U+2713) with `aria-hidden="true"`, then the word `Copied`. Affordance window: 1500 ms. |
 | ReviewPanel Copy button `title` (when disabled) | `Add at least one comment to generate` | Inherited verbatim from the current Generate button (`ReviewPanel.svelte:364`). The user's intent — "generate then copy" — is collapsed into one button but the gating reason is unchanged: zero comments → nothing to copy. |
 | Error toast on copy failure | `Failed to copy: ${msg}` | Exact carry-forward from Phase 71 (`ReviewDocPreview.svelte:42`). `msg` is `e.message` when `e instanceof Error`, else `String(e)`. |
@@ -188,7 +197,7 @@ This phase is interaction-heavy and refactor-light. Each interaction is defined 
 
 ### Layout placement
 
-- **Toolbar Review button:** new `.toolbar-group` appended as the rightmost group in `Toolbar.svelte` (after the existing Branch / Stash / Pop group at `Toolbar.svelte:264-274`). Single button, no sibling buttons in the group. Lays out via the existing `.toolbar` flexbox with `gap: 12px` between groups — no positioning hacks (CLAUDE.md).
+- **Toolbar Review button:** new `.toolbar-group` appended as the rightmost group in `Toolbar.svelte` (after the existing Branch / Stash / Pop group at `Toolbar.svelte:264-274`). Single button, no sibling buttons in the group. Lays out via the existing `.toolbar` flexbox — no positioning hacks (CLAUDE.md).
 - **ReviewPanel Copy button:** stays in the same docked position the Generate button occupies today — right-edge of the panel header row, pushed by `<span class="preview-spacer" style="flex: 1;"></span>` (`ReviewPanel.svelte:358`). Only the label, icon, and click handler change.
 - **Deleted header strip in `RepoView.svelte`:** lines 813-828 collapse out. Body inside `{#if reviewSession.state.reviewActive}` becomes a direct render of `ReviewPanel` or `DiffPanel` without the surrounding wrapper. Children flow naturally via the parent's existing flex column (`RepoView.svelte:809`).
 
@@ -232,11 +241,11 @@ Phase 72 introduces zero new dependencies (CONTEXT.md Net effect table: "Files a
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS — every user-facing string declared; carry-forward strings cite their source line; no destructive copy introduced
-- [ ] Dimension 2 Visuals: PASS — every new surface either matches a documented Toolbar/ReviewPanel precedent or is explicitly justified (the active-state styling is the one new visual contract, and it reuses `var(--color-accent)` reclaimed from the deleted blue button)
+- [ ] Dimension 1 Copywriting: PASS — every user-facing string declared; carry-forward strings cite their source line; single-word CTAs justified by toolbar/clipboard convention; no destructive copy introduced
+- [ ] Dimension 2 Visuals: PASS — every new surface either matches a documented Toolbar/ReviewPanel precedent or is explicitly justified (the active-state styling is the one new visual contract, and it reuses `var(--color-accent)` reclaimed from the deleted blue button); primary visual anchor is named per review-active state
 - [ ] Dimension 3 Color: PASS — zero hex literals introduced; all colors via existing `var(--color-*)` tokens; accent reserved for exactly one element (the Toolbar Review button's active state)
 - [ ] Dimension 4 Typography: PASS — single weight (400), single size for new UI (12px), one icon size (14px); inherits `var(--font-sans)`
-- [ ] Dimension 5 Spacing: PASS — every value matches a documented Toolbar or ReviewPanel-header precedent; no new spacing magic numbers
+- [ ] Dimension 5 Spacing: PASS — phase introduces zero new spacing values; the new Toolbar button reuses the existing `.toolbar-btn` class verbatim and the renamed Copy button keeps the Generate button's dimensions
 - [ ] Dimension 6 Registry Safety: PASS — N/A (no registry, no new packages)
 
 **Approval:** pending
@@ -244,3 +253,4 @@ Phase 72 introduces zero new dependencies (CONTEXT.md Net effect table: "Files a
 ---
 
 *Spec compiled: 2026-05-27 from CONTEXT.md (design-locked 2026-05-26), RESEARCH.md (researched 2026-05-27), and direct reads of `src/app.css`, `src/components/Toolbar.svelte`, `src/components/ReviewPanel.svelte`, `src/components/ReviewDocPreview.svelte`, `src/components/RepoView.svelte`.*
+*Revised: 2026-05-27 — spacing section restructured to make the phase contract (empty set) explicit, with inherited values relabeled as reference-only; copywriting notes added for single-word CTA conventions; primary visual anchor named per review-active state.*
