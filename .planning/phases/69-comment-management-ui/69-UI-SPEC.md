@@ -1,10 +1,11 @@
 ---
 phase: 69
 slug: comment-management-ui
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-26
+reviewed_at: 2026-05-26
 ---
 
 # Phase 69 — UI Design Contract
