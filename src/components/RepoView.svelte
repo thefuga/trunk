@@ -106,16 +106,23 @@ function handleReviewJump(comment: Comment) {
 		selectFile: selectCommitFileIdempotent,
 		scrollToRange: (startLine, endLine, side) => {
 			// The panel→diff swap destroys ReviewPanel and mounts a fresh DiffPanel;
-			// diffPanelRef is bound during that render. Poll a few frames until it's
-			// available before scrolling, so the jump never silently no-ops.
-			const tryScroll = (retries = 3) => {
+			// diffPanelRef is bound during that render. Poll up to ~0.5s of frames
+			// until it's available, then toast on exhaustion — the previous 3-frame
+			// budget would silently no-op on slow machines or under heavy reactivity
+			// work, contradicting the "never silently no-ops" guarantee (WR-05).
+			// Budget passed explicitly at the seed call so the dependency is visible
+			// (subsumes IN-04's brittle default-parameter call site).
+			const SCROLL_RETRY_BUDGET = 30;
+			const tryScroll = (retries: number) => {
 				if (diffPanelRef) {
 					diffPanelRef.scrollToLine(startLine, endLine, side);
 				} else if (retries > 0) {
 					requestAnimationFrame(() => tryScroll(retries - 1));
+				} else {
+					showToast("Could not scroll to comment location", "error");
 				}
 			};
-			requestAnimationFrame(() => tryScroll());
+			requestAnimationFrame(() => tryScroll(SCROLL_RETRY_BUDGET));
 		},
 	});
 }
