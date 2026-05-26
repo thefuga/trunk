@@ -189,7 +189,7 @@ Built in strict dependency order: lock the anchor schema and persistence first (
 - [x] **Phase 66: Commit Selection** — Seed from a baseâtip range and hand-pick commits from the graph (completed 2026-05-25)
 - [x] **Phase 67: Diff-Source Anchor Capture** — Comment on a diff line selection with a stable source-line anchor (completed 2026-05-25)
 - [x] **Phase 68: Full-File-Source Anchor Capture** — Comment on a full-file-at-commit line selection (completed 2026-05-25)
-- [ ] **Phase 69: Comment Management UI** — Review panel: list, edit, delete, jump-to-anchor, commit-level comments
+- [x] **Phase 69: Comment Management UI** — Review panel: list, edit, delete, jump-to-anchor, commit-level comments (completed 2026-05-26)
 - [ ] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts
 - [ ] **Phase 71: Output (Clipboard + Save-to-File)** — Copy the doc or save it via a native dialog
 
@@ -324,7 +324,7 @@ Plans:
 - [x] 69-02-PLAN.md — Mutating commands: add_commit_comment, edit_comment, delete_comment (by id)
 - [x] 69-03-PLAN.md — Read commands: list_session_comments + git2-backed resolve_session_comments (orphan classifier)
 - [x] 69-04-PLAN.md — TS DTOs (id/commit_oid/OrphanReason/CommentResolution) + review-session.svelte.ts rune
-- [ ] 69-05-PLAN.md — Real ReviewPanel in the center pane: group-by-commit, add-note, inline edit, delete-confirm, jump vs orphan
+- [x] 69-05-PLAN.md — Real ReviewPanel in the center pane: group-by-commit, add-note, inline edit, delete-confirm, jump vs orphan
 **UI hint**: yes
 **Notes:**
 

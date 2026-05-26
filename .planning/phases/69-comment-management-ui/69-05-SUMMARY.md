@@ -45,7 +45,7 @@ key-decisions:
   - "scrollToLine targets the hunk whose new-side range covers the start line (reusing scrollToHunk's scrollIntoView + 600ms hunk-highlight) rather than a per-line DOM scroll, because line markup lives three components deep (HunkView/FullFileView/SplitView) and adding queryable line attributes across all three is out of plan scope."
   - "Single shared textarea primitive (draftText + draftValid = trim().length > 0) for both Add note and inline edit; the disabled Save IS the empty-text feedback (no toast), per the LOCKED copywriting contract."
 
-requirements-completed: []  # pending human-verify (Task 3) — marked complete after the checkpoint clears
+requirements-completed: [ANCH-03, CMT-01, CMT-02, CMT-03, CMT-04]
 
 # Metrics
 duration: ~30min
@@ -76,7 +76,12 @@ completed: 2026-05-26
 3. **Task 2 (part): DiffPanel.scrollToLine** — `0d7388a` (feat)
 4. **Task 2: center-pane wiring (RepoView/App)** — `84acc54` (feat)
 5. **Task 2 refinement: poll diffPanelRef before scroll** — `a26d514` (fix)
-6. **Task 3: human-verify checkpoint** — PENDING (no commit; awaiting the human resume-signal)
+6. **Task 3: human-verify checkpoint** — APPROVED (`just dev` hands-on verification passed on the panel, add-note, edit, delete-confirm, jump, and orphan flows). Five post-checkpoint polish commits applied during verification:
+   - `e18c3cf`: fix — render panel comments whose commit isn't in session.commits (template gated on `commits.length` instead of `groups.length`, hiding the fallback group; also dropped the misleading `(commit gone)` synthetic header — the per-comment orphan badge carries the truth).
+   - `8630308`: fix — jump affordance moved from the curved-arrow icon to the file:line ref itself.
+   - `56746a2`: feat — commit short-hash header is clickable; selects the commit and scrolls the graph to it (panel stays open).
+   - `cf41f7e`: feat — GitHub-style comment cards with red/green diff backgrounds on `+`/`-` lines and a non-selectable gutter; edit mode now replaces only the body so the diff stays in view.
+   - `4773374`: feat — commit-level comments sort before line-anchored within a group (stable sort).
 
 ## Files Created/Modified
 
@@ -100,7 +105,9 @@ None of Rules 1–4 triggered for the automated tasks; one refinement (`a26d514`
 
 ## Deferred Issues
 
-- **`Source::FullFile` jump renders in whatever contentMode is active, not forced to full-file view.** The plan says jump swaps "diff/full-file per `Source`", but the Plan-04 `JumpDeps` interface (`selectCommit` / `selectFile` / `scrollToRange`) has **no `setContentMode` seam**, so RepoView cannot force DiffPanel's content mode from the rune without reopening the Plan-04 rune signature. For a `Source::FullFile` anchor the jump still selects the right commit + file and scrolls to the line range, but the view mode is whatever the user last set (the `Source::Diff` path is fully correct). This is a Plan-04 contract gap, intentionally NOT patched in Plan 05 to avoid widening scope. The human-verify checkpoint step 5 should be evaluated with this caveat. Resolution: a follow-up that extends `JumpDeps` with a content-mode seam, or a Phase 70 adjustment.
+- **`Source::FullFile` jump renders in whatever contentMode is active, not forced to full-file view.** The plan says jump swaps "diff/full-file per `Source`", but the Plan-04 `JumpDeps` interface (`selectCommit` / `selectFile` / `scrollToRange`) has **no `setContentMode` seam**, so RepoView cannot force DiffPanel's content mode from the rune without reopening the Plan-04 rune signature. For a `Source::FullFile` anchor the jump still selects the right commit + file and scrolls to the line range, but the view mode is whatever the user last set (the `Source::Diff` path is fully correct). Acknowledged at the human-verify checkpoint. Follow-up: extend `JumpDeps` with a content-mode seam.
+- **No syntax highlighting in the comment card's diff hunk.** Lines render red/green by `+`/`-` prefix using the existing `--color-diff-{add,delete}-bg` tokens, but the code text itself is plain monospace. The project's live diff view uses syntect (Rust) to produce structured token spans; the panel doesn't have access to those tokens because cached_excerpt is a plain string. Adding a JS highlighter (Shiki/Prism/highlight.js) would create a second color source that drifts from the diff view's `--color-syn-*` tokens, so it was deliberately not bolted on. Resolution: a future phase that either re-tokenizes cached_excerpt via syntect through IPC, or stores structured spans alongside cached_excerpt in the schema.
+- **Comment-only-from-diff sessions always land in a fallback group.** Phase 67's `add_comment` path auto-starts a session but never adds the commenting commit to `session.commits`. The new fallback rendering (e18c3cf) makes this navigable, but the natural "I'll just comment on this diff" flow doesn't pick up the real commit summary header. This is a Phase 66/67 UX question, not a Phase 69 bug — leaving for the user to decide whether to open a follow-up.
 
 ## Known Stubs
 
@@ -115,13 +122,13 @@ None. The panel is fully wired to the live backend reads/writes; no hardcoded/pl
 
 ---
 *Phase: 69-comment-management-ui*
-*Status: Tasks 1–2 complete and `just check` green; Task 3 (human-verify) PENDING*
+*Status: All 3 tasks complete (human-verify checkpoint approved); `just check` green at 517 tests*
 
 ## Self-Check: PASSED
 
 - All modified files present on disk (ReviewPanel.svelte, ReviewPanel.test.ts, DiffPanel.svelte, RepoView.svelte, App.svelte, 69-05-SUMMARY.md).
-- All five task commits found in git history (0e27f57 RED, be7272a GREEN, 0d7388a scrollToLine, 84acc54 wiring, a26d514 scroll-poll fix).
-- `export function scrollToLine` present in DiffPanel.svelte.
-- `npx vitest run src/components/ReviewPanel.test.ts` → 14 passed.
-- `just check` exits 0 (fmt, biome, svelte-check 0 errors, clippy, cargo-test, vitest 513 passing). No inline color literals in ReviewPanel.svelte.
+- All task commits found in git history including the post-checkpoint polish: 0e27f57 (RED), be7272a (GREEN), 0d7388a, 84acc54, a26d514, e18c3cf, 8630308, 56746a2, cf41f7e, 4773374.
+- `export function scrollToLine` present in DiffPanel.svelte; `onJumpToCommit` prop wired through RepoView's `handleReviewJumpToCommit` → `handleCommitSelect` + `commitGraphRef.scrollToOid`.
+- `just check` exits 0 (fmt, biome, svelte-check 0 errors, clippy, cargo-test, vitest 517 passing). No inline color literals in ReviewPanel.svelte — diff backgrounds use `--color-diff-{add,delete}-bg`.
 - TDD gate: `test(69-05)` (0e27f57) precedes `feat(69-05)` GREEN (be7272a).
+- Human-verify (Task 3) approved after the five polish commits.
