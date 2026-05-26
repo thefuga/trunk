@@ -429,6 +429,49 @@ describe("ReviewPanel", () => {
 			expect(onJumpToCommit).toHaveBeenCalledWith(COMMIT_A);
 		});
 
+		it("classifies diff-source excerpt lines by their +/-/space prefix", async () => {
+			const commentWithDiff: Comment = {
+				id: "c1",
+				text: "look at this",
+				anchor: {
+					commit_oid: COMMIT_A,
+					file_path: "src/main.ts",
+					source: "Diff",
+					side: "New",
+					start_line: 10,
+					end_line: 12,
+				},
+				cached_excerpt:
+					" const ctx = 0;\n+const added = 1;\n-const removed = 2;",
+				commit_oid: null,
+			};
+			installReads({
+				commits,
+				comments: [commentWithDiff],
+				resolutions: [resolvable("c1")],
+			});
+			const { container } = render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
+			await flush();
+
+			const addedRow = screen
+				.getByText("const added = 1;")
+				.closest(".diff-line");
+			const removedRow = screen
+				.getByText("const removed = 2;")
+				.closest(".diff-line");
+			const contextRow = screen
+				.getByText("const ctx = 0;")
+				.closest(".diff-line");
+			expect(addedRow?.className).toContain("diff-line-add");
+			expect(removedRow?.className).toContain("diff-line-del");
+			expect(contextRow?.className).toContain("diff-line-context");
+			// The gutter character is in its own span so copy-paste of the content
+			// doesn't include the +/-.
+			expect(container.querySelectorAll(".diff-gutter").length).toBe(3);
+		});
+
 		it("maps each OrphanReason to its locked badge label", async () => {
 			installReads({
 				commits,
