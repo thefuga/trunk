@@ -8,9 +8,7 @@
 //! All resolution failures are routed INTO the returned markdown (per L-04 +
 //! L-09); the renderer NEVER returns an error.
 
-#[allow(unused_imports)] // classify_anchor / Side / Source wired by task 2 GREEN
 use crate::commands::review::{classify_anchor, OrphanReason};
-#[allow(unused_imports)] // Side / Source wired by task 2 GREEN
 use crate::git::types::{Anchor, ReviewSession, Side, Source};
 
 /// Render-only failure kinds. Does NOT cross the IPC wire (the Phase 69
@@ -84,35 +82,158 @@ pub(crate) fn fence_language(file_path: &str) -> &'static str {
     }
 }
 
+/// L-06 line-indexing convention: 1-based inclusive bounds over
+/// `str::lines()` semantics, with CRLF→LF normalisation applied to the body
+/// BEFORE slicing. Mirrors `classify_anchor` at `commands/review.rs:358` so a
+/// comment that resolves at classification time also resolves at render time —
+/// one convention applies on both sides (capture and render). RESEARCH Item 2
+/// Option (a): `str::lines()` already handles `\r\n` as one boundary, so line
+/// indices are unchanged; only the bytes inside the fence become LF-only.
+fn slice_lines(content: &str, start_line: u32, end_line: u32) -> Option<String> {
+    if start_line == 0 || end_line < start_line {
+        return None;
+    }
+    let normalised = content.replace("\r\n", "\n");
+    let lines: Vec<&str> = normalised.lines().collect();
+    let line_count = lines.len() as u32;
+    if end_line > line_count {
+        return None;
+    }
+    let start_idx = (start_line - 1) as usize;
+    let end_idx = end_line as usize;
+    Some(lines[start_idx..end_idx].join("\n"))
+}
+
 /// L-02 + L-05 + L-06: re-resolve a `Source::FullFile` excerpt by reading the
-/// blob fresh from git2. Stub — task 2 GREEN implements the slice. Caller MUST
-/// have run `classify_anchor` first (Pitfall 1).
+/// blob fresh from git2. Side semantics mirror `classify_anchor`
+/// (`commands/review.rs:339-346`): `New` reads the commit's tree, `Old` reads
+/// the parent's. `blob.is_binary()` short-circuits to `ExcerptError::Binary`
+/// BEFORE any slicing (L-05). Caller MUST have run `classify_anchor` first
+/// (Pitfall 1) — `slice_full_file` does NOT re-gate.
 #[allow(dead_code)] // wired up in task 3
 pub(crate) fn slice_full_file(
-    _repo: &git2::Repository,
-    _anchor: &Anchor,
+    repo: &git2::Repository,
+    anchor: &Anchor,
 ) -> Result<String, ExcerptError> {
-    Err(ExcerptError::ResolutionFailed)
+    let oid =
+        git2::Oid::from_str(&anchor.commit_oid).map_err(|_| ExcerptError::ResolutionFailed)?;
+    let commit = repo
+        .find_commit(oid)
+        .map_err(|_| ExcerptError::ResolutionFailed)?;
+    let tree = match anchor.side {
+        Side::New => commit.tree().map_err(|_| ExcerptError::ResolutionFailed)?,
+        Side::Old => commit
+            .parent(0)
+            .map_err(|_| ExcerptError::ResolutionFailed)?
+            .tree()
+            .map_err(|_| ExcerptError::ResolutionFailed)?,
+    };
+    let entry = tree
+        .get_path(std::path::Path::new(&anchor.file_path))
+        .map_err(|_| ExcerptError::ResolutionFailed)?;
+    let blob = repo
+        .find_blob(entry.id())
+        .map_err(|_| ExcerptError::ResolutionFailed)?;
+    if blob.is_binary() {
+        return Err(ExcerptError::Binary);
+    }
+    let content = String::from_utf8_lossy(blob.content()).into_owned();
+    slice_lines(&content, anchor.start_line, anchor.end_line).ok_or(ExcerptError::ResolutionFailed)
 }
 
-/// L-02 + Phase 67 L-03: re-resolve a `Source::Diff` excerpt via diff replay.
-/// Stub — task 2 GREEN implements the walk.
+/// L-02 + Phase 67 L-03: re-resolve a `Source::Diff` excerpt by replaying
+/// `diff_tree_to_tree(parent, commit)` with `pathspec(file_path)` and keeping
+/// lines whose side-lineno overlaps `[start_line, end_line]`. Lines with no
+/// side-lineno (the opposing-side `-`/`+` rows) are kept per Phase 67 L-03 so
+/// the body matches what the cached_excerpt looked like at capture. Empty
+/// walk → `ExcerptError::NoHunks` (Pitfall 2 — file unchanged from parent at
+/// this commit). Root-commit guard mirrors `commands/diff.rs:410-414`.
 #[allow(dead_code)] // wired up in task 3
-pub(crate) fn slice_diff(
-    _repo: &git2::Repository,
-    _anchor: &Anchor,
-) -> Result<String, ExcerptError> {
-    Err(ExcerptError::ResolutionFailed)
+pub(crate) fn slice_diff(repo: &git2::Repository, anchor: &Anchor) -> Result<String, ExcerptError> {
+    let oid =
+        git2::Oid::from_str(&anchor.commit_oid).map_err(|_| ExcerptError::ResolutionFailed)?;
+    let commit = repo
+        .find_commit(oid)
+        .map_err(|_| ExcerptError::ResolutionFailed)?;
+    let commit_tree = commit.tree().map_err(|_| ExcerptError::ResolutionFailed)?;
+
+    let mut opts = git2::DiffOptions::new();
+    opts.pathspec(&anchor.file_path);
+
+    let diff = if commit.parent_count() == 0 {
+        repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))
+            .map_err(|_| ExcerptError::ResolutionFailed)?
+    } else {
+        let parent_tree = commit
+            .parent(0)
+            .map_err(|_| ExcerptError::ResolutionFailed)?
+            .tree()
+            .map_err(|_| ExcerptError::ResolutionFailed)?;
+        repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut opts))
+            .map_err(|_| ExcerptError::ResolutionFailed)?
+    };
+
+    let side = anchor.side.clone();
+    let start_line = anchor.start_line;
+    let end_line = anchor.end_line;
+    let mut out = String::new();
+    diff.foreach(
+        &mut |_d, _p| true,
+        None,
+        Some(&mut |_d, _h| true),
+        Some(&mut |_d, _h, line| {
+            let lineno = match side {
+                Side::New => line.new_lineno(),
+                Side::Old => line.old_lineno(),
+            };
+            // Lines with a side-lineno: keep if in [start_line, end_line].
+            // Lines WITHOUT one (the opposing-side change row): keep iff
+            // origin matches the opposing-direction change marker (Phase 67
+            // L-03 — visually anchors the range).
+            let in_range = match lineno {
+                Some(n) => n >= start_line && n <= end_line,
+                None => matches!(
+                    (side.clone(), line.origin()),
+                    (Side::New, '-') | (Side::Old, '+')
+                ),
+            };
+            if in_range {
+                let prefix = match line.origin() {
+                    '+' | '-' | ' ' => line.origin(),
+                    _ => ' ',
+                };
+                out.push(prefix);
+                out.push_str(&String::from_utf8_lossy(line.content()));
+            }
+            true
+        }),
+    )
+    .map_err(|_| ExcerptError::ResolutionFailed)?;
+
+    if out.is_empty() {
+        Err(ExcerptError::NoHunks)
+    } else {
+        // L-06 second clause: CRLF→LF normalise the body inside the fence.
+        Ok(out.replace("\r\n", "\n"))
+    }
 }
 
-/// Gate-then-resolve dispatch (Pitfall 1). Stub — task 2 GREEN implements the
-/// classify-then-slice flow.
+/// Gate-then-resolve dispatch (Pitfall 1): `classify_anchor` is the MANDATORY
+/// first call. On `Ok(())`, dispatch to `slice_full_file` or `slice_diff` by
+/// `anchor.source`. On `Err(reason)`, wrap into `ExcerptError::Orphaned`
+/// WITHOUT entering the slicers — a `Side::Old` anchor on a root commit would
+/// otherwise hit `commit.parent(0)` and surface as `ResolutionFailed`
+/// (wrong: the correct reason is `FileGone`).
 #[allow(dead_code)] // wired up in task 3
 pub(crate) fn try_resolve_excerpt(
-    _repo: &git2::Repository,
-    _anchor: &Anchor,
+    repo: &git2::Repository,
+    anchor: &Anchor,
 ) -> Result<String, ExcerptError> {
-    Err(ExcerptError::ResolutionFailed)
+    classify_anchor(anchor, repo).map_err(ExcerptError::Orphaned)?;
+    match anchor.source {
+        Source::FullFile => slice_full_file(repo, anchor),
+        Source::Diff => slice_diff(repo, anchor),
+    }
 }
 
 /// Top-level pure renderer. Placeholder scaffold — task 3 implements the full
