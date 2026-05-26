@@ -181,7 +181,7 @@ Full details: [milestones/v0.12-ROADMAP.md](milestones/v0.12-ROADMAP.md)
 
 ### ð§ v0.13 Code Review Mode (In Progress)
 
-**Milestone Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy or save.
+**Milestone Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy to the clipboard.
 
 Built in strict dependency order: lock the anchor schema and persistence first (every later phase reads/writes it), then commit selection, then the two independent anchor-capture surfaces, then comment management, then render, then output. Phases 67 and 68 are independent and parallelizable.
 
@@ -191,7 +191,7 @@ Built in strict dependency order: lock the anchor schema and persistence first (
 - [x] **Phase 68: Full-File-Source Anchor Capture** — Comment on a full-file-at-commit line selection (completed 2026-05-25)
 - [x] **Phase 69: Comment Management UI** — Review panel: list, edit, delete, jump-to-anchor, commit-level comments (completed 2026-05-26)
 - [x] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts (completed 2026-05-26)
-- [ ] **Phase 71: Output (Clipboard + Save-to-File)** — Copy the doc or save it via a native dialog
+- [ ] **Phase 71: Output (Clipboard)** — Copy the doc to the clipboard with explicit success/failure feedback (save-to-file dropped 2026-05-26 — see 71-CONTEXT.md)
 
 #### Phase 65: Data Model + Persistence + Session Lifecycle
 
@@ -364,25 +364,22 @@ Plans:
 - Fence length = `max(3, longest_backtick_run_in_excerpt + 1)`; never indent the fence; preserve exact indentation inside.
 - Every resolution step returns `Result` — never `unwrap`. On failure emit a warning block in the "unresolvable" section using the independently-stored comment text and cached excerpt. Binary files render a `[binary file, no excerpt]` placeholder. Normalize CRLFâLF and fix a single line-counting convention shared by capture and render.
 
-#### Phase 71: Output (Clipboard + Save-to-File)
+#### Phase 71: Output (Clipboard)
 
-**Goal**: User can get the generated markdown out of the app, by clipboard or file.
-**Depends on**: Phase 70 (may merge with it)
-**Requirements**: OUT-01, OUT-02
+**Goal**: User can get the generated markdown out of the app by copying it to the system clipboard.
+**Depends on**: Phase 70
+**Requirements**: OUT-01
 **Success Criteria** (what must be TRUE):
 
   1. User can copy the generated markdown to the clipboard and gets explicit success/failure feedback (not fire-and-forget).
-  2. User can save the generated markdown to a file via a native save dialog; the file is written with its full contents.
-  3. Cancelling the save dialog is a no-op — no file written, no false "Saved" toast.
 
 **Plans**: TBD
 **UI hint**: yes
 **Notes:**
 
-- REQUIRED capability: add `dialog:allow-save` to `capabilities/default.json` (currently grants only open/ask + clipboard-write). Verify save works in a RELEASE build, not just dev.
-- Save strategy: `save()` returns the path or `null` (cancel) â on non-null, write via a custom Rust `std::fs` command with atomic tmp+rename (matches the project's "git2/std for local writes, plugins for UI" pattern); no `fs:` plugin scope needed.
-- Await the clipboard `writeText` and toast on success/error — do NOT copy the existing fire-and-forget `.catch(() => {})` copy-SHA pattern; this artifact is the product.
-- Suggested filename: `trunk-review-<repo-name>-<YYYYMMDD-HHMM>.md`. The generated file is a static snapshot, never re-synced.
+- Save-to-file (OUT-02) was dropped 2026-05-26 during context-gathering — see `.planning/phases/71-output-clipboard-save-to-file/71-CONTEXT.md` for rationale and preserved design ground.
+- `clipboard-manager:allow-write-text` is already granted in `src-tauri/capabilities/default.json`. No new capability needed.
+- Await the clipboard `writeText` and surface success/failure — do NOT copy the existing fire-and-forget `.catch(() => {})` copy-SHA pattern; this artifact is the product. Per 71-CONTEXT D-03/D-05: success uses an in-button "✓ Copied" affordance (no success toast); failure shows an error toast with the underlying reason.
 
 ## Progress
 
@@ -404,4 +401,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-05-25 — v0.13 Code Review Mode roadmap created (Phases 65-71)*
+*Last updated: 2026-05-26 — Phase 71 descoped: save-to-file (OUT-02) dropped during context-gathering; phase is now clipboard-only*

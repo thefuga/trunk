@@ -2,7 +2,7 @@
 
 **Defined:** 2026-05-25
 **Core Value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits — all without touching the terminal.
-**Milestone Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy or save.
+**Milestone Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy to the clipboard.
 
 ## v1 Requirements
 
@@ -44,7 +44,8 @@ Requirements for v0.13. Each maps to a roadmap phase. Recipient of the generated
 ### Output
 
 - [ ] **OUT-01**: User can copy the generated markdown to the clipboard
-- [ ] **OUT-02**: User can save the generated markdown to a file via a native save dialog
+
+> **OUT-02 (save to file) was dropped 2026-05-26** during Phase 71 context-gathering. The dialog/permission/atomic-write/filename/overwrite/release-build surface area was disproportionate to the marginal value over `Cmd+V` into the user's own editor. Users who want a file can paste and save themselves. Full design ground preserved in `phases/71-output-clipboard-save-to-file/71-CONTEXT.md` if it ever comes back.
 
 ## Future Requirements
 
@@ -101,13 +102,13 @@ Which phases cover which requirements. Phase numbers continue from v0.12 (last p
 | DOC-03 | Phase 70 | Complete |
 | DOC-04 | Phase 70 | Complete |
 | OUT-01 | Phase 71 | Pending |
-| OUT-02 | Phase 71 | Pending |
+| ~~OUT-02~~ | ~~Phase 71~~ | Dropped 2026-05-26 |
 
 **Coverage:**
-- v1 requirements: 20 total
-- Mapped to phases: 20
+- v1 requirements: 19 total (OUT-02 dropped 2026-05-26)
+- Mapped to phases: 19
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-25*
-*Last updated: 2026-05-25 — traceability finalized by roadmapper (Phases 65-71); all 20 v1 requirements mapped*
+*Last updated: 2026-05-26 — OUT-02 (save to file) dropped during Phase 71 context-gathering; v1 requirements now 19*
