@@ -1649,4 +1649,71 @@ mod tests {
             "a not_found edit must mutate nothing"
         );
     }
+
+    // Test 15 (CMT-03): delete_comment_inner removes the comment whose id matches
+    // and leaves the rest; the count drops by exactly one.
+    #[test]
+    fn delete_comment_removes_by_id_and_leaves_rest() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        add_commit_comment_inner(
+            data_dir.path(),
+            &canonical,
+            &sessions,
+            AddCommitCommentRequest {
+                commit_oid: "c1".to_string(),
+                text: "doomed".to_string(),
+            },
+        )
+        .unwrap();
+        add_commit_comment_inner(
+            data_dir.path(),
+            &canonical,
+            &sessions,
+            AddCommitCommentRequest {
+                commit_oid: "c2".to_string(),
+                text: "survivor".to_string(),
+            },
+        )
+        .unwrap();
+        let target_id = loaded(&data_dir, &canonical).comments[0].id.clone();
+
+        delete_comment_inner(data_dir.path(), &canonical, &sessions, &target_id).unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        assert_eq!(s.comments.len(), 1, "delete drops exactly one comment");
+        assert_eq!(
+            s.comments[0].text, "survivor",
+            "the non-targeted comment survives"
+        );
+    }
+
+    // Test 16 (T-69-05 idempotency): delete_comment_inner on a missing id mutates
+    // nothing and returns Ok — an idempotent no-op (parity with apply_remove).
+    #[test]
+    fn delete_comment_missing_id_is_idempotent_no_op() {
+        let data_dir = TempDir::new().unwrap();
+        let (canonical, sessions) = seeded_sessions(&data_dir);
+        add_commit_comment_inner(
+            data_dir.path(),
+            &canonical,
+            &sessions,
+            AddCommitCommentRequest {
+                commit_oid: "c1".to_string(),
+                text: "untouched".to_string(),
+            },
+        )
+        .unwrap();
+
+        // Returns Ok — never an error — even though nothing matches.
+        delete_comment_inner(data_dir.path(), &canonical, &sessions, "no-such-id").unwrap();
+
+        let s = loaded(&data_dir, &canonical);
+        assert_eq!(
+            s.comments.len(),
+            1,
+            "a missing-id delete leaves the comment count unchanged"
+        );
+        assert_eq!(s.comments[0].text, "untouched");
+    }
 }
