@@ -8,8 +8,10 @@
 //! All resolution failures are routed INTO the returned markdown (per L-04 +
 //! L-09); the renderer NEVER returns an error.
 
-use crate::commands::review::OrphanReason;
-use crate::git::types::ReviewSession;
+#[allow(unused_imports)] // classify_anchor / Side / Source wired by task 2 GREEN
+use crate::commands::review::{classify_anchor, OrphanReason};
+#[allow(unused_imports)] // Side / Source wired by task 2 GREEN
+use crate::git::types::{Anchor, ReviewSession, Side, Source};
 
 /// Render-only failure kinds. Does NOT cross the IPC wire (the Phase 69
 /// `OrphanReason` does — never extend it). All variants funnel into either the
@@ -82,6 +84,37 @@ pub(crate) fn fence_language(file_path: &str) -> &'static str {
     }
 }
 
+/// L-02 + L-05 + L-06: re-resolve a `Source::FullFile` excerpt by reading the
+/// blob fresh from git2. Stub — task 2 GREEN implements the slice. Caller MUST
+/// have run `classify_anchor` first (Pitfall 1).
+#[allow(dead_code)] // wired up in task 3
+pub(crate) fn slice_full_file(
+    _repo: &git2::Repository,
+    _anchor: &Anchor,
+) -> Result<String, ExcerptError> {
+    Err(ExcerptError::ResolutionFailed)
+}
+
+/// L-02 + Phase 67 L-03: re-resolve a `Source::Diff` excerpt via diff replay.
+/// Stub — task 2 GREEN implements the walk.
+#[allow(dead_code)] // wired up in task 3
+pub(crate) fn slice_diff(
+    _repo: &git2::Repository,
+    _anchor: &Anchor,
+) -> Result<String, ExcerptError> {
+    Err(ExcerptError::ResolutionFailed)
+}
+
+/// Gate-then-resolve dispatch (Pitfall 1). Stub — task 2 GREEN implements the
+/// classify-then-slice flow.
+#[allow(dead_code)] // wired up in task 3
+pub(crate) fn try_resolve_excerpt(
+    _repo: &git2::Repository,
+    _anchor: &Anchor,
+) -> Result<String, ExcerptError> {
+    Err(ExcerptError::ResolutionFailed)
+}
+
 /// Top-level pure renderer. Placeholder scaffold — task 3 implements the full
 /// D-03..D-10 section assembly. Always returns a `String`, never panics.
 #[allow(dead_code)] // task 3 fleshes this out
@@ -92,6 +125,78 @@ pub fn render(_session: &ReviewSession, _repo: &git2::Repository) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use git2::{Oid, Repository, Signature};
+    use tempfile::TempDir;
+
+    // ── Test harness lifted from commands/review.rs:1135-2102 ─────────────
+    // Real git2 + tempfile (classical TDD: no mocks). `_dir` field keeps the
+    // TempDir alive for the test's duration; drop deletes it.
+
+    fn sig() -> Signature<'static> {
+        Signature::new("Test", "test@example.com", &git2::Time::new(0, 0)).unwrap()
+    }
+
+    fn commit_with_file(
+        repo: &Repository,
+        message: &str,
+        parents: &[Oid],
+        path: &str,
+        content: &[u8],
+    ) -> Oid {
+        let blob_oid = repo.blob(content).unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder
+            .insert(path, blob_oid, git2::FileMode::Blob.into())
+            .unwrap();
+        let tree = repo.find_tree(builder.write().unwrap()).unwrap();
+        let parent_commits: Vec<_> = parents
+            .iter()
+            .map(|oid| repo.find_commit(*oid).unwrap())
+            .collect();
+        let parent_refs: Vec<&git2::Commit> = parent_commits.iter().collect();
+        let s = sig();
+        repo.commit(None, &s, &s, message, &tree, &parent_refs)
+            .unwrap()
+    }
+
+    /// Empty-tree commit (no files). Used as the parent of `commit_with_file`
+    /// commits so the diff-replay walks see a single added file.
+    fn empty_commit(repo: &Repository, message: &str, parents: &[Oid]) -> Oid {
+        let tree_oid = repo.treebuilder(None).unwrap().write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let parent_commits: Vec<_> = parents
+            .iter()
+            .map(|oid| repo.find_commit(*oid).unwrap())
+            .collect();
+        let parent_refs: Vec<&git2::Commit> = parent_commits.iter().collect();
+        let s = sig();
+        repo.commit(None, &s, &s, message, &tree, &parent_refs)
+            .unwrap()
+    }
+
+    fn make_repo() -> (TempDir, Repository) {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        (dir, repo)
+    }
+
+    fn anchor(
+        commit_oid: Oid,
+        file_path: &str,
+        source: Source,
+        side: Side,
+        start_line: u32,
+        end_line: u32,
+    ) -> Anchor {
+        Anchor {
+            commit_oid: commit_oid.to_string(),
+            file_path: file_path.to_string(),
+            source,
+            side,
+            start_line,
+            end_line,
+        }
+    }
 
     // ── Task 1: fence_length unit tests (L-03) ────────────────────────────
 
@@ -130,5 +235,169 @@ mod tests {
         // The 5-run lives in the middle of a longer line; the scan must find
         // it regardless of line position. 5 + 1 = 6.
         assert_eq!(fence_length("a\nbbb`````ccc\nd"), 6);
+    }
+
+    // ── Task 2: slice_full_file + slice_diff + try_resolve_excerpt ────────
+
+    #[test]
+    fn slice_full_file_returns_requested_range() {
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(
+            &repo,
+            "B",
+            &[],
+            "foo.rs",
+            b"fn a() {}\nfn b() {}\nfn c() {}\n",
+        );
+        let a = anchor(b, "foo.rs", Source::FullFile, Side::New, 2, 3);
+
+        let body = slice_full_file(&repo, &a).expect("resolvable FullFile slice");
+
+        assert_eq!(body, "fn b() {}\nfn c() {}");
+    }
+
+    #[test]
+    fn slice_full_file_normalizes_crlf() {
+        // L-06: CRLF in the blob collapses to LF inside the fence body.
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "foo.txt", b"a\r\nb\r\nc\r\n");
+        let a = anchor(b, "foo.txt", Source::FullFile, Side::New, 1, 3);
+
+        let body = slice_full_file(&repo, &a).expect("resolvable FullFile slice");
+
+        assert_eq!(body, "a\nb\nc");
+    }
+
+    #[test]
+    fn slice_full_file_returns_binary_for_nul_byte_blob() {
+        // L-05: a blob with a NUL byte → blob.is_binary() == true → Binary
+        // variant. The placeholder is task 3's concern; here we assert the
+        // dispatch ends in Binary, not ResolutionFailed.
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "bin.dat", b"abc\0def\n");
+        let a = anchor(b, "bin.dat", Source::FullFile, Side::New, 1, 1);
+
+        let err = slice_full_file(&repo, &a).expect_err("binary blob must error");
+
+        assert!(
+            matches!(err, ExcerptError::Binary),
+            "expected ExcerptError::Binary, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn slice_full_file_passes_through_non_utf8_bytes_with_lossy_substitution() {
+        // RESEARCH Pitfall 3: Latin-1 bytes (>=0x80) with no NUL pass
+        // is_binary() == false; from_utf8_lossy emits U+FFFD substitutions
+        // rather than erroring. The line stays sliceable.
+        let (_dir, repo) = make_repo();
+        // 0xC3 alone (no follow byte) is invalid UTF-8 but has no NUL.
+        let b = commit_with_file(&repo, "B", &[], "latin1.txt", b"hello \xC3 world\nsecond\n");
+        let a = anchor(b, "latin1.txt", Source::FullFile, Side::New, 1, 1);
+
+        let body = slice_full_file(&repo, &a).expect("lossy UTF-8 still resolves");
+
+        // U+FFFD = "\u{FFFD}" — the lossy substitution char.
+        assert!(
+            body.contains('\u{FFFD}'),
+            "expected lossy substitution char in body, got {body:?}"
+        );
+        assert!(!body.is_empty());
+    }
+
+    #[test]
+    fn slice_diff_returns_requested_range() {
+        // Parent A has foo.rs = "old\n"; commit B has foo.rs = "new\n".
+        // Side::New anchor on line 1 keeps the `+new` line; Phase 67 L-03
+        // keeps the opposing-side `-old` line too.
+        let (_dir, repo) = make_repo();
+        let a = commit_with_file(&repo, "A", &[], "foo.rs", b"old\n");
+        let b = commit_with_file(&repo, "B", &[a], "foo.rs", b"new\n");
+        let an = anchor(b, "foo.rs", Source::Diff, Side::New, 1, 1);
+
+        let body = slice_diff(&repo, &an).expect("resolvable Diff slice");
+
+        assert!(
+            body.contains("+new"),
+            "diff body must contain the +new line, got {body:?}"
+        );
+        assert!(
+            body.contains("-old"),
+            "Phase 67 L-03: opposing-side `-` line must be kept, got {body:?}"
+        );
+    }
+
+    #[test]
+    fn slice_diff_returns_no_hunks_when_file_unchanged() {
+        // Pitfall 2: the file is byte-identical to its parent's version. The
+        // pathspec-filtered diff emits zero hunks → NoHunks (not an empty fence).
+        let (_dir, repo) = make_repo();
+        // Two-file parent so we can keep foo.rs unchanged at the child:
+        let a = commit_with_file(&repo, "A", &[], "foo.rs", b"same\n");
+        // Child B adds an unrelated file; foo.rs is byte-identical to A's.
+        let blob_a = repo.blob(b"same\n").unwrap();
+        let blob_other = repo.blob(b"unrelated\n").unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder
+            .insert("foo.rs", blob_a, git2::FileMode::Blob.into())
+            .unwrap();
+        builder
+            .insert("other.rs", blob_other, git2::FileMode::Blob.into())
+            .unwrap();
+        let tree = repo.find_tree(builder.write().unwrap()).unwrap();
+        let parent = repo.find_commit(a).unwrap();
+        let b = repo
+            .commit(None, &sig(), &sig(), "B", &tree, &[&parent])
+            .unwrap();
+        let an = anchor(b, "foo.rs", Source::Diff, Side::New, 1, 1);
+
+        let err = slice_diff(&repo, &an).expect_err("unchanged file must yield NoHunks");
+
+        assert!(
+            matches!(err, ExcerptError::NoHunks),
+            "expected ExcerptError::NoHunks, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn slice_diff_handles_root_commit() {
+        // Root commit R adds foo.rs from nothing. Diff against None (no
+        // parent) per the root-commit guard at commands/diff.rs:410-414.
+        let (_dir, repo) = make_repo();
+        let r = commit_with_file(&repo, "R (root)", &[], "foo.rs", b"hello\n");
+        let an = anchor(r, "foo.rs", Source::Diff, Side::New, 1, 1);
+
+        let body = slice_diff(&repo, &an).expect("root-commit Side::New must resolve");
+
+        assert!(
+            body.contains("+hello"),
+            "root-commit diff body must contain +hello, got {body:?}"
+        );
+    }
+
+    #[test]
+    fn try_resolve_excerpt_short_circuits_on_missing_commit() {
+        // classify_anchor must be the first call: a 40-zero OID is unknown
+        // to the repo. The dispatcher returns Orphaned(CommitGone) WITHOUT
+        // entering slice_full_file or slice_diff (Pitfall 1).
+        let (_dir, repo) = make_repo();
+        // Repo has SOMETHING valid so we know it's not a "repo is broken" case.
+        let _b = commit_with_file(&repo, "B", &[], "foo.rs", b"hi\n");
+        let missing_oid = Oid::from_str(&"0".repeat(40)).unwrap();
+        let an = anchor(missing_oid, "foo.rs", Source::FullFile, Side::New, 1, 1);
+
+        let err = try_resolve_excerpt(&repo, &an).expect_err("missing commit must orphan");
+
+        assert!(
+            matches!(err, ExcerptError::Orphaned(OrphanReason::CommitGone)),
+            "expected Orphaned(CommitGone), got {err:?}"
+        );
+    }
+
+    // Suppress unused-helper warning while task 3 is still pending.
+    #[test]
+    fn _empty_commit_helper_is_used() {
+        let (_dir, repo) = make_repo();
+        let _ = empty_commit(&repo, "R", &[]);
     }
 }

@@ -321,7 +321,7 @@ pub struct CommentResolution {
 /// Classify the line range of a line-anchored comment against the repo. Returns
 /// `Ok(())` when resolvable, `Err(reason)` for the orphan kind. Pure helper so
 /// `resolve_all` reads as a flat per-comment match; never panics.
-fn classify_anchor(
+pub(crate) fn classify_anchor(
     anchor: &crate::git::types::Anchor,
     repo: &git2::Repository,
 ) -> Result<(), OrphanReason> {
