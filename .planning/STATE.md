@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Phase 69 UI-SPEC approved
+stopped_at: Completed 69-01-PLAN.md (review schema v2)
 last_updated: "2026-05-26T00:47:51.360Z"
 last_activity: 2026-05-26
 progress:
