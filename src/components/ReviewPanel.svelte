@@ -177,11 +177,22 @@ function parseExcerpt(
 async function reload() {
 	// Track the canonical path so the session-changed listener can filter to this
 	// repo (a missing/inactive session is a normal state — swallow silently).
-	safeInvoke<SessionStatus>("get_review_session_status", { path: repoPath })
-		.then((s) => {
-			canonicalPath = s.canonical_path;
-		})
-		.catch(() => {});
+	// AWAIT the status so canonicalPath is set BEFORE the listener installed by
+	// the sibling $effect can fire — otherwise a session-changed event arriving
+	// during the cold-start window passes the `canonicalPath && payload !== …`
+	// filter (canonicalPath is still null → falsy → short-circuit fails closed,
+	// the filter never triggers), and the panel reloads for unrelated repos in
+	// a multi-tab session (WR-02).
+	try {
+		const status = await safeInvoke<SessionStatus>(
+			"get_review_session_status",
+			{ path: repoPath },
+		);
+		canonicalPath = status.canonical_path;
+	} catch {
+		// Tolerate — the panel can still try the list reads below; if they fail
+		// with no_session that's handled, otherwise a toast surfaces.
+	}
 
 	try {
 		const [nextCommits, nextComments, nextResolutions] = await Promise.all([
