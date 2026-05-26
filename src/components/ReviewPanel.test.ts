@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "../lib/invoke.js";
+import { createReviewSession } from "../lib/review-session.svelte.js";
 import type {
 	Comment,
 	CommentResolution,
@@ -85,11 +86,14 @@ function orphan(
 }
 
 // Install the dispatcher: reads return the supplied fixtures; writes resolve
-// undefined. Per-test overrides extend `extra`.
+// undefined. Per-test overrides extend `extra`. `generateDoc` routes the Phase
+// 70 generate_review_doc IPC to a fixture string (the safeInvoke wrapper
+// returns it; the panel's rune-call then drives the preview swap).
 function installReads(opts: {
 	commits?: SessionCommit[];
 	comments?: Comment[];
 	resolutions?: CommentResolution[];
+	generateDoc?: string;
 }) {
 	vi.mocked(safeInvoke).mockReset();
 	vi.mocked(safeInvoke).mockImplementation((cmd: string) => {
@@ -100,6 +104,8 @@ function installReads(opts: {
 				return Promise.resolve(opts.comments ?? []);
 			case "resolve_session_comments":
 				return Promise.resolve(opts.resolutions ?? []);
+			case "generate_review_doc":
+				return Promise.resolve(opts.generateDoc ?? "# stub\n");
 			default:
 				return Promise.resolve(undefined);
 		}
@@ -135,7 +141,12 @@ describe("ReviewPanel", () => {
 			resolutions: [resolvable("c1"), resolvable("c2")],
 		});
 		render(ReviewPanel, {
-			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
 		});
 		await flush();
 
@@ -150,7 +161,12 @@ describe("ReviewPanel", () => {
 	it("reads the three session sources on mount", async () => {
 		installReads({ commits, comments: [], resolutions: [] });
 		render(ReviewPanel, {
-			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
 		});
 		await flush();
 		const cmds = calledCommands();
@@ -162,7 +178,12 @@ describe("ReviewPanel", () => {
 	it("shows the no-comments empty state when commits exist but no comments", async () => {
 		installReads({ commits, comments: [], resolutions: [] });
 		render(ReviewPanel, {
-			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
 		});
 		await flush();
 		expect(screen.getByText("No comments yet.")).toBeInTheDocument();
@@ -171,7 +192,12 @@ describe("ReviewPanel", () => {
 	it("shows the no-commits empty state when the session has no commits", async () => {
 		installReads({ commits: [], comments: [], resolutions: [] });
 		render(ReviewPanel, {
-			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
 		});
 		await flush();
 		expect(
@@ -190,7 +216,12 @@ describe("ReviewPanel", () => {
 			resolutions: [resolvable("c1")],
 		});
 		render(ReviewPanel, {
-			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
 		});
 		await flush();
 		expect(screen.getByText("i need eyes on this")).toBeInTheDocument();
@@ -208,7 +239,12 @@ describe("ReviewPanel", () => {
 		it("writes a commit-level comment via add_commit_comment on Save", async () => {
 			installReads({ commits, comments: [], resolutions: [] });
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -233,7 +269,12 @@ describe("ReviewPanel", () => {
 		it("disables Save while the add-note textarea is empty/whitespace", async () => {
 			installReads({ commits, comments: [], resolutions: [] });
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -263,7 +304,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -291,7 +337,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -312,7 +363,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -336,7 +392,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -356,7 +417,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -378,7 +444,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump, onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump,
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -396,7 +467,12 @@ describe("ReviewPanel", () => {
 				resolutions: [orphan("c1", "FileGone")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -416,7 +492,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit,
+				},
 			});
 			await flush();
 
@@ -446,7 +527,12 @@ describe("ReviewPanel", () => {
 				],
 			});
 			const { container } = render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -484,7 +570,12 @@ describe("ReviewPanel", () => {
 				resolutions: [resolvable("c1")],
 			});
 			const { container } = render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
@@ -520,13 +611,106 @@ describe("ReviewPanel", () => {
 				],
 			});
 			render(ReviewPanel, {
-				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
 			});
 			await flush();
 
 			expect(screen.getByText("commit gone")).toBeInTheDocument();
 			expect(screen.getByText("line out of range")).toBeInTheDocument();
 			expect(screen.getByText("file gone")).toBeInTheDocument();
+		});
+	});
+
+	// Phase 70 D-01 / D-02 / DOC-01: the Generate button + preview swap.
+	// The rune is exercised through the panel — only safeInvoke is mocked, so
+	// these tests verify the integration ReviewPanel↔rune↔IPC end-to-end.
+	describe("Generate / preview", () => {
+		it("generate button is disabled when no comments", async () => {
+			installReads({ commits, comments: [], resolutions: [] });
+			render(ReviewPanel, {
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
+			});
+			await flush();
+
+			const generateBtn = screen.getByRole("button", { name: /generate/i });
+			expect(generateBtn).toBeDisabled();
+			// The D-01 LOCKED tooltip drives the affordance when disabled.
+			expect(generateBtn.getAttribute("title")).toBe(
+				"Add at least one comment to generate",
+			);
+		});
+
+		it("generate click invokes generate_review_doc and swaps to preview", async () => {
+			installReads({
+				commits,
+				comments: [lineAnchoredComment("c1", COMMIT_A, "look here")],
+				resolutions: [resolvable("c1")],
+				generateDoc: "# Code review: trunk\n\nfoo",
+			});
+			render(ReviewPanel, {
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
+			});
+			await flush();
+
+			const generateBtn = screen.getByRole("button", { name: /generate/i });
+			expect(generateBtn).not.toBeDisabled();
+			await fireEvent.click(generateBtn);
+			await flush();
+
+			expect(calledCommands()).toContain("generate_review_doc");
+			expect(callArgs("generate_review_doc")?.path).toBe("/repo");
+			// The preview view replaces the list — the markdown body is in the DOM.
+			expect(
+				await screen.findByText(/# Code review: trunk/),
+			).toBeInTheDocument();
+		});
+
+		it("back to comments returns to list view", async () => {
+			installReads({
+				commits,
+				comments: [lineAnchoredComment("c1", COMMIT_A, "look here")],
+				resolutions: [resolvable("c1")],
+				generateDoc: "# Code review: trunk\n\nfoo",
+			});
+			render(ReviewPanel, {
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
+			});
+			await flush();
+
+			// Drive into preview first.
+			await fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+			await flush();
+			expect(
+				await screen.findByText(/# Code review: trunk/),
+			).toBeInTheDocument();
+
+			// Click the back affordance inside the preview header.
+			await fireEvent.click(screen.getByRole("button", { name: /back/i }));
+			await flush();
+
+			// The list view's file-ref text returns; the preview body is gone.
+			expect(screen.getByText("src/main.ts:L10-L12")).toBeInTheDocument();
+			expect(screen.queryByText(/# Code review: trunk/)).toBeNull();
 		});
 	});
 });

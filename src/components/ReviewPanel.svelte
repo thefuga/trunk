@@ -5,9 +5,10 @@
 // and jump-to-anchor with read-only orphan rows (D-07 / D-08). The panel lives
 // in the center pane (UI-SPEC:133); jump is driven by the host via onJump.
 
-import { MessageSquarePlus } from "@lucide/svelte";
+import { FileText, MessageSquarePlus } from "@lucide/svelte";
 import { listen } from "@tauri-apps/api/event";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
+import type { ReviewSessionManager } from "../lib/review-session.svelte.js";
 import { showToast } from "../lib/toast.svelte.js";
 import type {
 	Comment,
@@ -16,9 +17,13 @@ import type {
 	SessionCommit,
 	SessionStatus,
 } from "../lib/types.js";
+import ReviewDocPreview from "./ReviewDocPreview.svelte";
 
 interface Props {
 	repoPath: string;
+	// The review-session rune (owned by RepoView, threaded in so the panel can
+	// drive panel-internal swaps and call the Phase 70 Generate IPC via the rune).
+	session: ReviewSessionManager;
 	// Resolvable-comment jump: the host (RepoView) binds this to the review-session
 	// rune's jumpTo, wiring commit/file selection + scroll-to-range.
 	onJump: (comment: Comment) => void;
@@ -27,7 +32,7 @@ interface Props {
 	onJumpToCommit: (commitOid: string) => void;
 }
 
-let { repoPath, onJump, onJumpToCommit }: Props = $props();
+let { repoPath, session, onJump, onJumpToCommit }: Props = $props();
 
 let commits = $state<SessionCommit[]>([]);
 let comments = $state<Comment[]>([]);
@@ -264,6 +269,23 @@ async function saveEdit(id: string) {
 	}
 }
 
+// Phase 70 D-01 / DOC-01: click handler for the header Generate button. The
+// button is disabled by `!hasAnyComment`, so the no_comments TrunkError branch
+// is reachable only by a race (the session was emptied by another window
+// between render and click) — surface it as a toast and stay on the list view.
+// The rune's generate() is the IPC + state-mutation surface; this handler is
+// the toast-wrapping facade.
+async function onGenerateClick() {
+	try {
+		await session.generate(repoPath);
+	} catch (e) {
+		showToast(
+			(e as TrunkError).message ?? "Failed to generate review doc",
+			"error",
+		);
+	}
+}
+
 async function deleteComment(id: string) {
 	const { ask } = await import("@tauri-apps/plugin-dialog");
 	const confirmed = await ask("Delete this comment? This cannot be undone.", {
@@ -307,19 +329,57 @@ $effect(() => {
 });
 </script>
 
-<div
-  class="flex flex-col"
-  style="
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 12px;
-    background: var(--color-surface);
-    color: var(--color-text);
-    font-size: 12px;
-    line-height: 1.5;
-  "
->
+{#if session.state.panelMode === "preview" && session.state.previewMarkdown !== null}
+  <!-- Phase 70 D-02: panel-internal swap. The generated markdown replaces the
+       comment-list view entirely; the cached previewMarkdown is preserved
+       across swaps (re-Generate is the only invalidation path). -->
+  <ReviewDocPreview
+    markdown={session.state.previewMarkdown}
+    onBack={() => session.showList()}
+  />
+{:else}
+<div class="flex flex-col" style="flex: 1; min-height: 0; overflow: hidden;">
+  <!-- Panel-level header (Phase 70 D-01): hosts the Generate button. Disabled
+       until the session has >=1 comment; the disabled tooltip and the hard
+       backstop in commands/review.rs (no_comments TrunkError) form the D-11
+       gate. The header sits above the scrollable list body so the button is
+       always visible while the list scrolls. -->
+  <div
+    class="flex items-center"
+    style="
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+      font-size: 12px;
+    "
+  >
+    <span class="preview-spacer" style="flex: 1;"></span>
+    <button
+      type="button"
+      class="generate-button flex items-center"
+      onclick={onGenerateClick}
+      disabled={!hasAnyComment}
+      title={hasAnyComment ? "" : "Add at least one comment to generate"}
+    >
+      <FileText size={14} />
+      <span>Generate</span>
+    </button>
+  </div>
+  <div
+    class="flex flex-col"
+    style="
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      background: var(--color-surface);
+      color: var(--color-text);
+      font-size: 12px;
+      line-height: 1.5;
+    "
+  >
   {#if groups.length === 0}
     <div class="flex flex-col" style="gap: 4px; padding: 12px;">
       <span>No commits in this review yet.</span>
@@ -533,7 +593,9 @@ $effect(() => {
       {/each}
     </ul>
   {/if}
+  </div>
 </div>
+{/if}
 
 <style>
   .jump-ref:hover,
@@ -671,6 +733,28 @@ $effect(() => {
     font-size: 12px;
   }
   .card-editor-actions button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Phase 70 Generate button — lives in the panel header. Disabled state
+     follows the existing card-editor-actions pattern (cursor + opacity). */
+  .generate-button {
+    gap: 4px;
+    background: transparent;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  .generate-button:hover:not([disabled]),
+  .generate-button:focus-visible:not([disabled]) {
+    background: var(--color-hover);
+  }
+  .generate-button[disabled] {
     cursor: not-allowed;
     opacity: 0.5;
   }

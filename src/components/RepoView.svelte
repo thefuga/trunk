@@ -839,7 +839,7 @@ function startRightResize(e: MouseEvent) {
               onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
             />
           {:else}
-            <ReviewPanel {repoPath} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
+            <ReviewPanel {repoPath} session={reviewSession} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
           {/if}
         </div>
       </div>
