@@ -348,7 +348,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 70-01-PLAN.md — Pure Rust renderer in src-tauri/src/git/review.rs with TDD goldens (DOC-02, DOC-03, DOC-04)
+- [x] 70-01-PLAN.md — Pure Rust renderer in src-tauri/src/git/review.rs with TDD goldens (DOC-02, DOC-03, DOC-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
