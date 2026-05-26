@@ -363,17 +363,20 @@ async function jumpTo(c: Comment) {
 
 **Not assumed (verified this session):** the serde corruption trap (read `review_store.rs:104-135`), `Tree::get_path` existence (docs.rs git2 0.19), the absence of a read-comments command and of a `uuid` dep, the `_inner`+RMW+emit pattern, the confirm-dialog pattern, the selection/scroll machinery.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Which pane does the real panel claim?** (HIGH importance — planner must resolve.)
+   - **RESOLVED:** center pane, per the UI-SPEC lock (69-UI-SPEC.md:133 — "LOCKED to the center pane"); Plan 69-05 wires the single-pane panel↔diff swap and escalates rather than silently relocating if a layout constraint surfaces.
    - What we know: `RepoView.svelte` has a **center pane** (`flex-1`, line 721) rendering `DiffPanel`/`MergeEditor`/`CommitGraph`, and a **rightmost pane** (line 781) rendering `CommitDetail`/`StagingPanel`. ROADMAP §69 says the panel "replaces CommitDetail/DiffPanel content when Review mode active" — but those are in two different panes.
    - What's unclear: does the panel claim the center pane (so jump swaps it back to `DiffPanel`, and `CommitGraph` must go somewhere), the right pane (replacing `CommitDetail`, smaller canvas), or become its own Review mode that hides one pane?
    - Recommendation: The panel claims the **center pane** in Review mode (where `DiffPanel` already lives), because D-07's jump is exactly "swap THIS pane from panel → diff and back". `CommitGraph` continues to occupy the center pane when Review mode is off / no file selected; the `review-session.svelte.ts` rune gates which of {panel, diff, graph} the center pane shows. This keeps jump a single-pane swap and avoids touching the rightmost `CommitDetail`/`StagingPanel` pane. Confirm in discuss-phase or let the planner lock it as a plan decision.
 
 2. **Commit-level write: extend `add_comment` or sibling command?**
+   - **RESOLVED:** sibling command per Plan 69-02 / D-01 — `add_commit_comment(path, commitOid, text)`; `add_comment`'s wire shape is left unchanged.
    - Recommendation: **Sibling `add_commit_comment(path, commit_oid, text)`**. Extending `add_comment` to optional anchor changes the wire shape of a shipped command and forces edits to all 7 Phase 67/68 tests (`review.rs:1187-1394`) and the TS `AddCommentRequest`. A sibling is purely additive (CONTEXT code_context: "must NOT break existing line-anchored callers"). Both route through `mutate_session_rmw` + emit.
 
 3. **Edit/delete of a missing id: error or no-op?**
+   - **RESOLVED:** per Plan 69-02 acceptance criteria — delete of a missing id is an idempotent no-op (returns Ok), edit of a missing id returns a `not_found` TrunkError.
    - Recommendation: delete = idempotent no-op (parity with `apply_remove`, `review.rs:232`); edit of a missing id = `not_found` `TrunkError` (the user expected a specific comment to exist). Planner's call; low risk.
 
 ## Environment Availability

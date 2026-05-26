@@ -1,9 +1,9 @@
 ---
 phase: 69
 slug: comment-management-ui
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-26
 ---
 
@@ -41,7 +41,17 @@ created: 2026-05-26
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 69-XX-XX | XX | X | REQ-XX | — | N/A | unit | `cargo test … review` | ❌ W0 | ⬜ pending |
+| 69-01-T1 | 01 | 1 | CMT-02, CMT-03 | T-69-01, T-69-SC | v1-shaped JSON deserializes (id=="" sentinel), uuid pinned | unit | `cargo test --manifest-path src-tauri/Cargo.toml types` | ❌ W0 | ⬜ pending |
+| 69-01-T2 | 01 | 1 | CMT-02, CMT-03 | T-69-01, T-69-02, T-69-03 | v1→v2 migrate-on-load (no corrupt); v3 RefusedNewer; garbage quarantined | unit | `cargo test --manifest-path src-tauri/Cargo.toml review_store` | ❌ W0 | ⬜ pending |
+| 69-02-T1 | 02 | 2 | ANCH-03, CMT-02 | T-69-05, T-69-06 | commit-level write (anchor None) + edit-by-id; missing id → not_found | unit | `cargo test --manifest-path src-tauri/Cargo.toml review` | ❌ W0 | ⬜ pending |
+| 69-02-T2 | 02 | 2 | CMT-03 | T-69-05, T-69-08 | delete-by-id idempotent no-op; commands registered + emit | unit | `cargo test --manifest-path src-tauri/Cargo.toml review && cargo build --manifest-path src-tauri/Cargo.toml` | ❌ W0 | ⬜ pending |
+| 69-03-T1 | 03 | 3 | CMT-01, CMT-04 | T-69-10, T-69-12 | resolve_all classifies CommitGone/FileGone/LineOutOfRange side-aware, never drops/panics | unit (in-process repo) | `cargo test --manifest-path src-tauri/Cargo.toml review` | ❌ W0 | ⬜ pending |
+| 69-03-T2 | 03 | 3 | CMT-01, CMT-04 | T-69-09, T-69-11 | resolver runs git2 off-lock in spawn_blocking; reads only | unit | `cargo test --manifest-path src-tauri/Cargo.toml review && cargo build --manifest-path src-tauri/Cargo.toml` | ❌ W0 | ⬜ pending |
+| 69-04-T1 | 04 | 2 | CMT-01, CMT-04 | T-69-13 | TS DTOs mirror v2 wire shape (id/commit_oid/OrphanReason/CommentResolution) | type-check | `npx svelte-check --threshold error` | ❌ W0 | ⬜ pending |
+| 69-04-T2 | 04 | 2 | CMT-04 | T-69-14 | rune owns center-pane state; jumpTo returns early on null anchor | type-check | `npx svelte-check --threshold error` | ❌ W0 | ⬜ pending |
+| 69-05-T1 | 05 | 4 | CMT-01, CMT-02, CMT-03, CMT-04 | T-69-15, T-69-16, T-69-17 | group-by-commit render; inline edit; delete-confirm cancel/confirm; jump vs orphan | component (vitest) | `npx vitest run src/components/ReviewPanel.test.ts` | ❌ W0 | ⬜ pending |
+| 69-05-T2 | 05 | 4 | ANCH-03, CMT-04 | T-69-18 | center-pane swap wiring the rune; full suite green | integration | `just check` | ❌ W0 | ⬜ pending |
+| 69-05-T3 | 05 | 4 | CMT-04 | T-69-15, T-69-17 | live jump scroll/highlight + read-only orphan badge fidelity | manual (human-check) | manual — see Manual-Only Verifications | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -68,11 +78,11 @@ created: 2026-05-26
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies (69-05-T3 is the single manual checkpoint, backed by the Manual-Only Verifications table)
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
