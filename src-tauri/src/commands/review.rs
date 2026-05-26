@@ -395,9 +395,11 @@ fn add_comment_inner(
 ) -> Result<(), TrunkError> {
     mutate_session_rmw(data_dir, canonical, sessions, |session| {
         session.comments.push(Comment {
+            id: uuid::Uuid::new_v4().to_string(),
             text: req.text,
             anchor: Some(req.anchor),
             cached_excerpt: Some(req.cached_excerpt),
+            commit_oid: None,
         });
         session.draft_comment = None;
     })

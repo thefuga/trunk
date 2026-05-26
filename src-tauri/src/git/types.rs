@@ -316,9 +316,18 @@ pub struct Anchor {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Comment {
+    // Stable id generated on write (D-03); edit/delete target by id, never by
+    // list position. `#[serde(default)]` makes a v1 file lacking `id` deserialize
+    // to "" (the migration-shape-A sentinel backfilled at load time) instead of
+    // failing from_value.
+    #[serde(default)]
+    pub id: String,
     pub text: String,
     pub anchor: Option<Anchor>,
     pub cached_excerpt: Option<String>,
+    // Commit-level comment target (D-01, written in Plan 02). A missing field
+    // maps to None automatically for Option, so no #[serde(default)] is needed.
+    pub commit_oid: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
