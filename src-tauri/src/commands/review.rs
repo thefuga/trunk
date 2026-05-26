@@ -1623,13 +1623,22 @@ mod tests {
 
         let s = loaded(&data_dir, &canonical);
         let c = &s.comments[0];
-        assert!(c.anchor.is_none(), "commit-level comment has no code anchor");
-        assert!(c.commit_oid.is_some(), "commit-level comment is tied to a commit");
+        assert!(
+            c.anchor.is_none(),
+            "commit-level comment has no code anchor"
+        );
+        assert!(
+            c.commit_oid.is_some(),
+            "commit-level comment is tied to a commit"
+        );
         assert!(
             c.cached_excerpt.is_none(),
             "commit-level comment has no diff excerpt"
         );
-        assert!(!c.id.is_empty(), "every comment carries a fresh non-empty id");
+        assert!(
+            !c.id.is_empty(),
+            "every comment carries a fresh non-empty id"
+        );
     }
 
     // Test 12: add_commit_comment_inner does NOT clear the line-anchored draft slot —
