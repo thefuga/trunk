@@ -298,9 +298,24 @@ export interface Anchor {
 }
 
 export interface Comment {
+	id: string;
 	text: string;
 	anchor: Anchor | null;
 	cached_excerpt: string | null;
+	commit_oid?: string | null;
+}
+
+// Why a comment cannot be jumped to / no longer resolves against the repo.
+// Mirrors the Rust OrphanReason enum (PascalCase variant strings, no rename_all,
+// following the Source/Side convention above).
+export type OrphanReason = "CommitGone" | "FileGone" | "LineOutOfRange";
+
+// Per-comment resolvability classification (mirrors the Rust CommentResolution
+// struct, snake_case-irrelevant single-word fields; reason is null when resolvable).
+export interface CommentResolution {
+	id: string;
+	resolvable: boolean;
+	reason: OrphanReason | null;
 }
 
 export interface DraftComment {
