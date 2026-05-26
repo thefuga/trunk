@@ -4,13 +4,13 @@ milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
 stopped_at: Phase 69 UI-SPEC approved
-last_updated: "2026-05-26T00:33:51.929Z"
-last_activity: 2026-05-26 -- Phase 69 planning complete
+last_updated: "2026-05-26T00:47:51.360Z"
+last_activity: 2026-05-26
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 19
-  completed_plans: 14
+  completed_plans: 15
   percent: 57
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 68 — full-file-source-anchor-capture
+**Current focus:** Phase 69 — comment-management-ui
 
 ## Current Position
 
-Phase: 68 — COMPLETE
-Plan: 2 of 2
+Phase: 69 (comment-management-ui) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-26 -- Phase 69 planning complete
+Last activity: 2026-05-26
 
-Progress: [██████████] 100%
+Progress: [████████░░] 79%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████████] 100%
 | Phase 67 P04 | 25min | 2 tasks | 7 files |
 | Phase 68 P01 | 6min | 2 tasks | 2 files |
 | Phase 68 P02 | 6min | 2 tasks | 5 files |
+| Phase 69 P01 | 18min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Progress: [██████████] 100%
 - [Phase 68]: 68-02: FullFileView owns selection state (anchorIndex/focusIndex) and exports clearSelection(); host receives flat indices on the affordance click — reconciles the plan's ownership ambiguity
 - [Phase 68]: 68-02: CommentComposer reused via an optional injected captured result (lower-coupling seam over a source mode); diff-path buildDiffAnchor fallback intact
 - [Phase 68]: 68-02: merge commits keep the full-file Comment affordance ENABLED (L-05) — HunkView isMerge disable not copied
+- [Phase 69]: Review schema v2 — Comment gains stable id: String (#[serde(default)] empty-string sentinel) + commit_oid: Option<String>; CURRENT_SCHEMA_VERSION=2 (D-04, one bump for both)
+- [Phase 69]: v1->v2 lazy load-path migration backfills uuid ids and re-saves via the atomic writer; version-gate stays BEFORE from_value/migration so D-16 (refuse newer untouched) and D-15 (corrupt quarantine) both hold
+- [Phase 69]: line-anchored comments mint a real uuid id at WRITE time (add_comment_inner), not empty, so edit/delete-by-id never misses before a reload
 
 ### Pending Todos
 
@@ -141,7 +145,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-25
-Last session: 2026-05-26T00:03:08.539Z
+Last session: 2026-05-26T00:47:41.095Z
 Stopped at: Phase 69 UI-SPEC approved
-Resume file: .planning/phases/69-comment-management-ui/69-UI-SPEC.md
+Resume file: None
 Next action: Human runs `just dev` and verifies the attach flow (steps 1-8); type "approved" to resume Plan 04 completion (SUMMARY + state advance)
