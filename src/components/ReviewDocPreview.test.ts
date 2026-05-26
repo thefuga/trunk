@@ -45,8 +45,11 @@ describe("ReviewDocPreview", () => {
 		await tick();
 	}
 
+	// `Copy` vs `Copied` share only the "Cop" prefix (no "y" in "Copied"!), so a
+	// substring match on `/Copy/` would NOT match the success-state button. Use
+	// `/Cop(y|ied)/` to cover both states via a single accessor.
 	function getCopyButton() {
-		return screen.getByRole("button", { name: /Copy/ });
+		return screen.getByRole("button", { name: /Cop(y|ied)/ });
 	}
 
 	function getBackButton() {
