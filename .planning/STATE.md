@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Completed 69-02-PLAN.md
-last_updated: "2026-05-26T01:02:28.463Z"
+stopped_at: Completed 69-03-PLAN.md
+last_updated: "2026-05-26T01:15:06.591Z"
 last_activity: 2026-05-26
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 57
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 ## Current Position
 
 Phase: 69 (comment-management-ui) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-05-26
 
-Progress: [█████████░] 89%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [█████████░] 89%
 | Phase 69 P01 | 18min | 2 tasks | 7 files |
 | Phase 69 P02 | 12min | 2 tasks | 2 files |
 | Phase 69 P04 | 6min | 2 tasks | 2 files |
+| Phase 69 P03 | ~25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,8 @@ Progress: [█████████░] 89%
 - [Phase ?]: 69-02: comment edit/delete target by stable uuid id (D-03), not list position — multi-tab-safe; missing id -> not_found (edit) / no-op (delete)
 - [Phase ?]: 69-04: TS Comment DTO mirrors Rust v2 wire shape (id, commit_oid?); OrphanReason/CommentResolution added ahead of their 69-03 backend
 - [Phase ?]: 69-04: review-session.svelte.ts rune owns center-pane Review state (rightPaneMode panel|diff, reviewActive) + a RepoView-decoupled jumpTo(comment, deps) via injected JumpDeps callbacks (D-07/D-08)
+- [Phase ?]: 69-03: resolve_all reads the anchor's own commit_oid for line-anchored comments (top-level commit_oid only for commit-level); a (None,None) no-target arm is CommitGone, never a panic
+- [Phase ?]: 69-03: 1-based inclusive line bounds (last line resolvable) per Phase 67/68 capture; resolvability runs git2 off-lock in spawn_blocking, read-only (no emit)
 
 ### Pending Todos
 
@@ -151,7 +154,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-25
-Last session: 2026-05-26T01:02:16.384Z
-Stopped at: Completed 69-02-PLAN.md
+Last session: 2026-05-26T01:15:06.583Z
+Stopped at: Completed 69-03-PLAN.md
 Resume file: None
 Next action: Human runs `just dev` and verifies the attach flow (steps 1-8); type "approved" to resume Plan 04 completion (SUMMARY + state advance)

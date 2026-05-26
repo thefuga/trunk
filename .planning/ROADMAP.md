@@ -322,7 +322,7 @@ Plans:
 **Plans**: 5 plans
 - [x] 69-01-PLAN.md — Schema v2: Comment id + commit_oid, schema_version 1→2, lazy id-backfill migration (D-15/D-16 preserved)
 - [x] 69-02-PLAN.md — Mutating commands: add_commit_comment, edit_comment, delete_comment (by id)
-- [ ] 69-03-PLAN.md — Read commands: list_session_comments + git2-backed resolve_session_comments (orphan classifier)
+- [x] 69-03-PLAN.md — Read commands: list_session_comments + git2-backed resolve_session_comments (orphan classifier)
 - [x] 69-04-PLAN.md — TS DTOs (id/commit_oid/OrphanReason/CommentResolution) + review-session.svelte.ts rune
 - [ ] 69-05-PLAN.md — Real ReviewPanel in the center pane: group-by-commit, add-note, inline edit, delete-confirm, jump vs orphan
 **UI hint**: yes
