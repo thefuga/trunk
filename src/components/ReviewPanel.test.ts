@@ -134,7 +134,9 @@ describe("ReviewPanel", () => {
 			],
 			resolutions: [resolvable("c1"), resolvable("c2")],
 		});
-		render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+		render(ReviewPanel, {
+			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+		});
 		await flush();
 
 		// Group headers: short SHA of each commit present.
@@ -147,7 +149,9 @@ describe("ReviewPanel", () => {
 
 	it("reads the three session sources on mount", async () => {
 		installReads({ commits, comments: [], resolutions: [] });
-		render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+		render(ReviewPanel, {
+			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+		});
 		await flush();
 		const cmds = calledCommands();
 		expect(cmds).toContain("list_session_commits");
@@ -157,14 +161,18 @@ describe("ReviewPanel", () => {
 
 	it("shows the no-comments empty state when commits exist but no comments", async () => {
 		installReads({ commits, comments: [], resolutions: [] });
-		render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+		render(ReviewPanel, {
+			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+		});
 		await flush();
 		expect(screen.getByText("No comments yet.")).toBeInTheDocument();
 	});
 
 	it("shows the no-commits empty state when the session has no commits", async () => {
 		installReads({ commits: [], comments: [], resolutions: [] });
-		render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+		render(ReviewPanel, {
+			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+		});
 		await flush();
 		expect(
 			screen.getByText("No commits in this review yet."),
@@ -181,7 +189,9 @@ describe("ReviewPanel", () => {
 			comments: [lineAnchoredComment("c1", COMMIT_A, "i need eyes on this")],
 			resolutions: [resolvable("c1")],
 		});
-		render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+		render(ReviewPanel, {
+			props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+		});
 		await flush();
 		expect(screen.getByText("i need eyes on this")).toBeInTheDocument();
 		// Fallback header uses the short oid; no synthetic "(commit gone)" label
@@ -197,7 +207,9 @@ describe("ReviewPanel", () => {
 	describe("add note", () => {
 		it("writes a commit-level comment via add_commit_comment on Save", async () => {
 			installReads({ commits, comments: [], resolutions: [] });
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			// Open the inline composer for commit A.
@@ -220,7 +232,9 @@ describe("ReviewPanel", () => {
 
 		it("disables Save while the add-note textarea is empty/whitespace", async () => {
 			installReads({ commits, comments: [], resolutions: [] });
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			const addBtns = screen.getAllByText("Add note");
@@ -248,7 +262,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "original")],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByText("Edit"));
@@ -274,7 +290,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "original")],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByText("Edit"));
@@ -293,7 +311,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "original")],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByText("Edit"));
@@ -315,7 +335,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "doomed")],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByText("Delete"));
@@ -333,7 +355,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "doomed")],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByText("Delete"));
@@ -353,7 +377,9 @@ describe("ReviewPanel", () => {
 				comments: [comment],
 				resolutions: [resolvable("c1")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump, onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			await fireEvent.click(screen.getByLabelText("Jump to code"));
@@ -369,7 +395,9 @@ describe("ReviewPanel", () => {
 				comments: [lineAnchoredComment("c1", COMMIT_A, "stale note")],
 				resolutions: [orphan("c1", "FileGone")],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			// Reason badge with the LOCKED label.
@@ -378,6 +406,27 @@ describe("ReviewPanel", () => {
 			expect(screen.queryByLabelText("Jump to code")).toBeNull();
 			// The comment text + excerpt remain visible.
 			expect(screen.getByText("stale note")).toBeInTheDocument();
+		});
+
+		it("clicking the commit header short oid calls onJumpToCommit with the full oid", async () => {
+			const onJumpToCommit = vi.fn();
+			installReads({
+				commits,
+				comments: [lineAnchoredComment("c1", COMMIT_A, "note")],
+				resolutions: [resolvable("c1")],
+			});
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit },
+			});
+			await flush();
+
+			await fireEvent.click(
+				screen.getByLabelText(`Jump to commit ${commits[0].short_oid}`),
+			);
+			await flush();
+
+			expect(onJumpToCommit).toHaveBeenCalledTimes(1);
+			expect(onJumpToCommit).toHaveBeenCalledWith(COMMIT_A);
 		});
 
 		it("maps each OrphanReason to its locked badge label", async () => {
@@ -394,7 +443,9 @@ describe("ReviewPanel", () => {
 					orphan("c3", "FileGone"),
 				],
 			});
-			render(ReviewPanel, { props: { repoPath: "/repo", onJump: vi.fn() } });
+			render(ReviewPanel, {
+				props: { repoPath: "/repo", onJump: vi.fn(), onJumpToCommit: vi.fn() },
+			});
 			await flush();
 
 			expect(screen.getByText("commit gone")).toBeInTheDocument();

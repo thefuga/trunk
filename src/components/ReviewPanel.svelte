@@ -22,9 +22,12 @@ interface Props {
 	// Resolvable-comment jump: the host (RepoView) binds this to the review-session
 	// rune's jumpTo, wiring commit/file selection + scroll-to-range.
 	onJump: (comment: Comment) => void;
+	// Commit-header jump: select the commit and scroll the graph to it. Same
+	// gesture as clicking a line ref, but without a file/line — the panel stays.
+	onJumpToCommit: (commitOid: string) => void;
 }
 
-let { repoPath, onJump }: Props = $props();
+let { repoPath, onJump, onJumpToCommit }: Props = $props();
 
 let commits = $state<SessionCommit[]>([]);
 let comments = $state<Comment[]>([]);
@@ -279,10 +282,23 @@ $effect(() => {
             class="flex items-center"
             style="gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--color-border);"
           >
-            <span
-              class="font-mono"
-              style="font-size: 13px; font-weight: 600; flex-shrink: 0;"
-            >{group.shortOid}</span>
+            <button
+              type="button"
+              aria-label="Jump to commit {group.shortOid}"
+              onclick={() => onJumpToCommit(group.oid)}
+              class="jump-ref font-mono"
+              style="
+                background: transparent;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+                color: inherit;
+                font-family: inherit;
+                flex-shrink: 0;
+              "
+            >{group.shortOid}</button>
             <span
               class="overflow-hidden text-ellipsis whitespace-nowrap"
               style="font-size: 13px; font-weight: 600; flex: 1;"

@@ -115,6 +115,13 @@ function handleReviewJump(comment: Comment) {
 	});
 }
 
+// Commit-header click in the review panel: select the commit (loads detail)
+// and scroll the graph to it. Panel stays open — no view swap.
+async function handleReviewJumpToCommit(oid: string) {
+	await handleCommitSelect(oid);
+	await commitGraphRef?.scrollToOid(oid);
+}
+
 // Per-repo state
 let refreshSignal = $state(0);
 let dirtyCounts = $state<DirtyCounts>({
@@ -795,7 +802,7 @@ function startRightResize(e: MouseEvent) {
               onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
             />
           {:else}
-            <ReviewPanel {repoPath} onJump={handleReviewJump} />
+            <ReviewPanel {repoPath} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
           {/if}
         </div>
       </div>
