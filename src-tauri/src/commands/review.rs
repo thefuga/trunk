@@ -422,11 +422,20 @@ where
     F: FnOnce(&mut ReviewSession),
 {
     let mut map = sessions.lock().unwrap();
-    let session = map.get_mut(canonical).ok_or_else(|| {
-        TrunkError::new("no_session", "No active review session for this repository")
-    })?;
-    mutate(session);
-    review_store::save_session(data_dir, canonical, session)?;
+    // Disk-first ordering (D-10): clone the current session, mutate the clone,
+    // persist it to disk, and only then commit the clone back into the map. If
+    // save_session fails, the in-memory map keeps the prior session unchanged,
+    // so disk and memory never diverge (matches start/end_review_session's
+    // verified-correct ordering and the docstring contract above).
+    let mut next = map
+        .get(canonical)
+        .ok_or_else(|| {
+            TrunkError::new("no_session", "No active review session for this repository")
+        })?
+        .clone();
+    mutate(&mut next);
+    review_store::save_session(data_dir, canonical, &next)?;
+    map.insert(canonical.to_path_buf(), next);
     Ok(())
 }
 
@@ -1481,6 +1490,45 @@ mod tests {
         // No in-memory session for `canonical` → RMW must reject with `no_session`.
         let err = add_review_commit_rmw(data_dir.path(), &canonical, &sessions, "x").unwrap_err();
         assert_eq!(err.code, "no_session");
+    }
+
+    // Disk-first ordering (D-10): if save_session fails, the in-memory session
+    // must NOT be mutated — otherwise the panel would render dirty state that
+    // disk never witnessed, and an app restart would silently lose the change.
+    // Setup: put a REGULAR FILE at the `sessions` path inside data_dir so the
+    // internal `create_dir_all(sessions_dir)` errors with "not a directory",
+    // which propagates as a TrunkError out of save_session.
+    #[test]
+    fn rmw_save_failure_does_not_mutate_in_memory_session() {
+        use std::sync::Mutex;
+        let data_dir = TempDir::new().unwrap();
+        // Block save_session by placing a FILE where it expects a DIRECTORY.
+        std::fs::write(data_dir.path().join("sessions"), b"blocker").unwrap();
+
+        let canonical = data_dir.path().join("repo-canonical");
+        let original = ReviewSession {
+            schema_version: 2,
+            commits: vec!["pre-existing".to_string()],
+            comments: vec![],
+            draft_comment: None,
+        };
+        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        sessions
+            .lock()
+            .unwrap()
+            .insert(canonical.clone(), original.clone());
+
+        let err = add_review_commit_rmw(data_dir.path(), &canonical, &sessions, "new-oid")
+            .expect_err("save_session must fail when sessions/ is blocked by a regular file");
+        assert_eq!(err.code, "io", "expected an io error from save_session");
+
+        // Critical assertion: the in-memory session is the UNCHANGED original.
+        let in_memory = sessions.lock().unwrap();
+        let stored = in_memory.get(&canonical).unwrap();
+        assert_eq!(
+            stored.commits, original.commits,
+            "in-memory session must NOT be mutated when disk write fails (D-10)"
+        );
     }
 
     // ── Phase 67 Plan 02: comment capture (add_comment / save_draft_comment) ──
