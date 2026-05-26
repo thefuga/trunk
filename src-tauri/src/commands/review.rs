@@ -356,7 +356,14 @@ fn classify_anchor(
     // does NOT count a trailing newline as a final empty line, so a comment on the
     // exact last line (end_line == line_count) is in-range.
     let line_count = String::from_utf8_lossy(blob.content()).lines().count() as u32;
-    if anchor.start_line >= 1 && anchor.end_line <= line_count {
+    // The Anchor struct has no validating constructor (just Deserialize), so a
+    // corrupted session file or a future capture bug could produce an inverted
+    // range (start_line > end_line). The classifier is the chokepoint every
+    // comment funnels through, so enforce the invariant here.
+    if anchor.start_line >= 1
+        && anchor.end_line >= anchor.start_line
+        && anchor.end_line <= line_count
+    {
         Ok(())
     } else {
         Err(OrphanReason::LineOutOfRange)
@@ -2277,6 +2284,23 @@ mod tests {
             Some(OrphanReason::LineOutOfRange),
             "end_line == line count + 1 is out of range"
         );
+    }
+
+    #[test]
+    fn resolve_all_rejects_inverted_line_range() {
+        let t = make_file_repo();
+        let b = t.with_file.to_string();
+        // start_line > end_line on a 3-line file: the bound check would pass
+        // (start_line >= 1, end_line <= line_count) without the inverted-range
+        // guard, and the panel would render a normal jump affordance against an
+        // empty/inverted span. classify_anchor is the one chokepoint, so it
+        // enforces start_line <= end_line.
+        let comments = vec![line_comment("inverted", &b, "foo.rs", Side::New, 3, 2)];
+
+        let out = resolve_all(&comments, &t.repo);
+
+        assert_eq!(find(&out, "inverted").reason, Some(OrphanReason::LineOutOfRange));
+        assert!(!find(&out, "inverted").resolvable);
     }
 
     #[test]
