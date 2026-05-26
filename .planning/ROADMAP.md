@@ -190,7 +190,7 @@ Built in strict dependency order: lock the anchor schema and persistence first (
 - [x] **Phase 67: Diff-Source Anchor Capture** — Comment on a diff line selection with a stable source-line anchor (completed 2026-05-25)
 - [x] **Phase 68: Full-File-Source Anchor Capture** — Comment on a full-file-at-commit line selection (completed 2026-05-25)
 - [x] **Phase 69: Comment Management UI** — Review panel: list, edit, delete, jump-to-anchor, commit-level comments (completed 2026-05-26)
-- [ ] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts
+- [x] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts (completed 2026-05-26)
 - [ ] **Phase 71: Output (Clipboard + Save-to-File)** — Copy the doc or save it via a native dialog
 
 #### Phase 65: Data Model + Persistence + Session Lifecycle
@@ -356,7 +356,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 70-03-PLAN.md — Generate button in ReviewPanel header + panel preview swap + ReviewDocPreview component (DOC-01)
+- [x] 70-03-PLAN.md — Generate button in ReviewPanel header + panel preview swap + ReviewDocPreview component (DOC-01)
 **Notes:**
 
 - Render in Rust (`git/review.rs` pure logic), returning one markdown string — not a giant per-line enriched payload. Skip syntax/word-span enrichment for excerpts (plain text in a fence is what the AI needs).
