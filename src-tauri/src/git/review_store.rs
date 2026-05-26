@@ -170,4 +170,144 @@ mod tests {
             "different canonical paths must map to different filenames",
         );
     }
+
+    // ── v1→v2 migration / load-recovery state machine ────────────────────────
+
+    /// Write raw bytes to the session path a given canonical repo maps to,
+    /// creating the sessions dir first (mirrors atomic_write_json's setup).
+    fn seed_session_file(data_dir: &Path, canonical: &Path, raw: &str) {
+        let path = session_path(data_dir, canonical);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, raw).unwrap();
+    }
+
+    fn corrupt_sidecar_path(data_dir: &Path, canonical: &Path) -> PathBuf {
+        session_path(data_dir, canonical).with_extension("json.corrupt")
+    }
+
+    #[test]
+    fn v1_session_loads_and_backfills_ids_without_corrupting() {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = Path::new("/repos/trunk");
+        let v1 = r#"{
+            "schema_version": 1,
+            "commits": ["abc"],
+            "comments": [
+                { "text": "one", "anchor": null, "cached_excerpt": null },
+                { "text": "two", "anchor": null, "cached_excerpt": null }
+            ],
+            "draft_comment": null
+        }"#;
+        seed_session_file(dir.path(), canonical, v1);
+
+        let outcome = load_session(dir.path(), canonical).unwrap();
+
+        let session = match outcome {
+            LoadOutcome::Loaded(s) => s,
+            _ => panic!("v1 file must load, not corrupt/refuse"),
+        };
+        assert!(
+            session.comments.iter().all(|c| !c.id.is_empty()),
+            "every comment must have a non-empty backfilled id",
+        );
+        assert!(
+            !corrupt_sidecar_path(dir.path(), canonical).exists(),
+            "a valid v1 load must NOT create a .corrupt sidecar (D-15 false positive)",
+        );
+    }
+
+    #[test]
+    fn backfilled_ids_are_stable_across_reloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = Path::new("/repos/trunk");
+        let v1 = r#"{
+            "schema_version": 1,
+            "commits": [],
+            "comments": [
+                { "text": "one", "anchor": null, "cached_excerpt": null }
+            ],
+            "draft_comment": null
+        }"#;
+        seed_session_file(dir.path(), canonical, v1);
+
+        let first = match load_session(dir.path(), canonical).unwrap() {
+            LoadOutcome::Loaded(s) => s,
+            _ => panic!("first load must succeed"),
+        };
+        let second = match load_session(dir.path(), canonical).unwrap() {
+            LoadOutcome::Loaded(s) => s,
+            _ => panic!("second load must succeed"),
+        };
+
+        assert_eq!(
+            first.comments[0].id, second.comments[0].id,
+            "backfilled ids must persist (re-saved as v2), not re-mint each reload",
+        );
+        assert_eq!(
+            second.schema_version, 2,
+            "the on-disk file must have been re-saved as schema_version 2",
+        );
+    }
+
+    #[test]
+    fn v2_session_loads_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = Path::new("/repos/trunk");
+        let v2 = r#"{
+            "schema_version": 2,
+            "commits": [],
+            "comments": [
+                { "id": "keep-me", "text": "one", "anchor": null, "cached_excerpt": null, "commit_oid": null }
+            ],
+            "draft_comment": null
+        }"#;
+        seed_session_file(dir.path(), canonical, v2);
+
+        let session = match load_session(dir.path(), canonical).unwrap() {
+            LoadOutcome::Loaded(s) => s,
+            _ => panic!("v2 file must load"),
+        };
+        assert_eq!(session.comments[0].id, "keep-me", "existing ids preserved");
+        assert_eq!(session.schema_version, 2);
+    }
+
+    #[test]
+    fn newer_schema_refused_and_file_left_byte_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = Path::new("/repos/trunk");
+        let v3 = r#"{ "schema_version": 3, "commits": [], "comments": [], "draft_comment": null }"#;
+        seed_session_file(dir.path(), canonical, v3);
+        let before = fs::read(session_path(dir.path(), canonical)).unwrap();
+
+        let outcome = load_session(dir.path(), canonical).unwrap();
+
+        assert!(
+            matches!(outcome, LoadOutcome::RefusedNewer),
+            "a schema_version > CURRENT must return RefusedNewer (D-16)",
+        );
+        let after = fs::read(session_path(dir.path(), canonical)).unwrap();
+        assert_eq!(before, after, "the newer file must be left byte-unchanged (D-16)");
+        assert!(
+            !corrupt_sidecar_path(dir.path(), canonical).exists(),
+            "a refused file must NOT be quarantined",
+        );
+    }
+
+    #[test]
+    fn garbage_json_quarantines_to_corrupt_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let canonical = Path::new("/repos/trunk");
+        seed_session_file(dir.path(), canonical, "{ this is not valid json ]");
+
+        let outcome = load_session(dir.path(), canonical).unwrap();
+
+        assert!(
+            matches!(outcome, LoadOutcome::RecoveredCorrupt),
+            "malformed JSON must return RecoveredCorrupt (D-15)",
+        );
+        assert!(
+            corrupt_sidecar_path(dir.path(), canonical).exists(),
+            "a .corrupt sidecar must be created (D-15)",
+        );
+    }
 }
