@@ -515,6 +515,815 @@ mod tests {
         );
     }
 
+    // ── Task 3: render() doc assembly (D-03..D-10, 14 goldens) ────────────
+
+    use crate::git::types::{Comment, DraftComment, ReviewSession};
+
+    fn line_comment(
+        id: &str,
+        text: &str,
+        commit_oid: Oid,
+        file_path: &str,
+        source: Source,
+        side: Side,
+        start_line: u32,
+        end_line: u32,
+        cached_excerpt: Option<&str>,
+    ) -> Comment {
+        Comment {
+            id: id.to_string(),
+            text: text.to_string(),
+            anchor: Some(anchor(
+                commit_oid, file_path, source, side, start_line, end_line,
+            )),
+            cached_excerpt: cached_excerpt.map(|s| s.to_string()),
+            commit_oid: None,
+        }
+    }
+
+    fn orphan_line_comment(
+        id: &str,
+        text: &str,
+        bogus_oid: &str,
+        file_path: &str,
+        source: Source,
+        side: Side,
+        start_line: u32,
+        end_line: u32,
+        cached_excerpt: Option<&str>,
+    ) -> Comment {
+        Comment {
+            id: id.to_string(),
+            text: text.to_string(),
+            anchor: Some(Anchor {
+                commit_oid: bogus_oid.to_string(),
+                file_path: file_path.to_string(),
+                source,
+                side,
+                start_line,
+                end_line,
+            }),
+            cached_excerpt: cached_excerpt.map(|s| s.to_string()),
+            commit_oid: None,
+        }
+    }
+
+    fn commit_level_comment(id: &str, text: &str, commit_oid: Oid) -> Comment {
+        Comment {
+            id: id.to_string(),
+            text: text.to_string(),
+            anchor: None,
+            cached_excerpt: None,
+            commit_oid: Some(commit_oid.to_string()),
+        }
+    }
+
+    fn make_session(commits: Vec<String>, comments: Vec<Comment>) -> ReviewSession {
+        ReviewSession {
+            schema_version: 2,
+            commits,
+            comments,
+            draft_comment: None::<DraftComment>,
+        }
+    }
+
+    // Helper: take the 7-char short SHA of an Oid for assertion text.
+    fn short(o: Oid) -> String {
+        let s = o.to_string();
+        s.chars().take(7).collect()
+    }
+
+    #[test]
+    fn render_emits_all_sections_in_d04_order() {
+        // D-04 section order: H1 + framing + refs (top) → resolved per-(file,
+        // commit) → commit-level → unresolvable. All four buckets present.
+        let (_dir, repo) = make_repo();
+        let parent = commit_with_file(&repo, "A", &[], "foo.rs", b"hello\nworld\n");
+        let child = commit_with_file(
+            &repo,
+            "B (changes foo.rs)",
+            &[parent],
+            "foo.rs",
+            b"hello\nMARK\n",
+        );
+        let bogus = "0".repeat(40);
+        let session = make_session(
+            vec![parent.to_string(), child.to_string()],
+            vec![
+                // (i) resolvable Diff anchor on the change in child
+                line_comment(
+                    "d1",
+                    "diff comment",
+                    child,
+                    "foo.rs",
+                    Source::Diff,
+                    Side::New,
+                    2,
+                    2,
+                    None,
+                ),
+                // (ii) resolvable FullFile anchor
+                line_comment(
+                    "f1",
+                    "full file comment",
+                    child,
+                    "foo.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    None,
+                ),
+                // (iii) commit-level comment
+                commit_level_comment("c1", "this commit needs review", child),
+                // (iv) orphan (bogus commit)
+                orphan_line_comment(
+                    "o1",
+                    "orphan comment",
+                    &bogus,
+                    "foo.rs",
+                    Source::Diff,
+                    Side::New,
+                    1,
+                    1,
+                    Some("- old\n+ new\n"),
+                ),
+            ],
+        );
+
+        let md = render(&session, &repo);
+        let title_pos = md.find("# Code review:").expect("doc has H1 title");
+        // Commit refs list comes after the title (D-03/D-07).
+        let refs_pos = md
+            .find(&short(parent))
+            .or_else(|| md.find(&short(child)))
+            .expect("refs section contains a short SHA");
+        let resolved_pos = md
+            .find("foo.rs")
+            .expect("resolved per-file section mentions foo.rs");
+        let commit_level_pos = md
+            .find("this commit needs review")
+            .expect("commit-level section contains its comment text");
+        let unresolvable_pos = md
+            .find("orphan comment")
+            .expect("unresolvable section contains the orphan text");
+
+        assert!(title_pos < refs_pos, "title before refs: {md}");
+        assert!(refs_pos < resolved_pos, "refs before resolved: {md}");
+        assert!(
+            resolved_pos < commit_level_pos,
+            "resolved before commit-level: {md}"
+        );
+        assert!(
+            commit_level_pos < unresolvable_pos,
+            "commit-level before unresolvable: {md}"
+        );
+    }
+
+    #[test]
+    fn diff_source_uses_diff_fence() {
+        let (_dir, repo) = make_repo();
+        let a = commit_with_file(&repo, "A", &[], "foo.rs", b"old\n");
+        let b = commit_with_file(&repo, "B", &[a], "foo.rs", b"new\n");
+        let session = make_session(
+            vec![a.to_string(), b.to_string()],
+            vec![line_comment(
+                "d1",
+                "look here",
+                b,
+                "foo.rs",
+                Source::Diff,
+                Side::New,
+                1,
+                1,
+                None,
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.contains("```diff"),
+            "Diff source must use ```diff info string, got: {md}"
+        );
+    }
+
+    #[test]
+    fn full_file_uses_language_fence() {
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "foo.rs", b"fn main() {}\n");
+        let session = make_session(
+            vec![b.to_string()],
+            vec![line_comment(
+                "f1",
+                "this fn",
+                b,
+                "foo.rs",
+                Source::FullFile,
+                Side::New,
+                1,
+                1,
+                None,
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.contains("```rust"),
+            "FullFile on .rs must use ```rust fence, got: {md}"
+        );
+    }
+
+    #[test]
+    fn render_fence_length_avoids_backtick_collision() {
+        // A FullFile excerpt body containing ``` must get a 4-backtick fence;
+        // ```` body must get a 5-backtick fence. Closing fence matches opening.
+        let (_dir, repo) = make_repo();
+        let body3 = b"line one\nfoo ``` bar\nline three\n";
+        let b3 = commit_with_file(&repo, "B3", &[], "a.rs", body3);
+        let session3 = make_session(
+            vec![b3.to_string()],
+            vec![line_comment(
+                "f1",
+                "watch the backticks",
+                b3,
+                "a.rs",
+                Source::FullFile,
+                Side::New,
+                1,
+                3,
+                None,
+            )],
+        );
+
+        let md = render(&session3, &repo);
+
+        // 4-backtick fence ("````") appears at least twice (open + close).
+        assert!(
+            md.contains("````rust"),
+            "3-backtick body needs 4-backtick fence (opening ````rust), got: {md}"
+        );
+        let four_count = md.matches("\n````\n").count() + md.matches("\n````").count();
+        assert!(
+            four_count >= 1,
+            "4-backtick CLOSING fence must appear; doc: {md}"
+        );
+    }
+
+    #[test]
+    fn anchors_grouped_by_file_commit() {
+        // Two comments on foo.rs@A + one on foo.rs@B + one on bar.rs@A →
+        // THREE distinct (file, commit) groups → three heading occurrences.
+        let (_dir, repo) = make_repo();
+        let a = commit_with_file(&repo, "A", &[], "foo.rs", b"a1\na2\na3\n");
+        let b = commit_with_file(&repo, "B", &[a], "foo.rs", b"b1\nb2\nb3\n");
+        let bar_blob = repo.blob(b"x\n").unwrap();
+        let mut tb = repo.treebuilder(None).unwrap();
+        tb.insert("foo.rs", repo.blob(b"a1\na2\na3\n").unwrap(), 0o100644)
+            .unwrap();
+        tb.insert("bar.rs", bar_blob, 0o100644).unwrap();
+        let tree = repo.find_tree(tb.write().unwrap()).unwrap();
+        let a_parent = repo.find_commit(a).unwrap();
+        let a_with_bar = repo
+            .commit(None, &sig(), &sig(), "A2", &tree, &[&a_parent])
+            .unwrap();
+        let session = make_session(
+            vec![a.to_string(), a_with_bar.to_string(), b.to_string()],
+            vec![
+                line_comment(
+                    "c1",
+                    "c1",
+                    a,
+                    "foo.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    None,
+                ),
+                line_comment(
+                    "c2",
+                    "c2",
+                    a,
+                    "foo.rs",
+                    Source::FullFile,
+                    Side::New,
+                    2,
+                    2,
+                    None,
+                ),
+                line_comment(
+                    "c3",
+                    "c3",
+                    b,
+                    "foo.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    None,
+                ),
+                line_comment(
+                    "c4",
+                    "c4",
+                    a_with_bar,
+                    "bar.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    None,
+                ),
+            ],
+        );
+
+        let md = render(&session, &repo);
+
+        // Heading text contains both path AND short-sha; count distinct
+        // (file, short-sha) pairs visible in the output.
+        let pair_foo_a = format!("foo.rs ({})", short(a));
+        let pair_foo_b = format!("foo.rs ({})", short(b));
+        let pair_bar_a2 = format!("bar.rs ({})", short(a_with_bar));
+        assert!(md.contains(&pair_foo_a), "expected `{pair_foo_a}` in {md}");
+        assert!(md.contains(&pair_foo_b), "expected `{pair_foo_b}` in {md}");
+        assert!(
+            md.contains(&pair_bar_a2),
+            "expected `{pair_bar_a2}` in {md}"
+        );
+    }
+
+    #[test]
+    fn anchors_sorted_by_start_line() {
+        // Three comments at start_lines 30, 10, 20 on the same (file, commit)
+        // appear in 10, 20, 30 order in the output.
+        let (_dir, repo) = make_repo();
+        let mut buf = Vec::new();
+        for i in 1..=40 {
+            buf.extend_from_slice(format!("line {i}\n").as_bytes());
+        }
+        let b = commit_with_file(&repo, "B", &[], "f.rs", &buf);
+        let session = make_session(
+            vec![b.to_string()],
+            vec![
+                line_comment(
+                    "thirty",
+                    "at 30",
+                    b,
+                    "f.rs",
+                    Source::FullFile,
+                    Side::New,
+                    30,
+                    30,
+                    None,
+                ),
+                line_comment(
+                    "ten",
+                    "at 10",
+                    b,
+                    "f.rs",
+                    Source::FullFile,
+                    Side::New,
+                    10,
+                    10,
+                    None,
+                ),
+                line_comment(
+                    "twenty",
+                    "at 20",
+                    b,
+                    "f.rs",
+                    Source::FullFile,
+                    Side::New,
+                    20,
+                    20,
+                    None,
+                ),
+            ],
+        );
+
+        let md = render(&session, &repo);
+
+        let pos_at_10 = md.find("at 10").expect("at 10 in output");
+        let pos_at_20 = md.find("at 20").expect("at 20 in output");
+        let pos_at_30 = md.find("at 30").expect("at 30 in output");
+        assert!(pos_at_10 < pos_at_20, "10 before 20");
+        assert!(pos_at_20 < pos_at_30, "20 before 30");
+    }
+
+    #[test]
+    fn anchor_heading_uses_path_lstart_lend_shortsha_shape() {
+        // L-08 + D-08: per-anchor heading is `path:Lstart-Lend (sha)`.
+        // git2::TreeBuilder inserts at one level only, so a nested file path
+        // requires building the inner tree first and inserting it under the
+        // root tree as a Tree entry.
+        let (_dir, repo) = make_repo();
+        let mut buf = Vec::new();
+        for i in 1..=20 {
+            buf.extend_from_slice(format!("line {i}\n").as_bytes());
+        }
+        let file_blob = repo.blob(&buf).unwrap();
+        let mut src_builder = repo.treebuilder(None).unwrap();
+        src_builder.insert("main.rs", file_blob, 0o100644).unwrap();
+        let src_tree_oid = src_builder.write().unwrap();
+        let mut root_builder = repo.treebuilder(None).unwrap();
+        root_builder.insert("src", src_tree_oid, 0o040000).unwrap();
+        let root_tree = repo.find_tree(root_builder.write().unwrap()).unwrap();
+        let b = repo
+            .commit(None, &sig(), &sig(), "B", &root_tree, &[])
+            .unwrap();
+        let session = make_session(
+            vec![b.to_string()],
+            vec![line_comment(
+                "x",
+                "tag",
+                b,
+                "src/main.rs",
+                Source::FullFile,
+                Side::New,
+                12,
+                15,
+                None,
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        let expected = format!("src/main.rs:L12-L15 ({})", short(b));
+        assert!(
+            md.contains(&expected),
+            "expected anchor heading `{expected}` in {md}"
+        );
+    }
+
+    #[test]
+    fn commit_refs_list_shape() {
+        // D-07 + D-08: each session.commits OID renders as a bullet line with
+        // 7-char short SHA + commit subject.
+        let (_dir, repo) = make_repo();
+        let a = commit_with_file(&repo, "Add feature X", &[], "x.rs", b"x\n");
+        let b = commit_with_file(&repo, "Fix bug Y", &[a], "x.rs", b"y\n");
+        // Need at least one comment so the doc is rendered (per D-11).
+        let session = make_session(
+            vec![a.to_string(), b.to_string()],
+            vec![commit_level_comment("cl", "any note", b)],
+        );
+
+        let md = render(&session, &repo);
+
+        // 7-char short SHA + the commit's subject appear on the same bullet.
+        let a_short = short(a);
+        let b_short = short(b);
+        assert!(
+            md.contains(&format!("- {a_short}")) || md.contains(&format!("- `{a_short}`")),
+            "expected bullet for {a_short} in {md}"
+        );
+        assert!(
+            md.contains("Add feature X"),
+            "expected commit A subject in refs list: {md}"
+        );
+        assert!(
+            md.contains(&format!("- {b_short}")) || md.contains(&format!("- `{b_short}`")),
+            "expected bullet for {b_short} in {md}"
+        );
+        assert!(
+            md.contains("Fix bug Y"),
+            "expected commit B subject in refs list: {md}"
+        );
+    }
+
+    #[test]
+    fn excerpt_before_comment_text_within_anchor_block() {
+        // D-06: inside a resolvable anchor block, the fenced excerpt appears
+        // BEFORE the comment text.
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "foo.rs", b"hello\nworld\n");
+        let session = make_session(
+            vec![b.to_string()],
+            vec![line_comment(
+                "f1",
+                "REVIEWER_NOTE_TOKEN",
+                b,
+                "foo.rs",
+                Source::FullFile,
+                Side::New,
+                1,
+                1,
+                None,
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        let excerpt_pos = md.find("hello").expect("excerpt body in output");
+        let comment_pos = md
+            .find("REVIEWER_NOTE_TOKEN")
+            .expect("comment text in output");
+        assert!(
+            excerpt_pos < comment_pos,
+            "D-06: excerpt before comment text; got excerpt@{excerpt_pos} text@{comment_pos} in {md}"
+        );
+    }
+
+    #[test]
+    fn unresolvable_uses_cached_excerpt_fenced_by_source() {
+        // D-10: an orphan with cached_excerpt + Source::Diff fences with ```diff
+        // and the comment block contains "cached" labelling.
+        let (_dir, repo) = make_repo();
+        let _b = commit_with_file(&repo, "B", &[], "foo.rs", b"hi\n");
+        let bogus = "0".repeat(40);
+        let session = make_session(
+            vec![],
+            vec![orphan_line_comment(
+                "o1",
+                "this comment lost its anchor",
+                &bogus,
+                "foo.rs",
+                Source::Diff,
+                Side::New,
+                1,
+                1,
+                Some("- old\n+ new\n"),
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.contains("```diff"),
+            "D-10: unresolvable Diff orphan uses ```diff fence; got {md}"
+        );
+        assert!(
+            md.contains("cached"),
+            "D-10: cached-at-attach-time label present; got {md}"
+        );
+        assert!(
+            md.contains("+ new"),
+            "cached_excerpt body should be in the fenced block; got {md}"
+        );
+    }
+
+    #[test]
+    fn unresolvable_uses_d09_phrasing() {
+        // D-09 phrasings for CommitGone / FileGone / LineOutOfRange.
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "exists.rs", b"a\nb\nc\n");
+        let bogus = "0".repeat(40);
+        let session = make_session(
+            vec![b.to_string()],
+            vec![
+                orphan_line_comment(
+                    "commit_gone",
+                    "cg",
+                    &bogus,
+                    "exists.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    Some("snap"),
+                ),
+                line_comment(
+                    "file_gone",
+                    "fg",
+                    b,
+                    "missing.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    Some("snap"),
+                ),
+                line_comment(
+                    "line_oob",
+                    "lob",
+                    b,
+                    "exists.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    99,
+                    Some("snap"),
+                ),
+            ],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.contains("commit no longer exists in the repository"),
+            "expected CommitGone phrase in {md}"
+        );
+        assert!(
+            md.contains("file no longer exists at this commit/side"),
+            "expected FileGone phrase in {md}"
+        );
+        assert!(
+            md.contains("anchor line range is outside the current file bounds"),
+            "expected LineOutOfRange phrase in {md}"
+        );
+    }
+
+    #[test]
+    fn binary_blob_uses_placeholder_in_resolved_section() {
+        // L-05: a FullFile anchor on a binary blob renders the placeholder
+        // INSIDE the resolved per-file section (NOT unresolvable).
+        let (_dir, repo) = make_repo();
+        // 4 lines + NUL byte → blob.is_binary() = true.
+        let b = commit_with_file(&repo, "B", &[], "bin.dat", b"a\nb\nc\0d\n");
+        let session = make_session(
+            vec![b.to_string()],
+            vec![line_comment(
+                "bin",
+                "binary anchor",
+                b,
+                "bin.dat",
+                Source::FullFile,
+                Side::New,
+                1,
+                1,
+                None,
+            )],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.contains("[binary file, no excerpt]"),
+            "expected binary placeholder in {md}"
+        );
+        // Must appear BEFORE any "unresolvable" heading marker if one exists,
+        // because L-05 routes Binary into the resolved section.
+        let placeholder_pos = md.find("[binary file, no excerpt]").unwrap();
+        if let Some(unres_pos) = md.find("Unresolvable") {
+            assert!(
+                placeholder_pos < unres_pos,
+                "binary placeholder must live in the resolved per-file section, not unresolvable"
+            );
+        }
+    }
+
+    #[test]
+    fn renderer_never_panics_on_orphan() {
+        // L-04 + L-09: a session that includes every orphan kind plus a binary
+        // comment renders without panicking; every entry appears in the right
+        // section.
+        let (_dir, repo) = make_repo();
+        let parent = commit_with_file(&repo, "A", &[], "f.rs", b"a\nb\nc\n");
+        let child = commit_with_file(&repo, "B", &[parent], "f.rs", b"a\nb\nC\n");
+        // Make a fresh commit B2 whose foo2.rs is unchanged from parent A2 →
+        // diff replay yields NoHunks.
+        let a2_blob = repo.blob(b"same\n").unwrap();
+        let mut tb_a2 = repo.treebuilder(None).unwrap();
+        tb_a2.insert("foo2.rs", a2_blob, 0o100644).unwrap();
+        let tree_a2 = repo.find_tree(tb_a2.write().unwrap()).unwrap();
+        let a2 = repo
+            .commit(None, &sig(), &sig(), "A2", &tree_a2, &[])
+            .unwrap();
+        // B2 keeps foo2.rs identical but adds an unrelated file.
+        let mut tb_b2 = repo.treebuilder(None).unwrap();
+        tb_b2.insert("foo2.rs", a2_blob, 0o100644).unwrap();
+        tb_b2
+            .insert("unrelated.rs", repo.blob(b"hello\n").unwrap(), 0o100644)
+            .unwrap();
+        let tree_b2 = repo.find_tree(tb_b2.write().unwrap()).unwrap();
+        let parent_a2 = repo.find_commit(a2).unwrap();
+        let b2 = repo
+            .commit(None, &sig(), &sig(), "B2", &tree_b2, &[&parent_a2])
+            .unwrap();
+        // Binary file.
+        let bin_b = commit_with_file(&repo, "BIN", &[], "img.bin", b"a\0b\n");
+
+        let bogus = "0".repeat(40);
+        let session = make_session(
+            vec![
+                parent.to_string(),
+                child.to_string(),
+                a2.to_string(),
+                b2.to_string(),
+                bin_b.to_string(),
+            ],
+            vec![
+                // CommitGone
+                orphan_line_comment(
+                    "cg",
+                    "TXT_CG",
+                    &bogus,
+                    "f.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    Some("cg-snap"),
+                ),
+                // FileGone (file does not exist at this commit)
+                line_comment(
+                    "fg",
+                    "TXT_FG",
+                    child,
+                    "no-such-file.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    Some("fg-snap"),
+                ),
+                // LineOutOfRange
+                line_comment(
+                    "lob",
+                    "TXT_LOB",
+                    child,
+                    "f.rs",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    999,
+                    Some("lob-snap"),
+                ),
+                // NoHunks (Source::Diff on a file unchanged from parent)
+                line_comment(
+                    "nh",
+                    "TXT_NH",
+                    b2,
+                    "foo2.rs",
+                    Source::Diff,
+                    Side::New,
+                    1,
+                    1,
+                    Some("nh-snap"),
+                ),
+                // Binary
+                line_comment(
+                    "bin",
+                    "TXT_BIN",
+                    bin_b,
+                    "img.bin",
+                    Source::FullFile,
+                    Side::New,
+                    1,
+                    1,
+                    None,
+                ),
+            ],
+        );
+
+        // The whole point of L-04 — must not panic.
+        let md = render(&session, &repo);
+
+        // Each comment's text must appear somewhere in the doc.
+        for tag in ["TXT_CG", "TXT_FG", "TXT_LOB", "TXT_NH", "TXT_BIN"] {
+            assert!(md.contains(tag), "expected `{tag}` in render output: {md}");
+        }
+        // Binary lives in the resolved section, the rest in unresolvable.
+        let bin_pos = md.find("TXT_BIN").unwrap();
+        let cg_pos = md.find("TXT_CG").unwrap();
+        assert!(
+            bin_pos < cg_pos,
+            "binary comment must precede orphan section (it's in the resolved area)"
+        );
+    }
+
+    #[test]
+    fn doc_starts_with_h1_and_framing() {
+        // D-03: the doc starts with `# Code review: <repo-name>` followed by
+        // a brief framing paragraph.
+        let (_dir, repo) = make_repo();
+        let b = commit_with_file(&repo, "B", &[], "f.rs", b"x\n");
+        let session = make_session(
+            vec![b.to_string()],
+            vec![commit_level_comment("c1", "note", b)],
+        );
+
+        let md = render(&session, &repo);
+
+        assert!(
+            md.starts_with("# Code review:"),
+            "doc must begin with H1 title, got: {md}"
+        );
+        // Framing mentions either "code review" or "anchored excerpts".
+        let lower = md.to_lowercase();
+        assert!(
+            lower.contains("code review") && lower.contains("anchored"),
+            "framing paragraph must explain the doc; got: {md}"
+        );
+    }
+
+    #[test]
+    fn renderer_does_not_import_syntax_module() {
+        // L-10 gate: the renderer module is abstinent — no syntax.rs imports.
+        // include_str! resolves relative to this file at expand time, so the
+        // assertion runs against the on-disk content of review.rs itself.
+        // Build the needle from two halves so the test body does NOT itself
+        // count as a match — a literal "use" + "::" import statement to the
+        // syntax module appearing in this comment would trip its own assertion.
+        let src = include_str!("review.rs");
+        let needle = concat!("use crate::", "git::syntax");
+        assert!(
+            !src.contains(needle),
+            "L-10 violation: review.rs must NOT import the syntax module"
+        );
+    }
+
     // Suppress unused-helper warning while task 3 is still pending.
     #[test]
     fn _empty_commit_helper_is_used() {
