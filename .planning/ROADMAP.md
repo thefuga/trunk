@@ -344,7 +344,19 @@ Plans:
   3. Comments are grouped by file and ordered by line, each under a `path:Lstart-Lend (sha)` heading; commit-level comments render in a trailing section.
   4. A comment whose anchor can no longer be resolved appears in a dedicated "unresolvable" section with a reason — never silently dropped and never crashing the render.
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 70-01-PLAN.md — Pure Rust renderer in src-tauri/src/git/review.rs with TDD goldens (DOC-02, DOC-03, DOC-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 70-02-PLAN.md — Tauri command generate_review_doc with D-11 zero-comment gate
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 70-03-PLAN.md — Generate button in ReviewPanel header + panel preview swap + ReviewDocPreview component (DOC-01)
 **Notes:**
 
 - Render in Rust (`git/review.rs` pure logic), returning one markdown string — not a giant per-line enriched payload. Skip syntax/word-span enrichment for excerpts (plain text in a fence is what the AI needs).
