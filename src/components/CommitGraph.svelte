@@ -24,7 +24,7 @@ import {
 	PILL_HEIGHT,
 	PILL_PADDING_X,
 } from "../lib/graph-constants.js";
-import { safeInvoke, type TrunkError } from "../lib/invoke.js";
+import { isTrunkError, safeInvoke, type TrunkError } from "../lib/invoke.js";
 import { buildOverlayPaths } from "../lib/overlay-paths.js";
 import { getVisibleOverlayElements } from "../lib/overlay-visible.js";
 import { buildRefPillData } from "../lib/ref-pill-data.js";
@@ -310,6 +310,10 @@ const searchDimmingActive = $derived(
 // get_review_session_status state === "active", NOT the panel-open flag (A1).
 let sessionStatus = $state<SessionStatus | null>(null);
 let sessionActive = $derived(sessionStatus?.state === "active");
+// Tracked separately from sessionStatus so the session-changed listener can
+// fail-closed when canonical is unknown (mirrors ReviewPanel:241 — Phase 73-01
+// pattern). When null, cross-repo events MUST NOT trigger reload (WR-01).
+let canonicalPath = $state<string | null>(null);
 // Event-driven membership Set (Pitfall 5: reassign new Set(...) so reactivity fires).
 let sessionOids = $state<Set<string>>(new Set());
 // Transient D-01 range base — set by "Set as review base", cleared after the
@@ -322,6 +326,10 @@ async function reloadSession() {
 			"get_review_session_status",
 			{ path: repoPath },
 		);
+		// Capture canonical BEFORE the active-branch so the session-changed
+		// listener filter works even on cold (resume-available / none) sessions
+		// — mirrors ReviewPanel:241 (Phase 73-01).
+		canonicalPath = status.canonical_path;
 		sessionStatus = status;
 		if (status.state === "active") {
 			const list = await safeInvoke<SessionCommit[]>("list_session_commits", {
@@ -331,11 +339,22 @@ async function reloadSession() {
 		} else {
 			sessionOids = new Set();
 		}
-	} catch {
-		// No-session / inactive is a normal state — list_session_commits returns
-		// Err("no_session"). Reset to an empty set, never toast.
+	} catch (e) {
+		// no_session / not_open are normal states (cold repo, or first-run
+		// window before refresh_commit_graph populates CommitCache). Reset to
+		// empty, never toast. Anything else is a real backend / IPC failure —
+		// reset state so the UI doesn't show stale session data, AND surface
+		// a toast so the operator sees the failure (WR-02).
 		sessionStatus = null;
+		canonicalPath = null;
 		sessionOids = new Set();
+		if (isTrunkError(e) && (e.code === "no_session" || e.code === "not_open")) {
+			return;
+		}
+		showToast(
+			"Failed to load review session. Try again or reopen the repo.",
+			"error",
+		);
 	}
 }
 
@@ -1374,16 +1393,27 @@ $effect(() => {
 });
 
 // Live coordination: reload sessionOids when a session-changed event arrives for
-// this repo's canonical path (mirrors ReviewPanel.svelte:81-93).
+// this repo's canonical path. Fail-closed when canonicalPath is null (cross-repo
+// events during the cold-start window must not trigger a reload — WR-01). The
+// `cancelled` flag prevents the listen() promise from leaking a listener if the
+// effect tears down before the promise resolves (mirrors ReviewPanel:447-461).
 $effect(() => {
 	let unlisten: (() => void) | undefined;
+	let cancelled = false;
 	listen<string>("session-changed", (event) => {
-		if (sessionStatus && event.payload !== sessionStatus.canonical_path) return;
+		// Fail-closed: when canonicalPath is unknown OR the payload is for a
+		// different repo, drop the event. ReviewPanel relies on synchronous
+		// `await reload()` in $effect to set canonicalPath before the listener
+		// fires; CommitGraph's reload effect runs in parallel with the listener
+		// effect, so the null check is mandatory (WR-01).
+		if (!canonicalPath || event.payload !== canonicalPath) return;
 		reloadSession();
 	}).then((fn) => {
-		unlisten = fn;
+		if (cancelled) fn();
+		else unlisten = fn;
 	});
 	return () => {
+		cancelled = true;
 		unlisten?.();
 	};
 });
