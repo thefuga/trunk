@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: completed
+status: in-progress
 stopped_at: Phase 73 context gathered
 last_updated: "2026-05-27T08:19:29.521Z"
-last_activity: 2026-05-27 -- Phase 72 marked complete
+last_activity: 2026-05-27 -- Phase 73 context gathered
 progress:
   total_phases: 9
   completed_phases: 8
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 72 — review-pane-ux-integration
+**Current focus:** Phase 73 — review-lifecycle-end-review-cold-boot-resume
 
 ## Current Position
 
-Phase: 72 — COMPLETE
-Plan: 1 of 4
-Status: Phase 72 complete
-Last activity: 2026-05-27 -- Phase 72 marked complete
+Phase: 73 — Context gathered
+Plan: 0 of 0 (ready for /gsd:plan-phase 73)
+Status: CONTEXT.md written; planning not started
+Last activity: 2026-05-27 -- Phase 73 context gathered
 
-Progress: [██████████] 95%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
