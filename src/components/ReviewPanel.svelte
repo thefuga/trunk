@@ -16,6 +16,7 @@ import type {
 	CommentResolution,
 	OrphanReason,
 	SessionCommit,
+	SessionState,
 	SessionStatus,
 } from "../lib/types.js";
 
@@ -133,6 +134,12 @@ let copied = $state(false);
 // Plain handle, not $state — only used to clear; reactivity is on `copied`.
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Phase 73-01 — Lifecycle state mirrored from get_review_session_status.
+// Drives the cold-boot resume branch in reload() and (in Plans 02/03) End-button
+// visibility + empty-state gating. Single source of truth; assigned from
+// status.state inside reload() before the resume branch reads it.
+let sessionState = $state<SessionState>("none");
+
 // Type guard for the TrunkError shape thrown by safeInvoke (a plain object with
 // string `code` + `message`, NOT an Error subclass — see lib/invoke.ts). Used
 // in catch blocks to surface `.message` without an unchecked `as` cast.
@@ -222,9 +229,32 @@ async function reload() {
 			{ path: repoPath },
 		);
 		canonicalPath = status.canonical_path;
+		sessionState = status.state;
 	} catch {
 		// Tolerate — the panel can still try the list reads below; if they fail
 		// with no_session that's handled, otherwise a toast surfaces.
+	}
+
+	// Phase 73-01 (D-01, D-07): cold-boot resume. When the session exists on
+	// disk but not in memory ("resume-available"), promote it before the reads.
+	// Resume emits session-changed; our own listener re-fires reload(), which
+	// then sees status === "active" and SKIPS this branch (recursion-safe by
+	// gating — RESEARCH Pitfall 1). A rejection (e.g. newer_version) surfaces
+	// a toast and falls through to the reads, which then return no_session
+	// and the existing arm renders the cold empty state.
+	if (sessionState === "resume-available") {
+		try {
+			await safeInvoke("resume_review_session", { path: repoPath });
+		} catch (e) {
+			// errorMessage extracts e.message (Error or TrunkError); the prefix
+			// is added by template literal so a fallback "Failed to resume review"
+			// would only fire if the value were neither shape (and the toast then
+			// reads "Failed to resume review: Failed to resume review" which is
+			// awkward — keep `errorMessage`'s fallback as "Failed to resume review"
+			// since the prefix already conveys the action that failed).
+			const msg = errorMessage(e, "unknown error");
+			showToast(`Failed to resume review: ${msg}`, "error");
+		}
 	}
 
 	try {
