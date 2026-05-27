@@ -111,22 +111,26 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ ContentMode/LayoutMode orthogonal toggles with icon buttons — v0.12
 - ✓ Syntax fallback: TypeScript/Svelte/Vue/JSX/TSX use JavaScript highlighting — v0.12
 
+- ✓ Start/resume/end a per-repo review session with atomic persistence across restarts (SESS-01..03) — v0.13
+- ✓ Seed review from base→tip commit range and hand-pick commits from the graph context menu (SEL-01..04) — v0.13
+- ✓ Comment on a diff line range with stable source-line anchor surviving context/whitespace toggles (ANCH-01) — v0.13
+- ✓ Comment on a full-file-at-commit line range with absolute blob line anchor (ANCH-02) — v0.13
+- ✓ Commit-level comment with no code anchor (ANCH-03) — v0.13
+- ✓ Review panel: list / inline edit / delete-with-confirm / jump-to-anchor with orphan badge fallback (CMT-01..04) — v0.13
+- ✓ Single markdown document with diff-fenced excerpts + language-fenced excerpts + per-file `path:Lstart-Lend (sha)` headings + trailing unresolvable section (DOC-01..04) — v0.13
+- ✓ Awaited clipboard copy with ✓ Copied affordance and failure toast (OUT-01) — v0.13
+- ✓ Toolbar Review toggle with active state, copy directly on the comments view (Phase 72) — v0.13
+- ✓ Cold-boot resume and two-step End-review lifecycle endpoints (Phase 73) — v0.13
+
 ### Active
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-## Current Milestone: v0.13 Code Review Mode
+## Current Milestone: v0.13 Code Review Mode (SHIPPED 2026-05-27)
 
-**Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy or save.
+**Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy to the clipboard.
 
-**Target features:**
-- Start/resume a per-repo review session; seed it from a commit range (base→tip) and hand-pick individual commits from the graph
-- Select a code range in either the diff view (reuse v0.7 line-selection) or the full-file-at-commit view (reuse v0.12 full-file view) and attach a comment
-- Manage comments: edit, delete, list in a session panel, jump-to-anchor; optional commit-level comment with no code anchor
-- Render one markdown doc — commit refs + code excerpts (diff-fenced for diff selections, language-fenced for full-file selections) + comments — framed as actionable AI review feedback
-- Output: copy-to-clipboard and save-to-file
-
-**Key context:** The doc's purpose is AI review — pasted or `@file`-referenced into an AI session, so format optimizes for an agent to act on. Session state persists per repo across restarts until the artifact is generated; the generated file is a static snapshot, never re-synced. No re-anchoring on history rewrite — sessions assume a stable range; render-time surfaces unresolvable anchors gracefully. No GitHub/GitLab posting — local markdown only.
+**Delivered:** All 19 requirements shipped across 10 phases (37 plans). Per-repo session with atomic persistence and FNV-1a-keyed disk file; range-seed + graph hand-pick commit selection; two independent anchor surfaces (diff line range with side discriminator, full-file blob line range); comment management with stable uuid ids, inline edit, delete-with-confirm, jump-to-anchor, and side-aware orphan classification (CommitGone/FileGone/LineOutOfRange); pure git2-backed markdown renderer with per-source fencing and collision-safe fence length; awaited clipboard copy with explicit success/failure feedback; Toolbar toggle for in-window Review mode; cold-boot resume and two-step End-review lifecycle endpoints. OUT-02 (save-to-file) dropped 2026-05-26.
 
 ## Current Milestone: v0.12 Better Diffs (SHIPPED 2026-03-30)
 
@@ -150,7 +154,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: v0.12 Better Diffs shipped (2026-03-30). Professional-grade diff viewer with syntax highlighting (syntect + JS fallback for TS/Svelte), word-level diff (similar crate), split view (single-flow flex rows, phantom spacers), 5 display toggles (content mode, layout mode, whitespace, invisibles, word wrap), all preferences persisted via LazyStore. DiffPanel decomposed into 5 focused components. ~15,000 LOC TypeScript/Svelte, ~10,000 LOC Rust. 423+ frontend tests, 167+ Rust integration tests. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 402 frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
+- **Current state**: v0.13 Code Review Mode shipped (2026-05-27). Per-repo code review sessions live in `app_data_dir/sessions/<FNV-1a hash>.json` (atomic tmp+rename, schema v2 with stable uuid `id` per comment, canonical-path keying, corrupt-quarantine + newer-version-refusal). Comments anchor to either a diff line range (Phase 67 source-line adapter) or a full-file blob line range (Phase 68 absolute-line adapter), with side-aware orphan classification. Pure Rust markdown renderer (`src-tauri/src/git/review.rs`) re-resolves excerpts per source type with collision-safe fence length and a trailing unresolvable section. ReviewPanel in the center pane with Toolbar toggle, cold-boot resume, two-step End-review, and one-click Copy. Stack carries forward from v0.12: syntect + similar (diff/syntax), 5 display toggles, all preferences via LazyStore. ~16,000 LOC TypeScript/Svelte, ~12,000 LOC Rust. 547+ frontend tests, 200+ Rust integration tests. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 547+ frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -234,13 +238,17 @@ A developer can open any Git repository, browse its full commit history as a vis
 | Icon toggle buttons over segmented controls | Single button per mode, icon swap communicates state, no highlight | ✓ Good — saves horizontal space, consistent with display option toggles |
 | LazyStore-first-then-callback pattern | DiffPanel persists value before calling parent callback | ✓ Good — prevents stale reads when parent rebuilds diff options |
 
-| Review doc targets AI consumption (v0.13) | Spawned need is reviewing AI-written code; doc is pasted/@file-referenced into an AI session as actionable feedback | — Pending |
-| One active review session per repo, persisted until render (v0.13) | Resume across restarts while building the review; generated markdown is a one-shot static snapshot, never re-synced | ✓ Persistence + resume realized in Phase 65 |
-| No re-anchoring on history rewrite (v0.13) | Sessions assume a stable range and no concurrent git ops; render-time surfaces unresolvable anchors instead of crashing | — Pending |
-| Anchor = (commit, file, line-range, source) (v0.13) | source ∈ {diff, full_file}; renderer branches on source for diff-fenced vs language-fenced excerpts | ✓ Schema defined + locked in Phase 65 (capture in 67/68) |
-| Session storage in app data dir, keyed by repo (v0.13) | Not `.git/`, not the working tree — review drafts are private working state, not shared artifacts | ✓ Realized in Phase 65 (atomic per-repo JSON, canonical-path keyed) |
-| Single comment per anchor, no threading (v0.13) | Edit/delete supported; optional commit-level comment with no code anchor; threading is overkill for personal AI-review use | — Pending |
-| Review session is a flat commit SET (v0.13) | Range-seed unions + hand-pick adds into one deduped set rendered in graph order; "range" is an input gesture, not stored state; merges are selectable | ✓ Realized in Phase 66 (revwalk range + add/remove commands, mutex-serialized RMW) |
+| Review doc targets AI consumption (v0.13) | Spawned need is reviewing AI-written code; doc is pasted/@file-referenced into an AI session as actionable feedback | ✓ Good — markdown layout (per-source fencing, file:line headings, unresolvable section) optimized for agent consumption end-to-end |
+| One active review session per repo, persisted until render (v0.13) | Resume across restarts while building the review; generated markdown is a one-shot static snapshot, never re-synced | ✓ Good — atomic per-repo JSON with cold-boot resume (Phase 73) and explicit End-review |
+| No re-anchoring on history rewrite (v0.13) | Sessions assume a stable range and no concurrent git ops; render-time surfaces unresolvable anchors instead of crashing | ✓ Good — `resolve_session_comments` classifier + dedicated unresolvable render section (DOC-04) |
+| Anchor = (commit, file, line-range, source) (v0.13) | source ∈ {diff, full_file}; renderer branches on source for diff-fenced vs language-fenced excerpts | ✓ Good — schema frozen in Phase 65, capture in 67/68, render in 70; never regressed |
+| Session storage in app data dir, keyed by repo (v0.13) | Not `.git/`, not the working tree — review drafts are private working state, not shared artifacts | ✓ Good — atomic tmp+sync_all+rename, FNV-1a filename hash for path-traversal safety, canonical-path keyed |
+| Single comment per anchor, no threading (v0.13) | Edit/delete supported; optional commit-level comment with no code anchor; threading is overkill for personal AI-review use | ✓ Good — stable uuid `id` (Phase 69 schema v2) makes edit/delete multi-tab-safe |
+| Review session is a flat commit SET (v0.13) | Range-seed unions + hand-pick adds into one deduped set rendered in graph order; "range" is an input gesture, not stored state; merges are selectable | ✓ Good — revwalk range + four mutex-serialized commands, no range state to drift |
+| Two-step destructive affordances over confirmation dialogs (v0.13 Phase 73) | "Click again to confirm" inline button (End-review) reads faster than a plugin-dialog ask and stays in the comments view; reuses the v0.12 toolbar-toggle ergonomic | ✓ Good — six TDD tests, zero backend changes |
+| Cached excerpt at capture-time as canonical body (v0.13) | Re-resolve at render with cached fallback; survives the watcher `repo-changed` re-fetch and `repoPath` change | ✓ Good — every anchor carries `cachedExcerpt`; orphan rendering falls back cleanly |
+| Pure renderer in Rust with TDD goldens (v0.13 Phase 70) | Renderer logic isolated from IPC; testable without Tauri; per-hunk overlap gate added in Phase 74 (slice_diff CR-01 fix) | ✓ Good — single `render` fn, goldens caught the multi-hunk leak in Phase 74 |
+| Drop save-to-file (OUT-02), clipboard only (v0.13 Phase 71) | Dialog+permission+atomic-write+overwrite surface area disproportionate to value over `Cmd+V` into the user's editor | ✓ Good — design ground preserved in 71-CONTEXT.md if it ever comes back |
 
 ## Evolution
 
@@ -260,4 +268,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 after Phase 66 (Commit Selection) completed*
+*Last updated: 2026-05-28 after v0.13 Code Review Mode shipped*

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: completed
-stopped_at: "Phase 74 complete — all 6 plans landed, just check green, 1 human UAT item (cross-repo session-changed)"
-last_updated: "2026-05-27T23:20:00.000Z"
-last_activity: 2026-05-27
+status: Awaiting next milestone
+stopped_at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
+last_updated: "2026-05-27T22:05:45.136Z"
+last_activity: 2026-05-27 — Milestone v0.13 completed and archived
 progress:
   total_phases: 10
   completed_phases: 10
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 ## Current Position
 
-Phase: 74 (complete)
-Plan: All 6 landed
-Status: Milestone complete
-Last activity: 2026-05-27
-
-Progress: [██████████] 100%
+Phase: Milestone v0.13 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-27 — Milestone v0.13 completed and archived
 
 ## Performance Metrics
 
@@ -167,6 +165,33 @@ None.
 | 260405-j41 | Fix diff view horizontal scroll to scroll entire view together | 2026-04-05 | c458fd3 | [260405-j41-fix-diff-view-horizontal-scroll-scroll-e](./quick/260405-j41-fix-diff-view-horizontal-scroll-scroll-e/) |
 | 260514-356 | VSCode-style recent projects picker (Cmd/Ctrl+R) | 2026-05-14 | 045de1f | [260514-356-build-a-recent-projects-picker-vscode-ct](./quick/260514-356-build-a-recent-projects-picker-vscode-ct/) |
 
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-05-28 (40 total — all pre-existing, none v0.13-specific blockers):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug_sessions | context-menu-take-all-no-resolve | diagnosed |
+| debug_sessions | graph-dot-zoom-drift | awaiting_human_verify |
+| debug_sessions | merge-editor-manual-edit-overridden | diagnosed |
+| debug_sessions | overflow-pill-context-menu | diagnosed |
+| debug_sessions | shift-click-text-selection | investigating |
+| debug_sessions | stash-dashed-branch-lines | diagnosed |
+| quick_tasks | 21 entries (most already shipped, slug-index marker stale) | missing |
+| todos | 2026-04-14-collect-commit-messages-for-merge-revert | open |
+| todos | 2026-05-26-relocate-copy-action-off-preview-pane | open (likely closed by Phase 72) |
+| todos | 2026-05-26-review-pane-navigation-and-dead-review-button | open (likely closed by Phase 72) |
+| uat_gaps | Phase 65 (1 open scenario) | partial |
+| uat_gaps | Phase 66 (10 open scenarios) | partial |
+| uat_gaps | Phase 70 (3 open scenarios) | partial |
+| verification_gaps | Phases 65, 66, 70, 71, 72, 73, 74 | human_needed |
+
+v0.13-specific outstanding work:
+
+- 1 human UAT — cross-repo session-changed isolation across two Tauri windows (Phase 73)
+- INT-W1 (stylistic, seed_review_range canonical path resolution location)
+- INT-W2 (edge case, save_draft_comment under cross-tab End-review)
+
 ## Session Continuity
 
 Last activity: 2026-05-27
@@ -174,3 +199,7 @@ Last session: 2026-05-27T23:20:00.000Z
 Stopped at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
 Resume file: .planning/phases/74-address-v0-13-tech-debt-66-wr-01-04-70-cr-01-70-wr-01-biome-/74-VERIFICATION.md
 Next action: 1 outstanding human UAT — cross-repo session-changed isolation in two Tauri windows. v0.13 milestone fully closed; ready for /gsd:complete-milestone or v0.14 planning.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

@@ -475,6 +475,69 @@
 
 ---
 
+## Milestone: v0.13 — Code Review Mode
+
+**Shipped:** 2026-05-27
+**Phases:** 10 | **Plans:** 37 | **Commits:** 290 | **Timeline:** 3 days (2026-05-25 → 2026-05-27)
+
+### What Was Built
+- Per-repo review session with atomic disk persistence (FNV-1a-keyed file, corrupt quarantine, newer-version refusal), canonical-path keying, schema v2 with stable uuid comment ids
+- Commit selection: revwalk range seeding + graph hand-pick, mutex-serialized RMW across four commands
+- Two anchor surfaces: diff line range with side discriminator (Phase 67) + full-file blob line range (Phase 68), both via pure capture-time adapters
+- Comment management: list / inline edit / delete-with-confirm / jump-to-anchor with side-aware orphan classification (CommitGone / FileGone / LineOutOfRange)
+- Pure Rust markdown renderer: per-source fencing, collision-safe fence length, trailing unresolvable section, never panics
+- One-click Copy with awaited clipboard write and ✓ Copied affordance (no fire-and-forget)
+- Toolbar Review toggle with active state, single-pane swap (panel ↔ jumped-to diff) in the center pane
+- Cold-boot resume on ReviewPanel open + two-step inline End-review button
+- Phase 74 tech-debt close: 66/WR-01..04, 70/CR-01, biome noNonNullAssertion ×3
+
+### What Worked
+- **Frozen keystone schema (Phase 65)**: Defining the anchor schema first — Rust DTOs + TS mirror with serde-shape test — eliminated migration cost across the next four phases. Schema v2 (Phase 69) bumped cleanly without breaking the gate
+- **Pure capture-time adapters (Phase 67/68)**: TDD-built `buildDiffAnchor` and `buildFullFileAnchor` isolated coordinate translation from Tauri state — both tested without a Svelte runtime, both reusable through the shared `add_comment` writer
+- **Shared dumb-writer commands**: `add_comment`/`save_draft_comment` over `mutate_session_rmw` let Phase 68 wire FullFile anchors with zero new IPC surface
+- **Auto-start session at the comment chokepoint (Phase 67)**: Sidestepped the entire "no_session" UX problem by lazily starting at the only point that needed it
+- **Pure git2 renderer with goldens (Phase 70)**: Renderer logic isolated from IPC made the multi-hunk overlap bug catchable by an isolated reproducer in Phase 74
+- **Two-step inline End-review over confirm dialog (Phase 73)**: "Click again to confirm" reads faster than plugin-dialog ask, stays in the comments view, six TDD tests, zero backend changes
+- **Wave-based parallel execution**: Phases 67 and 68 ran independently sharing the same writer contract
+- **Carry-forward bundling (Phase 73)**: Bundling Bug 3 (cold-boot resume) with the End-review affordance into one phase produced both lifecycle endpoints together — addressed the advisor concern that auto-resume without End makes permanence worse
+
+### What Was Inefficient
+- **REQUIREMENTS.md OUT-01 stale checkbox**: The traceability checkbox was never flipped after Phase 71 — drove a "stale paperwork" finding in the audit and required a fix at close. Pattern: when a phase ships its last requirement, update the checkbox in the same commit
+- **SUMMARY one_liner field hygiene**: Phase 72-04/74-01/74-04/74-05/74-06 SUMMARYs had review-process leakage in the `one_liner` field (e.g., "1. [Rule 3 - Blocking] Mock identity collision...") instead of an actual deliverable summary. `gsd-sdk milestone.complete` propagated these into MILESTONES.md verbatim, requiring manual cleanup
+- **CR-01 multi-hunk leak shipped to audit**: `slice_diff` opposing-side filter was missing a per-hunk overlap check; tests covered single-hunk only. Caught by audit, closed in Phase 74. Better: hunk-positional tests should have shipped with Phase 70
+- **6 phases shipped with `wave_0_complete: false` Nyquist**: Validation pipeline didn't finish on phases 65, 66, 68, 70, 71, 73 — these accumulated rather than getting closed in-phase
+- **20+ human UAT items deferred**: The decision to defer the cross-repo session-changed isolation UAT (Phase 73) was correct, but the broader pattern of deferring UAT bundles to "needs a running app" left the verification paper trail systematically incomplete
+- **Phase 74 directory not committed**: PLAN/RESEARCH/VALIDATION files for Phase 74 were untracked until milestone close — the safety commit caught it, but the phase should have committed its own working artifacts
+
+### Patterns Established
+- **Atomic per-repo JSON via tmp+sync_all+rename**: New persistence primitive for v0.13; FNV-1a filename hash mitigates path-traversal; corrupt file quarantines to `.corrupt` sidecar
+- **Stable uuid comment id (schema v2)**: Multi-tab-safe edit/delete by id, not by list position
+- **Side-aware orphan classifier**: `resolve_all` distinguishes CommitGone / FileGone / LineOutOfRange; Side::New reads the commit's own tree, Side::Old reads the parent's
+- **Pure capture-time adapter**: TS function `(selection, context) → {anchor, cachedExcerpt}` decouples UI selection state from persistence schema
+- **Shared dumb-writer commands**: `add_comment`/`save_draft_comment` accept arbitrary anchors; thin commands stay testable, fat logic lives in `mutate_session_rmw`
+- **`session-changed` Tauri event with canonical-path filter**: Multi-tab coordination via broadcast; per-listener canonicalPath filter (added in Phase 74) prevents cross-repo reload storms
+- **Pure git2-backed renderer with TDD goldens**: Markdown generation as a `fn render(session, repo) → String` with snapshot tests
+- **`emit_session_changed` helper**: Replaces `let _ = app.emit(...)` patterns with logged-on-failure emit (Phase 74 cleanup) — pattern generalizable to other backend emits
+- **Two-step inline destructive affordance**: Single button with "Click again to confirm" frozen label, success collapses via event round-trip, failure reverts + showToast — cheaper than plugin-dialog ask for in-view destructives
+- **Three-way empty-state branching**: Specificity-first dispatch (cold → warm-no-commits → warm-with-commits-zero-comments) consumes session state rune; no new state shapes needed
+
+### Key Lessons
+1. **Lock the schema before the surface area expands**: Phase 65's keystone schema decision prevented a Phase 67/68/69/70 migration nightmare. When N+ later phases will read/write a shape, freezing it first pays back N-fold
+2. **Audit retroactively catches what verification misses**: `/gsd:audit-milestone` produced the CR-01 finding that single-hunk tests never would have; build the audit into the milestone close flow, not optional
+3. **SUMMARY one_liner is a published artifact**: It propagates into MILESTONES.md verbatim. Treat it as a milestone-facing deliverable, not a phase-local scratch field — review for leakage before close
+4. **Update requirement checkboxes in the implementing commit**: Don't let traceability paperwork drift from code state — flip `[ ]`→`[x]` and update the traceability row Status in the same commit that closes the requirement
+5. **Per-event canonical-path filtering is the v0.9 multi-tab tax**: Any new Tauri event that broadcasts per-repo state must filter by canonical path on the listener side — `session-changed` (Phase 65), `repo-changed` (v0.9) both had to learn this
+6. **Capture excerpt at attach-time as canonical body**: Survives `repo-changed` re-fetch, `repoPath` change, and lets orphan rendering fall back cleanly. Re-resolve at render with cached fallback, never re-resolve at attach
+7. **Two lifecycle endpoints, not one**: Auto-resume without explicit End makes permanence worse, not better. If a feature has implicit creation, it needs explicit destruction in the same surface
+8. **Drop scope when the surface area exceeds the value**: OUT-02 (save-to-file) was dropped during Phase 71 context-gathering — preserved design ground in 71-CONTEXT.md if it ever comes back. Better to drop loudly than build resentfully
+
+### Cost Observations
+- Model mix: Predominantly Opus (planning/research) + Sonnet (execution); Haiku for trivial probes
+- Sessions: ~30 across 3 days
+- Notable: Phase 67/68 ran in parallel waves — independent capture surfaces over a shared writer contract is the cleanest parallelization pattern this project has produced
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -493,6 +556,7 @@
 | v0.10 | 2 | 3 | 4 | Smallest milestone — CI/CD infrastructure, zero gap closures, deterministic YAML work |
 | v0.11 | 2 | 6 | 16 | Testing infrastructure — GOOS harness, 520+ tests, benchmarks, E2E, coverage reporting |
 | v0.12 | 3 | 6 | 14 | Diff overhaul — syntax highlighting, word diff, split view, display options, iterative UI refinement |
+| v0.13 | 3 | 10 | 37 | Largest plan count to date — keystone schema first, then 4 parallelizable feature phases (66/67/68/69), then render + clipboard + UX integration + lifecycle endpoints; Phase 74 tech-debt close |
 
 ### Top Lessons (Verified Across Milestones)
 

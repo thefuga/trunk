@@ -1,5 +1,37 @@
 # Milestones
 
+## v0.13 Code Review Mode (Shipped: 2026-05-27)
+
+**Phases completed:** 10 phases, 37 plans, 65 tasks | **Timeline:** 3 days (2026-05-25 → 2026-05-27) | **Commits:** 290
+
+**Delivered:** A per-repo code review session — start/resume/end across restarts, seed from a commit range or hand-pick from the graph, comment on a diff line range or a full-file-at-commit line range, manage comments (edit/delete/jump/orphan handling), and render the whole session as one AI-framed markdown document copied to the clipboard. Two lifecycle endpoints in the UI: cold-boot resume on open and explicit two-step End-review.
+
+**Key accomplishments:**
+
+- Phase 65 — Frozen keystone schema (Rust DTOs + TS mirror, PascalCase enums / snake_case fields), atomic per-repo JSON store under `app_data_dir/sessions/<FNV-1a hash>.json` with corrupt-quarantine + newer-version refusal, canonical-path-keyed `ReviewSessionsState` with start/resume/end/get-status lifecycle commands and a throwaway 3-state ReviewPanel stub.
+- Phase 66 — Pure git2 revwalk range core (root/merge handling, bad-range/unrelated-history validation, set ops, graph-ordered dedup) wrapped by four mutex-serialized seed/add/remove/list commands; CommitGraph two-right-click range gesture + Add/Remove context-menu toggle + in-session row marker.
+- Phase 67 — Pure `buildDiffAnchor` capture-time adapter (selection indices → source-line anchor + diff-fenced cached excerpt, Delete-line drop with preservation in excerpt), shared `add_comment` + `save_draft_comment` writers, inline CommentComposer with debounced draft persistence, merge-commit disable, and auto-start of a session at the comment chokepoint.
+- Phase 68 — Sibling `buildFullFileAnchor` adapter (flat selection → `FullFile/New` anchor + plain-content excerpt with gap markers), click + shift-click contiguous selection in `FullFileView` (new-side endpoints, even on merge commits), and CommentComposer reuse via injected FullFile captured result.
+- Phase 69 — Schema v2 with stable `id: String` + `commit_oid?` on Comment and lazy v1→v2 migration; sibling `add_commit_comment`/`edit_comment`/`delete_comment` commands targeting by uuid (multi-tab-safe); `list_session_comments` + git2-backed `resolve_session_comments` orphan classifier; TS DTOs + `review-session.svelte.ts` rune; real center-pane ReviewPanel with grouped comments, inline edit, delete-confirm, jump-to-anchor, and orphan badges.
+- Phase 70 — Pure Rust markdown renderer in `src-tauri/src/git/review.rs` (per-source fencing with collision-safe length, side-aware excerpt resolution, trailing unresolvable section, never panics) behind a single `generate_review_doc` IPC command with zero-comment gate; preview swap in ReviewPanel.
+- Phase 71 — Awaited clipboard `writeText` with in-button ✓ Copied affordance and explicit error-toast on failure (no fire-and-forget); 8 vitest cases covering happy path, rapid re-click, timer cleanup, and three error-coercion paths.
+- Phase 72 — Reviewing as a first-class in-window mode: Toolbar Review toggle with active state, simplified review-session rune (3 axes → 2), Copy directly on the comments view, and removal of the preview-pane detour (deleted `ReviewDocPreview.svelte` + its tests, removed RepoView blue strip).
+- Phase 73 — Both lifecycle endpoints in the UI: cold-boot resume fires `resume_review_session` exactly once when ReviewPanel opens on a repo with an on-disk session (closes Bug 3 from 72-VERIFICATION); two-step End-review button in the header (REQ-73-END); three-way empty-state branching that distinguishes cold / warm-no-commits / warm-zero-comments; session summary caption.
+- Phase 74 — Tech-debt close: CommitGraph listener canonicalPath filter + reloadSession error branching (66/WR-01..02), `seed_review_range` session-existence precheck (66/WR-03), `emit_session_changed` helper replacing 10 silent emits (66/WR-04), `slice_diff` per-hunk overlap gate via `Patch::from_diff` (70/CR-01), explicit `deriveDiffCapture` guard replacing 3× `noNonNullAssertion` (biome cleanup), and formal documentation of 70/WR-01 incidental closure by Phase 72.
+
+### Known Gaps
+
+Proceeded with the following non-blocking items unverified at close:
+
+- **Pending human UAT** — cross-repo session-changed isolation across two Tauri windows (Phase 73). One outstanding scenario; all earlier UAT items in v0.13-MILESTONE-AUDIT.md still apply.
+- **INT-W1** — `seed_review_range` resolves canonical repo path inside `spawn_blocking` while siblings resolve before. Stylistic inconsistency, not a bug.
+- **INT-W2** — `save_draft_comment` can fail with `no_session` if End-review fires from another tab mid-draft. Edge case; out-of-band failure path is not surfaced to the composer UI.
+- **Nyquist validation** — 3 of 9 phases compliant (67, 69, 72); phases 65, 66, 68, 70, 71, 73 carry draft VALIDATION.md with `wave_0_complete: false`.
+
+Known deferred items at close: 40 (see STATE.md Deferred Items — all pre-existing across earlier milestones, none v0.13-specific blockers).
+
+---
+
 ## v0.12 Better Diffs (Shipped: 2026-03-30)
 
 **Phases completed:** 6 phases, 14 plans, 27 tasks
