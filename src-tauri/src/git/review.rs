@@ -827,6 +827,53 @@ mod tests {
     }
 
     #[test]
+    fn slice_diff_multi_hunk_isolates_opposing_side() {
+        // 70/CR-01 regression: in a multi-hunk file, opposing-side lines (the
+        // `-` rows when side == New, `+` rows when side == Old) from
+        // non-anchored hunks must NOT leak into the excerpt. The pre-fix
+        // line callback kept every opposing-side line regardless of which
+        // hunk it belonged to.
+        //
+        // Parent has 50 lines (`L1_PARENT\n…L50_PARENT\n`). Child edits line 5
+        // AND line 45. With default DiffOptions context (3), changes 40 lines
+        // apart are guaranteed-disjoint hunks. Anchoring at line 45 on
+        // Side::New must keep only the line-45 hunk's content; the line-5
+        // deletion (`L5_PARENT`) must NOT appear.
+        let (_dir, repo) = make_repo();
+
+        let mut parent_body = String::new();
+        for i in 1..=50 {
+            parent_body.push_str(&format!("L{i}_PARENT\n"));
+        }
+        let mut child_body = String::new();
+        for i in 1..=50 {
+            if i == 5 || i == 45 {
+                child_body.push_str(&format!("L{i}_CHILD\n"));
+            } else {
+                child_body.push_str(&format!("L{i}_PARENT\n"));
+            }
+        }
+        let a = commit_with_file(&repo, "A", &[], "foo.rs", parent_body.as_bytes());
+        let b = commit_with_file(&repo, "B", &[a], "foo.rs", child_body.as_bytes());
+        let an = anchor(b, "foo.rs", Source::Diff, Side::New, 45, 45);
+
+        let body = slice_diff(&repo, &an).expect("resolvable multi-hunk Diff slice");
+
+        assert!(
+            body.contains("L45_CHILD"),
+            "anchored hunk's new-side content must be kept, got {body:?}"
+        );
+        assert!(
+            !body.contains("L5_PARENT"),
+            "opposing-side deletion from the line-5 hunk leaked into the line-45 excerpt: {body:?}"
+        );
+        assert!(
+            !body.contains("L5_CHILD"),
+            "addition from the unrelated line-5 hunk leaked into the line-45 excerpt: {body:?}"
+        );
+    }
+
+    #[test]
     fn try_resolve_excerpt_short_circuits_on_missing_commit() {
         // classify_anchor must be the first call: a 40-zero OID is unknown
         // to the repo. The dispatcher returns Orphaned(CommitGone) WITHOUT
