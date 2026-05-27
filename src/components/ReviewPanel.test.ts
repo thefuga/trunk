@@ -637,8 +637,7 @@ describe("ReviewPanel", () => {
 	// Phase 72: Copy button replaces Generate. Click invokes generate_review_doc,
 	// then writeText with the returned markdown; ✓ Copied for 1500ms with
 	// clearTimeout-before-setTimeout re-arm; failure surfaces toast via
-	// instanceof Error narrowing. Pattern carry-forward from the now-deleted
-	// ReviewDocPreview.test.ts.
+	// instanceof Error narrowing.
 	describe("Copy", () => {
 		// Scope fake timers to THIS describe only. The file-global `flush` helper
 		// at the top uses `setTimeout(r, 0)` which deadlocks under fake timers —
