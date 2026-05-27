@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import Toolbar from "./Toolbar.svelte";
 
@@ -8,6 +8,7 @@ import "../__tests__/helpers/tauri-mock";
 // Explicitly mock @tauri-apps/api/event to prevent real listen calls
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: vi.fn().mockResolvedValue(() => {}),
+	emit: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock invoke module — safeInvoke for check_undo_available etc.
@@ -44,6 +45,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 		expect(screen.getByText("Pull")).toBeInTheDocument();
@@ -55,6 +57,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 		expect(screen.getByText("Push")).toBeInTheDocument();
@@ -66,6 +69,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 		expect(screen.getByText("Branch")).toBeInTheDocument();
@@ -77,6 +81,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 		expect(screen.getByText("Stash")).toBeInTheDocument();
@@ -89,6 +94,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 		expect(screen.getByText("Undo")).toBeInTheDocument();
@@ -104,6 +110,7 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState,
 				undoRedo: makeUndoRedo(),
+				reviewActive: false,
 			},
 		});
 
@@ -119,10 +126,42 @@ describe("Toolbar", () => {
 				repoPath: "/test/repo",
 				remoteState: makeRemoteState(),
 				undoRedo: makeUndoRedo(), // empty redoStack
+				reviewActive: false,
 			},
 		});
 
 		const redoBtn = screen.getByText("Redo").closest("button");
 		expect(redoBtn).toBeDisabled();
+	});
+
+	it("emits review-toggle on click", async () => {
+		const { emit } = await import("@tauri-apps/api/event");
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: false,
+			},
+		});
+		const reviewBtn = screen.getByText("Review").closest("button");
+		expect(reviewBtn).not.toBeNull();
+		await fireEvent.click(reviewBtn!);
+		expect(vi.mocked(emit)).toHaveBeenCalledWith("review-toggle");
+	});
+
+	it("shows active state when reviewActive is true", () => {
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: true,
+			},
+		});
+		const btn = screen.getByText("Review").closest("button");
+		expect(btn).not.toBeNull();
+		expect(btn).toHaveClass("toolbar-btn-active");
+		expect(btn).toHaveAttribute("aria-pressed", "true");
 	});
 });
