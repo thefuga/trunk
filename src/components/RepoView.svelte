@@ -808,40 +808,24 @@ function startRightResize(e: MouseEvent) {
   <div class="pane-divider" style="display: {leftPaneCollapsed ? 'none' : 'block'};" onmousedown={startLeftResize}></div>
   <div class="flex-1 overflow-hidden">
     {#if reviewSession.state.reviewActive}
-      <!-- Review mode claims the center pane (UI-SPEC:133). A persistent accent
-           "Review" toggle returns from a jumped-to diff back to the panel. -->
-      <div class="flex flex-col" style="height: 100%; min-height: 0;">
-        <div class="flex items-center" style="gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; background: var(--color-surface);">
-          <button
-            type="button"
-            onclick={() => reviewSession.showPanel()}
-            style="
-              background: {reviewSession.state.rightPaneMode === 'panel' ? 'var(--color-accent)' : 'transparent'};
-              color: {reviewSession.state.rightPaneMode === 'panel' ? 'var(--color-bg)' : 'var(--color-text-muted)'};
-              border: 1px solid {reviewSession.state.rightPaneMode === 'panel' ? 'var(--color-accent)' : 'var(--color-border)'};
-              border-radius: 4px;
-              cursor: pointer;
-              padding: 2px 10px;
-              font-size: 12px;
-            "
-          >Review</button>
-        </div>
-        <div class="flex flex-col" style="flex: 1; min-height: 0; overflow: hidden;">
-          {#if reviewSession.state.rightPaneMode === 'diff' && showDiff}
-            <DiffPanel
-              bind:this={diffPanelRef}
-              fileDiffs={currentDiffFiles}
-              commitDetail={commitDetail}
-              selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-              diffKind="commit"
-              {repoPath}
-              loading={stagingDiffLoading}
-              onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
-            />
-          {:else}
-            <ReviewPanel {repoPath} session={reviewSession} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
-          {/if}
-        </div>
+      <!-- Review mode claims the center pane (UI-SPEC:133). Entry/exit is via
+           Toolbar Review button or Cmd+Shift+R; DiffPanel close returns to
+           ReviewPanel via the onclose wiring below. -->
+      <div class="flex flex-col" style="flex: 1; min-height: 0; overflow: hidden;">
+        {#if reviewSession.state.rightPaneMode === 'diff' && showDiff}
+          <DiffPanel
+            bind:this={diffPanelRef}
+            fileDiffs={currentDiffFiles}
+            commitDetail={commitDetail}
+            selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
+            diffKind="commit"
+            {repoPath}
+            loading={stagingDiffLoading}
+            onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
+          />
+        {:else}
+          <ReviewPanel {repoPath} session={reviewSession} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
+        {/if}
       </div>
     {:else if showMergeEditor && selectedFile}
       <MergeEditor

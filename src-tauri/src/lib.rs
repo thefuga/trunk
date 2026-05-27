@@ -22,10 +22,11 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+F")
                 .build(app)?;
 
-            // Temporary trigger for the review-session stub (D-12); replaced by the
-            // real panel in Phase 69. Mirrors the find → search-toggle precedent.
-            let review_item =
-                MenuItemBuilder::with_id("review-toggle", "Start/End Code Review").build(app)?;
+            // View → Start/End Code Review menu item; emits `review-toggle` so the
+            // frontend can flip review mode. Accelerator mirrors find → search-toggle.
+            let review_item = MenuItemBuilder::with_id("review-toggle", "Start/End Code Review")
+                .accelerator("CmdOrCtrl+Shift+R")
+                .build(app)?;
 
             let app_menu = SubmenuBuilder::new(app, "Trunk")
                 .about(None)
