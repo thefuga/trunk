@@ -171,26 +171,62 @@ pub(crate) fn slice_diff(repo: &git2::Repository, anchor: &Anchor) -> Result<Str
     let side = anchor.side.clone();
     let start_line = anchor.start_line;
     let end_line = anchor.end_line;
+
+    // 70/CR-01 fix: walk the diff via `git2::Patch` so each hunk's positional
+    // overlap with `[start_line, end_line]` can gate its opposing-side lines.
+    // `opts.pathspec(&anchor.file_path)` constrains the diff to a single file,
+    // so file index 0 is the only delta — same pattern as
+    // commands/staging.rs:370 / 430 / 481. Pitfall 2: when the pathspec
+    // matches no changed delta (file byte-identical to parent), the diff has
+    // zero deltas and `Patch::from_diff` would error on index 0 — surface as
+    // `NoHunks`, matching the legacy post-loop "empty body" behavior. `None`
+    // covers the binary-or-unchanged single-delta case for parity with
+    // staging.rs.
+    if diff.deltas().len() == 0 {
+        return Err(ExcerptError::NoHunks);
+    }
+    let patch =
+        match git2::Patch::from_diff(&diff, 0).map_err(|_| ExcerptError::ResolutionFailed)? {
+            Some(p) => p,
+            None => return Err(ExcerptError::NoHunks),
+        };
+
     let mut out = String::new();
-    diff.foreach(
-        &mut |_d, _p| true,
-        None,
-        Some(&mut |_d, _h| true),
-        Some(&mut |_d, _h, line| {
+    for h_idx in 0..patch.num_hunks() {
+        let (hunk, _line_count) = patch
+            .hunk(h_idx)
+            .map_err(|_| ExcerptError::ResolutionFailed)?;
+        let (h_start, h_count) = match side {
+            Side::New => (hunk.new_start(), hunk.new_lines()),
+            Side::Old => (hunk.old_start(), hunk.old_lines()),
+        };
+        let h_end = h_start + h_count.saturating_sub(1);
+        let overlaps = h_start <= end_line && h_end >= start_line;
+        let line_count = patch
+            .num_lines_in_hunk(h_idx)
+            .map_err(|_| ExcerptError::ResolutionFailed)?;
+        for l_idx in 0..line_count {
+            let line = patch
+                .line_in_hunk(h_idx, l_idx)
+                .map_err(|_| ExcerptError::ResolutionFailed)?;
             let lineno = match side {
                 Side::New => line.new_lineno(),
                 Side::Old => line.old_lineno(),
             };
             // Lines with a side-lineno: keep if in [start_line, end_line].
             // Lines WITHOUT one (the opposing-side change row): keep iff
-            // origin matches the opposing-direction change marker (Phase 67
-            // L-03 — visually anchors the range).
+            // the hunk overlaps the anchor range AND the origin matches the
+            // opposing-direction change marker (Phase 67 L-03 — visually
+            // anchors the range, gated per-hunk to fix 70/CR-01).
             let in_range = match lineno {
                 Some(n) => n >= start_line && n <= end_line,
-                None => matches!(
-                    (side.clone(), line.origin()),
-                    (Side::New, '-') | (Side::Old, '+')
-                ),
+                None => {
+                    overlaps
+                        && matches!(
+                            (side.clone(), line.origin()),
+                            (Side::New, '-') | (Side::Old, '+')
+                        )
+                }
             };
             if in_range {
                 let prefix = match line.origin() {
@@ -200,10 +236,8 @@ pub(crate) fn slice_diff(repo: &git2::Repository, anchor: &Anchor) -> Result<Str
                 out.push(prefix);
                 out.push_str(&String::from_utf8_lossy(line.content()));
             }
-            true
-        }),
-    )
-    .map_err(|_| ExcerptError::ResolutionFailed)?;
+        }
+    }
 
     if out.is_empty() {
         Err(ExcerptError::NoHunks)
