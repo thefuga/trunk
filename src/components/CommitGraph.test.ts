@@ -31,9 +31,10 @@ if (typeof Element.prototype.scrollTo === "undefined") {
 // Mock safeInvoke at the wrapper layer so tests can dispatch by command name and
 // reject with TrunkError shapes for the WR-02 error branching tests.
 vi.mock("../lib/invoke.js", async () => {
-	const actual = await vi.importActual<typeof import("../lib/invoke.js")>(
-		"../lib/invoke.js",
-	);
+	const actual =
+		await vi.importActual<typeof import("../lib/invoke.js")>(
+			"../lib/invoke.js",
+		);
 	return {
 		...actual,
 		safeInvoke: vi.fn(),
@@ -48,14 +49,12 @@ vi.mock("../lib/toast.svelte.js", () => ({
 // CommitGraph also registers a search-toggle listener; filter by event name.
 let sessionChangedHandler: ((event: { payload: string }) => void) | null = null;
 vi.mock("@tauri-apps/api/event", () => ({
-	listen: vi.fn(
-		(event: string, cb: (event: { payload: string }) => void) => {
-			if (event === "session-changed") sessionChangedHandler = cb;
-			return Promise.resolve(() => {
-				if (event === "session-changed") sessionChangedHandler = null;
-			});
-		},
-	),
+	listen: vi.fn((event: string, cb: (event: { payload: string }) => void) => {
+		if (event === "session-changed") sessionChangedHandler = cb;
+		return Promise.resolve(() => {
+			if (event === "session-changed") sessionChangedHandler = null;
+		});
+	}),
 }));
 
 function fireSessionChanged(payload: string): void {
@@ -136,12 +135,14 @@ const TEST_COMMITS = [
 // Install the dispatcher. Reads route by command name; tests override individual
 // commands via `extra` (called BEFORE this installer to layer rejections).
 type DispatchOverride = (cmd: string) => unknown | undefined;
-function installReads(opts: {
-	commits?: typeof TEST_COMMITS;
-	status?: SessionStatus | null;
-	sessionCommits?: { oid: string }[];
-	override?: DispatchOverride;
-} = {}) {
+function installReads(
+	opts: {
+		commits?: typeof TEST_COMMITS;
+		status?: SessionStatus | null;
+		sessionCommits?: { oid: string }[];
+		override?: DispatchOverride;
+	} = {},
+) {
 	const status = opts.status;
 	const commits = opts.commits ?? TEST_COMMITS;
 	const sessionCommits = opts.sessionCommits ?? [];

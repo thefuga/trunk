@@ -20,9 +20,16 @@ import "../__tests__/helpers/tauri-mock";
 // Command-aware safeInvoke dispatcher: the panel issues three reads on mount
 // (list_session_commits / list_session_comments / resolve_session_comments) via
 // Promise.all, so a sequential mock would be fragile — route by command name.
-vi.mock("../lib/invoke.js", () => ({
-	safeInvoke: vi.fn(),
-}));
+vi.mock("../lib/invoke.js", async () => {
+	const actual =
+		await vi.importActual<typeof import("../lib/invoke.js")>(
+			"../lib/invoke.js",
+		);
+	return {
+		...actual,
+		safeInvoke: vi.fn(),
+	};
+});
 
 vi.mock("../lib/toast.svelte.js", () => ({
 	showToast: vi.fn(),
