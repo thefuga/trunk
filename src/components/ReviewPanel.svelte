@@ -521,7 +521,28 @@ $effect(() => {
       line-height: 1.5;
     "
   >
-  {#if groups.length === 0}
+  <!-- Phase 73-03 — Session summary caption (D-04). Visible whenever a session
+       exists (cold branch hides it); sits ABOVE the empty-state block so the
+       count is the first thing the eye lands on when the body has content. -->
+  {#if sessionState !== "none"}
+    <span style="color: var(--color-text-muted); font-size: 11px; padding: 2px 0;">
+      {comments.length} comments · {commits.length} commits
+    </span>
+  {/if}
+
+  <!-- Phase 73-03 — Three-way empty-state branching (D-06). Order is specificity-
+       first: cold (no session) → warm-no-commits (existing copy preserved
+       verbatim) → warm-with-commits-zero-comments (replaces prior "No comments
+       yet." copy). The three branches are mutually exclusive; when the user has
+       added at least one comment, none render and the list below takes over. -->
+  {#if sessionState === "none"}
+    <div class="flex flex-col" style="gap: 4px; padding: 12px;">
+      <span>No active review</span>
+      <span style="color: var(--color-text-muted); font-size: 11px;">
+        Toggle review mode in the toolbar to start.
+      </span>
+    </div>
+  {:else if groups.length === 0}
     <div class="flex flex-col" style="gap: 4px; padding: 12px;">
       <span>No commits in this review yet.</span>
       <span style="color: var(--color-text-muted); font-size: 11px;">
@@ -530,9 +551,9 @@ $effect(() => {
     </div>
   {:else if !hasAnyComment}
     <div class="flex flex-col" style="gap: 4px; padding: 12px;">
-      <span>No comments yet.</span>
+      <span>Review started.</span>
       <span style="color: var(--color-text-muted); font-size: 11px;">
-        Select lines in a diff to comment, or add a note to a commit above.
+        Select diff lines or add a commit note to comment.
       </span>
     </div>
   {/if}
