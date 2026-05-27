@@ -1023,3 +1023,194 @@ describe("cold-boot resume", () => {
 		);
 	});
 });
+
+// Phase 73-02 — End-review affordance. Two-step inline confirmation on the panel
+// header: first click flips label to "Click again to confirm" + danger color
+// (3000ms auto-revert with rapid-reclick re-arm); second click within the window
+// invokes end_review_session({ path: repoPath }). Failure path surfaces a toast
+// via errorMessage(); arrays are NOT manually cleared (D-08 — the session-changed
+// listener round-trip is the canonical refresh). Component unmount during the
+// confirming window clears the pending timer ($effect teardown — Pitfall 3).
+//
+// FAKE timers — scoped to THIS describe only. The file-global `flush()` helper
+// uses setTimeout(r, 0) and deadlocks under fake timers (same constraint as
+// describe("Copy") above; the local flushFake is microtask-only).
+describe("End review", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// Microtask flush — safe under fake timers (no setTimeout(0)).
+	async function flushFake() {
+		await Promise.resolve();
+		await tick();
+	}
+
+	// Render helper mirroring renderWithComment in the Copy describe. Returns
+	// the full render() handle so tests that need the unmount() callback
+	// (Test 6) can destructure it; Tests 1–5 ignore the return value.
+	function renderWithSession() {
+		installReads({
+			commits,
+			comments: [lineAnchoredComment("c1", COMMIT_A, "x")],
+			resolutions: [resolvable("c1")],
+			status: {
+				state: "active",
+				file_exists: true,
+				canonical_path: "/repo",
+			},
+		});
+		return render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+	}
+
+	function endCallCount(): number {
+		return calledCommands().filter((c) => c === "end_review_session").length;
+	}
+
+	function getEndButton() {
+		// Idle label is "End review"; confirming label is "Click again to confirm".
+		// Both share no common substring with "End review", so use a regex union.
+		return screen.getByRole("button", {
+			name: /End review|Click again to confirm/,
+		});
+	}
+
+	it("first click enters confirming state without invoking end_review_session", async () => {
+		renderWithSession();
+		await flushFake();
+
+		await fireEvent.click(getEndButton());
+		await flushFake();
+
+		expect(getEndButton()).toHaveTextContent(/Click again to confirm/);
+		expect(endCallCount()).toBe(0);
+	});
+
+	it("second click invokes end_review_session({ path }) exactly once", async () => {
+		renderWithSession();
+		await flushFake();
+
+		await fireEvent.click(getEndButton());
+		await flushFake();
+		await fireEvent.click(getEndButton());
+		await flushFake();
+
+		expect(endCallCount()).toBe(1);
+		expect(callArgs("end_review_session")).toEqual({ path: "/repo" });
+		// Success path: no error toast.
+		const errorCalls = vi
+			.mocked(showToast)
+			.mock.calls.filter((c) => c[1] === "error");
+		expect(errorCalls.length).toBe(0);
+	});
+
+	it("auto-reverts to idle after 3000ms with no second click", async () => {
+		renderWithSession();
+		await flushFake();
+
+		await fireEvent.click(getEndButton());
+		await flushFake();
+		expect(getEndButton()).toHaveTextContent(/Click again to confirm/);
+
+		vi.advanceTimersByTime(3000);
+		await tick();
+
+		expect(getEndButton()).toHaveTextContent(/^End review$/);
+		expect(endCallCount()).toBe(0);
+	});
+
+	it("second click within window cancels the auto-revert timer (clearTimeout before setTimeout)", async () => {
+		renderWithSession();
+		await flushFake();
+
+		// First click at virtual t=0 — arm the 3000ms revert.
+		await fireEvent.click(getEndButton());
+		await flushFake();
+		expect(getEndButton()).toHaveTextContent(/Click again to confirm/);
+
+		// Second click at virtual t=2000 — should clear the t=0+3000 revert AND
+		// fire the IPC. Under mocked listen() the post-success session-changed
+		// reload never happens, so the button stays in the confirming label —
+		// proving the original revert timer was cancelled.
+		vi.advanceTimersByTime(2000);
+		await fireEvent.click(getEndButton());
+		await flushFake();
+
+		// Now at virtual t=2000 + IPC await. Advance another 1500ms — past
+		// the original t=3000 revert deadline. If the timer hadn't been cleared
+		// the button would have reverted to "End review" by now.
+		vi.advanceTimersByTime(1500);
+		await tick();
+
+		expect(endCallCount()).toBe(1);
+		expect(getEndButton()).not.toHaveTextContent(/^End review$/);
+	});
+
+	it("surfaces 'Failed to end review: …' toast on end_review_session rejection", async () => {
+		installReads({
+			commits,
+			comments: [lineAnchoredComment("c1", COMMIT_A, "x")],
+			resolutions: [resolvable("c1")],
+			status: {
+				state: "active",
+				file_exists: true,
+				canonical_path: "/repo",
+			},
+			endRejection: {
+				code: "no_session",
+				message: "No active review session",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flushFake();
+
+		await fireEvent.click(getEndButton());
+		await flushFake();
+		await fireEvent.click(getEndButton());
+		await flushFake();
+
+		expect(vi.mocked(showToast)).toHaveBeenCalledWith(
+			"Failed to end review: No active review session",
+			"error",
+		);
+		expect(endCallCount()).toBe(1);
+		// Arrays untouched on failure — comment text remains rendered (D-08).
+		expect(screen.getByText("x")).toBeInTheDocument();
+	});
+
+	it("clears pending timer on unmount (no console.error from torn-down state)", async () => {
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const { unmount } = renderWithSession();
+		await flushFake();
+
+		await fireEvent.click(getEndButton());
+		await flushFake();
+		expect(getEndButton()).toHaveTextContent(/Click again to confirm/);
+
+		unmount();
+		vi.advanceTimersByTime(3000);
+		await Promise.resolve();
+
+		expect(consoleError.mock.calls.length).toBe(0);
+		consoleError.mockRestore();
+	});
+});
