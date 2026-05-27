@@ -18,21 +18,9 @@ import type { Comment, Side } from "./types";
 
 export type RightPaneMode = "panel" | "diff";
 
-// Phase 70 D-02: the ReviewPanel swaps in-place between the comment list and a
-// markdown preview of the generated review doc. The preview slot is panel-
-// internal — sibling to `rightPaneMode`'s panel-vs-diff dimension, not a
-// replacement for it.
-export type PanelMode = "list" | "preview";
-
 export interface ReviewSessionState {
 	reviewActive: boolean;
 	rightPaneMode: RightPaneMode;
-	// Phase 70 D-02: which face the ReviewPanel currently shows.
-	panelMode: PanelMode;
-	// Phase 70 D-02: cached generated doc; null when no preview has been
-	// generated for this session. Re-generating is the only invalidation path
-	// (swap-back to list preserves the cache).
-	previewMarkdown: string | null;
 }
 
 // The navigation seams jumpTo composes. Plan 05 binds these to RepoView's
@@ -53,53 +41,27 @@ export interface ReviewSessionManager {
 	showPanel(): void;
 	showDiff(): void;
 	jumpTo(comment: Comment, deps: JumpDeps): Promise<void>;
-	// Phase 70 D-02: ReviewPanel panel-internal view-swap actions.
-	showList(): void;
-	showPreview(md: string): void;
-	// Phase 70 DOC-01: calls `generate_review_doc` IPC and, on success, stores
-	// the returned markdown and swaps the panel to preview. Rejection propagates
-	// to the caller for toast surfacing; state is NOT partially updated.
-	generate(repoPath: string): Promise<void>;
+	// Phase 72: calls `generate_review_doc` IPC and returns the markdown.
+	// State is untouched; the caller composes the result (e.g. writeText for
+	// clipboard). Rejection propagates verbatim.
+	generate(repoPath: string): Promise<string>;
 }
 
 export function createReviewSession(): ReviewSessionManager {
 	const state: ReviewSessionState = $state({
 		reviewActive: false,
 		rightPaneMode: "panel" as RightPaneMode,
-		panelMode: "list" as PanelMode,
-		previewMarkdown: null,
 	});
 
 	return {
 		state,
 		setReviewActive(active: boolean) {
 			state.reviewActive = active;
-			// Deactivation ends the session — the cached preview belongs to that
-			// session's snapshot and is no longer meaningful. Reactivation does NOT
-			// touch the preview fields (the rune is reused across activate-toggles
-			// within the same logical session; only the explicit teardown clears).
-			if (!active) {
-				state.previewMarkdown = null;
-				state.panelMode = "list";
-			}
 		},
-		showList() {
-			state.panelMode = "list";
-		},
-		showPreview(md: string) {
-			state.previewMarkdown = md;
-			state.panelMode = "preview";
-		},
-		async generate(repoPath: string) {
-			// IMPORTANT: the assignment order is "await then write." A rejection
-			// from safeInvoke (e.g. TrunkError code "no_comments") propagates
-			// before any state mutation, so the panel stays on the list view and
-			// the cached previewMarkdown (if any) is untouched.
-			const md = await safeInvoke<string>("generate_review_doc", {
+		async generate(repoPath: string): Promise<string> {
+			return await safeInvoke<string>("generate_review_doc", {
 				path: repoPath,
 			});
-			state.previewMarkdown = md;
-			state.panelMode = "preview";
 		},
 		showPanel() {
 			state.rightPaneMode = "panel";
