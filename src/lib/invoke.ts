@@ -7,6 +7,19 @@ export interface TrunkError {
 	message: string;
 }
 
+// Type guard for the TrunkError shape thrown by safeInvoke (a plain object with
+// string `code` + `message`, NOT an Error subclass). Used in catch blocks to
+// surface `.message` and branch on `.code` without an unchecked `as` cast.
+export function isTrunkError(e: unknown): e is TrunkError {
+	return (
+		typeof e === "object" &&
+		e !== null &&
+		"code" in e &&
+		"message" in e &&
+		typeof (e as { message: unknown }).message === "string"
+	);
+}
+
 export async function safeInvoke<T>(
 	cmd: string,
 	args?: Record<string, unknown>,

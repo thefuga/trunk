@@ -8,7 +8,7 @@
 import { Clipboard, MessageSquarePlus, Trash2 } from "@lucide/svelte";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { safeInvoke, type TrunkError } from "../lib/invoke.js";
+import { isTrunkError, safeInvoke, type TrunkError } from "../lib/invoke.js";
 import type { ReviewSessionManager } from "../lib/review-session.svelte.js";
 import { showToast } from "../lib/toast.svelte.js";
 import type {
@@ -149,19 +149,6 @@ let sessionState = $state<SessionState>("none");
 let endConfirming = $state(false);
 // Plain handle, not $state — only used to clear; reactivity is on `endConfirming`.
 let endTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Type guard for the TrunkError shape thrown by safeInvoke (a plain object with
-// string `code` + `message`, NOT an Error subclass — see lib/invoke.ts). Used
-// in catch blocks to surface `.message` without an unchecked `as` cast.
-function isTrunkError(e: unknown): e is TrunkError {
-	return (
-		typeof e === "object" &&
-		e !== null &&
-		"code" in e &&
-		"message" in e &&
-		typeof (e as { message: unknown }).message === "string"
-	);
-}
 
 // Extract a human-readable message from an unknown catch value. Handles three
 // shapes: native Error (writeText / plugin throws), TrunkError (safeInvoke
