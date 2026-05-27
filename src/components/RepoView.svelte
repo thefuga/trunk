@@ -809,9 +809,13 @@ function startRightResize(e: MouseEvent) {
   <div class="flex-1 overflow-hidden">
     {#if reviewSession.state.reviewActive}
       <!-- Review mode claims the center pane (UI-SPEC:133). Entry/exit is via
-           Toolbar Review button or Cmd+Shift+R; DiffPanel close returns to
-           ReviewPanel via the onclose wiring below. -->
-      <div class="flex flex-col" style="flex: 1; min-height: 0; overflow: hidden;">
+           Toolbar Review button or the View → Start/End Code Review menu item;
+           DiffPanel close returns to ReviewPanel via the onclose wiring below.
+           Wrapper uses height:100% (not flex:1) so the ReviewPanel scroll body
+           has a constrained height — its parent .flex-1 is a flex *child*, so
+           flex:1 here resolves to intrinsic height and the comments list has
+           nothing to scroll against (Phase 72 gap closure). -->
+      <div class="flex flex-col" style="height: 100%; min-height: 0; overflow: hidden;">
         {#if reviewSession.state.rightPaneMode === 'diff' && showDiff}
           <DiffPanel
             bind:this={diffPanelRef}

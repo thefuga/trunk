@@ -48,7 +48,7 @@ Tasks are listed in execution order (Wave → Plan → Task). Threat refs come f
 | 72-03-T1 | 03 | 2 | REQ-72-3a, REQ-72-3b, REQ-72-3c, REQ-72-3d, REQ-72-3e | T-72-I (accept LOW: same error-toast surface as Phase 71); T-72-D (mitigated: clearTimeout before setTimeout) | Copy handler uses `instanceof Error` narrowing (never `as`); clipboard write uses pre-granted capability; error toast carries no new data shapes | unit (RED+GREEN atomic — Pitfall 3) | `bun run vitest run src/components/ReviewPanel.test.ts` | ✅ src/components/ReviewPanel.svelte, src/components/ReviewPanel.test.ts | ⬜ pending |
 | 72-04-T1 | 04 | 3 | REQ-72-4a | T-72-T (N/A: source deletion only) | `ReviewDocPreview.svelte` + `.test.ts` removed; no dangling imports; full suite still green after deletion | file-absence + smoke | `test ! -f src/components/ReviewDocPreview.svelte && test ! -f src/components/ReviewDocPreview.test.ts && rg -n "ReviewDocPreview" src/ \| (grep -v '^$' \|\| true) \| wc -l \| grep -qE '^\s*0\s*$' && bun run vitest run` | ✅ paths to be deleted | ⬜ pending |
 | 72-04-T2 | 04 | 3 | REQ-72-5a, REQ-72-6 | T-72-E (N/A: no new capability) | Blue-strip deletion reduces UI attack surface; accelerator binds to existing menu item (no new handler); CLAUDE.md grid/flexbox discipline preserved | smoke (phase gate) | `just check` | ✅ src/components/RepoView.svelte, src-tauri/src/lib.rs | ⬜ pending |
-| 72-04-T3 | 04 | 3 | REQ-72-1b, REQ-72-1c, REQ-72-5b | (no new threat surface) | Manual confirmation that Cmd+Shift+R, View menu, and DiffPanel close all route to the same `review-toggle` / `showPanel()` paths | manual UAT (blocking checkpoint) | n/a — checkpoint:human-verify | n/a | ⬜ pending |
+| 72-04-T3 | 04 | 3 | ~~REQ-72-1b~~ (RETRACTED — see 72-05), REQ-72-1c, REQ-72-5b | (no new threat surface) | Manual confirmation that View menu and DiffPanel close route to the same `review-toggle` / `showPanel()` paths (Cmd+Shift+R retracted in 72-05) | manual UAT (blocking checkpoint) | n/a — checkpoint:human-verify | n/a | n/a — RETRACTED in 72-05 (for REQ-72-1b); other reqs still ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -56,7 +56,7 @@ Tasks are listed in execution order (Wave → Plan → Task). Threat refs come f
 
 - Every task either runs an `<automated>` verify or sits behind a blocking `checkpoint:human-verify` (72-04-T3).
 - No 3 consecutive tasks lack an automated verify (only 72-04-T3 is checkpoint-only, sandwiched between 72-04-T2's `just check` and the SUMMARY write).
-- `REQ-72-1b`, `REQ-72-1c`, `REQ-72-5b` are intentionally manual per VALIDATION.md `## Manual-Only Verifications` (Tauri menu config + interaction).
+- ~~`REQ-72-1b`~~ (RETRACTED — see 72-05), `REQ-72-1c`, `REQ-72-5b` are intentionally manual per VALIDATION.md `## Manual-Only Verifications` (Tauri menu config + interaction).
 - `REQ-72-5a` is manual per Wave 0 finding (RepoView.test.ts contains no assertions on the blue-strip; grep verified at planning time).
 
 ### Phase requirements → Test Map (reference, from RESEARCH.md §Validation Architecture)
@@ -64,7 +64,7 @@ Tasks are listed in execution order (Wave → Plan → Task). Threat refs come f
 | Req ID | Behavior | Test Type | Automated Command |
 |--------|----------|-----------|-------------------|
 | REQ-72-1a | Toolbar Review button click emits `review-toggle` | unit | `bun run vitest run src/components/Toolbar.test.ts -t "review-toggle"` |
-| REQ-72-1b | Cmd+Shift+R triggers the menu item | manual UAT | — |
+| ~~REQ-72-1b~~ | ~~Cmd+Shift+R triggers the menu item~~ (RETRACTED — see 72-05) | manual UAT | — |
 | REQ-72-1c | View menu "Start/End Code Review" regression | manual UAT | — |
 | REQ-72-2 | Toolbar button active styling when `reviewActive === true` | unit | `bun run vitest run src/components/Toolbar.test.ts -t "active state"` |
 | REQ-72-3a | Copy click calls `generate` then `writeText` with returned markdown | unit | `bun run vitest run src/components/ReviewPanel.test.ts -t "copy click invokes generate and writeText"` |
@@ -97,7 +97,7 @@ Bundled into 72-04-T3 (single blocking `checkpoint:human-verify`) for atomic sig
 
 | Behavior | Requirement | Why Manual | Test Instructions (full script in 72-04-PLAN.md Task 3) |
 |----------|-------------|------------|---------------------------------------------------------|
-| Cmd+Shift+R toggles review mode | REQ-72-1b | OS-level menu accelerator binding (Tauri config only) | Press `Cmd+Shift+R` → Toolbar Review button toggles active state. |
+| ~~Cmd+Shift+R toggles review mode~~ | ~~REQ-72-1b~~ | ~~OS-level menu accelerator binding (Tauri config only)~~ | ~~Press `Cmd+Shift+R` → Toolbar Review button toggles active state.~~ (RETRACTED — see 72-05) |
 | View → Start/End Code Review still works | REQ-72-1c | Native macOS menu regression | Open View menu → confirm item present with `⌘⇧R` hint → click → toggles. |
 | DiffPanel close returns to ReviewPanel | REQ-72-5b | Surviving wiring (`reviewSession.showPanel()` at RepoView.svelte:~839) is the post-72 sole back-affordance | Enter review → jump from a comment to a diff → close DiffPanel → returns to ReviewPanel. |
 | Blue header strip removed | REQ-72-5a | Wave 0 finding: no existing automated coverage; visual confirmation | Inspect RepoView pane during review mode → no blue button above ReviewPanel/DiffPanel. |

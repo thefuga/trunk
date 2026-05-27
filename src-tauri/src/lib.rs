@@ -23,10 +23,10 @@ pub fn run() {
                 .build(app)?;
 
             // View → Start/End Code Review menu item; emits `review-toggle` so the
-            // frontend can flip review mode. Accelerator mirrors find → search-toggle.
-            let review_item = MenuItemBuilder::with_id("review-toggle", "Start/End Code Review")
-                .accelerator("CmdOrCtrl+Shift+R")
-                .build(app)?;
+            // frontend can flip review mode. No keyboard accelerator — user UAT
+            // surfaced a clash with launcher-tool shortcuts (Phase 72 gap closure).
+            let review_item =
+                MenuItemBuilder::with_id("review-toggle", "Start/End Code Review").build(app)?;
 
             let app_menu = SubmenuBuilder::new(app, "Trunk")
                 .about(None)
