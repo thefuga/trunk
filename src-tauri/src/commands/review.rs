@@ -157,6 +157,21 @@ fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     })
 }
 
+/// Emit the `session-changed` Tauri event for `canonical`, logging on failure
+/// (66/WR-04). Phase 65's stance is "never silently destroy" — the previous
+/// `let _ = app.emit(...)` pattern violated it. Failure here is unrecoverable
+/// runtime fault (dead event bus); the diagnostic goes to stderr because the
+/// codebase has no `log`/`tracing` dependency.
+fn emit_session_changed(app: &AppHandle, canonical: &Path) {
+    if let Err(e) = app.emit("session-changed", canonical.to_string_lossy().into_owned()) {
+        eprintln!(
+            "session-changed emit failed for {}: {}",
+            canonical.display(),
+            e
+        );
+    }
+}
+
 // ── Selection core (Phase 66, Plan 01): pure, testable helpers ───────────────
 // These take a `&git2::Repository` (no Tauri state) so the range/validation logic
 // is provable against an in-process test repo. Plan 02 wraps them in commands.
