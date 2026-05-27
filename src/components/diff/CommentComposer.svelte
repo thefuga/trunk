@@ -37,11 +37,23 @@ let draftTimer: ReturnType<typeof setTimeout> | null = null;
 // The capture-time adapter is the single source of truth for both the persisted
 // range (start_line..end_line) and the excerpt. When the host injects a captured
 // result (full-file path) use it directly; otherwise derive it from the diff-path
-// props. The diff-path caller always supplies file/hunkIdx/selectedLineIndices,
-// so the non-null assertions document that contract rather than guard it.
-const capturedResult = $derived(
-	captured ?? buildDiffAnchor(commitOid, file!, hunkIdx!, selectedLineIndices!),
-);
+// props. The diff-path caller (DiffPanel.svelte) guards composerOpen &&
+// composerFile && composerHunkIdx !== null before mounting, so the three optional
+// props are always defined on that path; the throw branch documents the contract
+// rather than handling a reachable case.
+function deriveDiffCapture(): { anchor: Anchor; cachedExcerpt: string } {
+	if (
+		file === undefined ||
+		hunkIdx === undefined ||
+		selectedLineIndices === undefined
+	) {
+		throw new Error(
+			"CommentComposer: diff-path props missing — caller contract violated",
+		);
+	}
+	return buildDiffAnchor(commitOid, file, hunkIdx, selectedLineIndices);
+}
+const capturedResult = $derived(captured ?? deriveDiffCapture());
 
 const submitDisabled = $derived(text.trim() === "" || submitting);
 
