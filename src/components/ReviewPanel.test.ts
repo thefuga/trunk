@@ -1446,9 +1446,7 @@ describe("multi-tab coordination", () => {
 		expect(screen.getByText("No active review")).toBeInTheDocument();
 		expect(screen.queryByText("tab-A note")).toBeNull();
 		expect(screen.queryByText("Review started.")).toBeNull();
-		expect(
-			screen.queryByRole("button", { name: /End review/ }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: /End review/ })).toBeNull();
 	});
 
 	it("session-changed for different repo is filtered out", async () => {
