@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: completed
-stopped_at: Phase 72 UI-SPEC approved
+status: in-progress
+stopped_at: Phase 73 added to roadmap (carry-forward bundle from Phase 72)
 last_updated: "2026-05-27T07:38:28.483Z"
-last_activity: 2026-05-27 -- Phase 72 marked complete
+last_activity: 2026-05-27 -- Phase 73 added to roadmap
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
   total_plans: 28
   completed_plans: 28
-  percent: 100
+  percent: 89
 ---
 
 # Project State

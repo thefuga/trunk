@@ -193,6 +193,7 @@ Built in strict dependency order: lock the anchor schema and persistence first (
 - [x] **Phase 70: Excerpt Resolution + Markdown Render** — Generate one AI-framed markdown doc with resolved excerpts (completed 2026-05-26)
 - [x] **Phase 71: Output (Clipboard)** — Copy the doc to the clipboard with explicit success/failure feedback (save-to-file dropped 2026-05-26 — see 71-CONTEXT.md) (completed 2026-05-26)
 - [x] **Phase 72: Review-Pane UX Integration** — Toolbar button + Cmd+Shift+R entry, Copy directly on comments view (Generate becomes Copy), preview pane + dead blue button removed (closes G-71-A and G-71-B from 71-UAT.md) (completed 2026-05-27)
+- [ ] **Phase 73: Review Lifecycle (End-review + cold-boot resume)** — Bundle Bug 3 (comments don't appear on first open after app boot) with the End-review affordance, so the review session has both lifecycle endpoints. Carry-forward from Phase 72; see `.planning/todos/pending/phase-73-review-lifecycle.md`.
 
 #### Phase 65: Data Model + Persistence + Session Lifecycle
 
@@ -424,6 +425,28 @@ Plans:
 - All carry-forward patterns from Phase 71 (1500ms ✓ Copied, awaited writeText, instanceof Error narrowing, clearTimeout-before-setTimeout, vi.useFakeTimers test pattern) move into `ReviewPanel.test.ts` when `ReviewDocPreview.test.ts` is deleted.
 - Zero new dependencies, zero new IPC commands, zero new Tauri capabilities. Threat model carries forward from Phase 71 with no new findings.
 
+#### Phase 73: Review Lifecycle (End-review + cold-boot resume)
+
+**Goal**: A review session has both lifecycle endpoints in the UI — comments appear on first ReviewPanel open after app boot without requiring a mutation, and the user has an explicit End-review affordance so a review is not implicitly permanent.
+**Depends on**: Phase 65 (session persistence + `resume_review_session_inner`/`end_review_session_inner` primitives), Phase 69 (ReviewPanel surface), Phase 72 (Copy + Toolbar wiring — independent and unchanged)
+**Requirements**: Carry-forward bundle — closes Bug 3 from `.planning/phases/72-review-pane-ux-integration/72-VERIFICATION.md` and the End-review design ask captured in `.planning/todos/pending/phase-73-review-lifecycle.md`
+**Success Criteria** (what must be TRUE):
+
+  1. Cold boot → open ReviewPanel for a repo with an on-disk session → comments appear without any mutation needed.
+  2. ReviewPanel has a visible End-review affordance; clicking it (with confirmation) terminates the runtime session and removes the on-disk session file. After End-review, restarting the app shows no session for that repo (matches Phase 65 SC #4 for the explicit end path).
+  3. Empty-state copy distinguishes "no session active" (cold) from "session active, no comments yet" (warm-empty) — they no longer look identical.
+  4. Existing Copy flow still works; Copy and End are independently usable from the comments view.
+  5. `just check` exits 0 with all updated/new tests passing.
+
+**Plans**: TBD (see `/gsd:plan-phase 73`)
+
+**UI hint**: yes
+**Notes:**
+
+- Carry-forward source of truth: `.planning/todos/pending/phase-73-review-lifecycle.md` — contains the bundling rationale (advisor concern: auto-resume without End-review compounds the permanence problem), backend primitives already in place, and open design questions for `/gsd:discuss-phase`.
+- **Out of scope:** Keyboard shortcuts for Start/End review (REQ-72-1b was retracted in 72-05 due to UAT clash with launcher tools); review history / archival (Phase 74 candidate if asked).
+- **Open design questions to resolve in discuss-phase:** resume semantics (status discriminator vs. dedicated `resume_or_start` command); end-review semantics (wipe vs. archive); whether to surface a session-state header ("N comments across M commits"); whether Copy+End is one action or two.
+
 ## Progress
 
 | Milestone | Phases | Plans | Status | Shipped |
@@ -440,8 +463,8 @@ Plans:
 | v0.10 CI/CD & Releases | 50-52 | 4/4 | Complete | 2026-03-26 |
 | v0.11 Infrastructure | 53-58 | 16/16 | Complete | 2026-03-27 |
 | v0.12 Better Diffs | 59-64 | 14/14 | Complete | 2026-03-30 |
-| v0.13 Code Review Mode | 65-72 | 0/4+ | In progress | — |
+| v0.13 Code Review Mode | 65-73 | 0/4+ | In progress | — |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-05-26 — Phase 72 added: design locked via brainstorming, ready for /gsd:plan-phase 72*
+*Last updated: 2026-05-27 — Phase 73 added: lifecycle carry-forward bundle (Bug 3 + End-review), v0.13 reopened*
