@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Phase 73 Plan 01 complete; Plan 02 next (End-review affordance)
-last_updated: "2026-05-27T15:28:56Z"
-last_activity: 2026-05-27 -- Phase 73 Plan 01 shipped (cold-boot resume)
+stopped_at: Phase 73 Plan 02 complete; Plan 03 next (empty-state gating + summary caption)
+last_updated: "2026-05-27T17:40:00Z"
+last_activity: 2026-05-27 -- Phase 73 Plan 02 shipped (End-review two-step button)
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 31
-  completed_plans: 29
-  percent: 90
+  completed_plans: 30
+  percent: 93
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 ## Current Position
 
 Phase: 73 (review-lifecycle-end-review-cold-boot-resume) — EXECUTING
-Plan: 2 of 3 (Plan 01 shipped — cold-boot resume)
+Plan: 3 of 3 (Plans 01-02 shipped — cold-boot resume + End-review button)
 Status: Executing Phase 73
-Last activity: 2026-05-27 -- Phase 73 Plan 01 shipped (cold-boot resume)
+Last activity: 2026-05-27 -- Phase 73 Plan 02 shipped (End-review two-step button)
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 90%
 | Phase 69 P04 | 6min | 2 tasks | 2 files |
 | Phase 69 P03 | ~25min | 2 tasks | 2 files |
 | Phase 73 P01 | 7min | 3 tasks | 2 files |
+| Phase 73 P02 | 6min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,9 @@ Progress: [█████████░] 90%
 - [Phase 73]: 73-01: cold-boot resume gated on sessionState === 'resume-available'; recursion-safe because post-resume status is 'active' and the listener-triggered second reload skips the resume branch (RESEARCH Pitfall 1)
 - [Phase 73]: 73-01: errorMessage() returns extracted .message only; "Failed to resume review: " prefix added via template literal at the call site (matches RESEARCH §Pattern 2 canonical shape)
 - [Phase 73]: 73-01: installReads default status = 'active' so 26 pre-existing ReviewPanel tests stay on the warm path without modification; statusAfterResume dispatcher flip models the backend "resume-available" -> "active" transition for recursion-safety assertions
+- [Phase 73]: 73-02: button order shipped as [End review] [Copy] — End BEFORE Copy in the header flex row; UI-SPEC doesn't pin the order; destructive reads naturally to the left of the affirmative action
+- [Phase 73]: 73-02: endConfirming stays TRUE during the IPC await (label frozen at "Click again to confirm" per UI-SPEC § In-flight); success collapses via session-changed listener round-trip → sessionState === 'none' → {#if} gate hides the button; failure explicitly reverts + showToast
+- [Phase 73]: 73-02: toast prefix added via template literal (`Failed to end review: ${errorMessage(e, "unknown error")}`) — same shape as Plan 01's resume-fail toast; errorMessage extracts only .message, the prefix is added at the call site
 
 ### Pending Todos
 
@@ -158,7 +162,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-27
-Last session: 2026-05-27T15:28:56Z
-Stopped at: Phase 73 Plan 01 complete (cold-boot resume shipped)
-Resume file: .planning/phases/73-review-lifecycle-end-review-cold-boot-resume/73-02-PLAN.md
-Next action: Execute Plan 73-02 (End-review two-step button); manual smoke test of cold-boot resume against `just dev` is outstanding per 73-VALIDATION.md but non-blocking for Plan 02
+Last session: 2026-05-27T17:40:00Z
+Stopped at: Phase 73 Plan 02 complete (End-review two-step button shipped)
+Resume file: .planning/phases/73-review-lifecycle-end-review-cold-boot-resume/73-03-PLAN.md
+Next action: Execute Plan 73-03 (three-way empty-state branching + summary caption + multi-tab tests); manual smoke tests for Plans 01 + 02 (cold-boot resume + End button danger color) are outstanding per 73-VALIDATION.md but non-blocking for Plan 03

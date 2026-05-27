@@ -454,7 +454,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 73-02-PLAN.md — End-review two-step button in header (D-03/D-05/D-08) with danger color tokens
+- [x] 73-02-PLAN.md — End-review two-step button in header (D-03/D-05/D-08) with danger color tokens
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
