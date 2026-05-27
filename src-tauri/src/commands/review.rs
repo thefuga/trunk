@@ -623,10 +623,18 @@ fn save_draft_comment_inner(
     })
 }
 
-/// Sync core of `seed_review_range`: precheck (Task 2) + git2 walk + RMW. Takes
-/// a pre-resolved canonical (matching siblings like `add_review_commit:676-677`)
-/// and the raw `repo_path` for `Repository::open`. Extracted so a unit test can
-/// drive the no-walk-on-no-session contract without a Tauri runtime (66/WR-03).
+/// Sync core mirroring `seed_review_range`'s precheck + git2 walk + RMW sequence.
+/// Takes a pre-resolved canonical (matching siblings like
+/// `add_review_commit:676-677`) and the raw `repo_path` for `Repository::open`.
+///
+/// **Test-only.** The live command does NOT call this helper because
+/// `ReviewSessionsState` is a bare `Mutex` (not `Arc<Mutex>`), whose borrow
+/// cannot satisfy `spawn_blocking`'s `'static + Send` bound. The command
+/// duplicates the precheck inline above its `spawn_blocking` call; this helper
+/// exists so a unit test pins the no-walk-on-no-session contract (66/WR-03)
+/// without a Tauri runtime. Any future change to the live precheck must be
+/// mirrored here so the test continues to gate the contract.
+#[cfg(test)]
 fn seed_review_range_inner(
     data_dir: &Path,
     canonical: &Path,
@@ -635,6 +643,23 @@ fn seed_review_range_inner(
     tip_oid: &str,
     repo_path: &str,
 ) -> Result<(), TrunkError> {
+    // Fast-fail precheck (66/WR-03): probe the sessions mutex BEFORE any git2
+    // work. Without this, an empty sessions map forces libgit2 to open the
+    // repo, parse OIDs, validate, and walk the range — only for the RMW lock
+    // to surface `no_session` after a wasted walk. Held in an explicit scope
+    // so the MutexGuard drops before any git2 call. The TOCTOU window between
+    // this probe and `seed_review_range_rmw` is acceptable: if End-review
+    // fires between them, the RMW lock still surfaces `no_session` and the
+    // user-visible result is identical (RESEARCH §3 Option A).
+    {
+        let map = sessions.lock().unwrap();
+        if !map.contains_key(canonical) {
+            return Err(TrunkError::new(
+                "no_session",
+                "No active review session for this repository",
+            ));
+        }
+    }
     let repo = git2::Repository::open(repo_path).map_err(TrunkError::from)?;
     let base = git2::Oid::from_str(base_oid).map_err(TrunkError::from)?;
     let tip = git2::Oid::from_str(tip_oid).map_err(TrunkError::from)?;
@@ -664,19 +689,36 @@ pub async fn seed_review_range(
     let canonical =
         canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
 
+    // Fast-fail precheck (66/WR-03): bail before spawning the git2 walk when no
+    // session exists for this canonical. Mirrors the precheck inside
+    // `seed_review_range_inner` (which the unit test pins) — the inner can't
+    // run on the live command because `ReviewSessionsState` is a bare `Mutex`
+    // whose borrow cannot satisfy `spawn_blocking`'s `'static + Send` bound.
+    {
+        let map = sessions.0.lock().unwrap();
+        if !map.contains_key(&canonical) {
+            return Err(serde_json::to_string(&TrunkError::new(
+                "no_session",
+                "No active review session for this repository",
+            ))
+            .unwrap());
+        }
+    }
+
     let path_for_blocking = path.clone();
-    let range_oids = tauri::async_runtime::spawn_blocking(
-        move || -> Result<Vec<String>, TrunkError> {
+    let range_oids =
+        tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, TrunkError> {
             let repo = git2::Repository::open(&path_for_blocking).map_err(TrunkError::from)?;
             let base = git2::Oid::from_str(&base_oid).map_err(TrunkError::from)?;
             let tip = git2::Oid::from_str(&tip_oid).map_err(TrunkError::from)?;
             validate_range(&repo, base, tip)?;
             compute_range_oids(&repo, base, tip)
-        },
-    )
-    .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        })
+        .await
+        .map_err(|e| {
+            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+        })?
+        .map_err(|e| serde_json::to_string(&e).unwrap())?;
 
     seed_review_range_rmw(&data_dir, &canonical, &sessions.0, range_oids)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
