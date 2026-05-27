@@ -4,8 +4,8 @@ milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
 stopped_at: Phase 72 UI-SPEC approved
-last_updated: "2026-05-26T23:59:53.791Z"
-last_activity: 2026-05-26 -- Phase 72 planning complete
+last_updated: "2026-05-27T00:05:44.382Z"
+last_activity: 2026-05-27 -- Phase 72 execution started
 progress:
   total_phases: 8
   completed_phases: 7
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Phase 71 — output-clipboard-save-to-file
+**Current focus:** Phase 72 — review-pane-ux-integration
 
 ## Current Position
 
-Phase: 71 (output-clipboard-save-to-file) — EXECUTING
-Plan: 1 of 1
-Status: Ready to execute
-Last activity: 2026-05-26 -- Phase 72 planning complete
+Phase: 72 (review-pane-ux-integration) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 72
+Last activity: 2026-05-27 -- Phase 72 execution started
 
 Progress: [██████████] 95%
 

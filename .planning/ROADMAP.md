@@ -405,12 +405,12 @@ Plans:
 Plans:
 **Wave 1** *(parallel — zero file overlap)*
 
-- [ ] 72-01-PLAN.md — Simplify review-session rune: drop panelMode/previewMarkdown; generate returns Promise<string> (TDD)
-- [ ] 72-02-PLAN.md — Toolbar Review button + active state + emit; App.svelte prop wiring (TDD)
+- [x] 72-01-PLAN.md — Simplify review-session rune: drop panelMode/previewMarkdown; generate returns Promise<string> (TDD)
+- [x] 72-02-PLAN.md — Toolbar Review button + active state + emit; App.svelte prop wiring (TDD)
 
 **Wave 2** *(blocked on Wave 1: 72-01 for rune signature)*
 
-- [ ] 72-03-PLAN.md — ReviewPanel Copy refactor: rename Generate→Copy, drop preview branch, rewrite preview tests as Copy tests atomically (TDD, Pitfall 3)
+- [x] 72-03-PLAN.md — ReviewPanel Copy refactor: rename Generate→Copy, drop preview branch, rewrite preview tests as Copy tests atomically (TDD, Pitfall 3)
 
 **Wave 3** *(blocked on Wave 2 + Wave 1: 72-02 + 72-03)*
 
