@@ -485,6 +485,21 @@ Plans:
 | v0.12 Better Diffs | 59-64 | 14/14 | Complete | 2026-03-30 |
 | v0.13 Code Review Mode | 65-73 | 0/4+ | In progress | — |
 
+### Phase 74: Address v0.13 tech debt: 66/WR-01..04, 70/CR-01, 70/WR-01, biome warnings
+
+**Goal:** Close the six deferred v0.13 audit items that still apply to current code (66/WR-01..04, 70/CR-01, biome noNonNullAssertion ×3) and formally document 70/WR-01's incidental closure by Phase 72.
+**Requirements**: None (tech-debt phase; findings map to v0.13-MILESTONE-AUDIT.md IDs)
+**Depends on:** Phase 73
+**Plans:** 6 plans
+
+Plans:
+- [x] 74-01-PLAN.md — CommitGraph listener canonicalPath filter + reloadSession error branching (66/WR-01 + 66/WR-02, TDD)
+- [x] 74-02-PLAN.md — Replace 3× noNonNullAssertion in CommentComposer.svelte with explicit deriveDiffCapture guard (biome cleanup)
+- [x] 74-03-PLAN.md — Document 70/WR-01 closure in v0.13-MILESTONE-AUDIT.md (docs-only, drop-from-scope evidence)
+- [x] 74-04-PLAN.md — seed_review_range session-existence precheck (66/WR-03, incidentally closes INT-W1, TDD)
+- [x] 74-05-PLAN.md — emit_session_changed helper replaces 10 silent let _ = app.emit sites (66/WR-04, depends on 74-04)
+- [x] 74-06-PLAN.md — slice_diff per-hunk overlap gate via Patch::from_diff (70/CR-01, only correctness fix, Wave 3 isolated, TDD)
+
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-05-27 — Phase 73 added: lifecycle carry-forward bundle (Bug 3 + End-review), v0.13 reopened*
+*Last updated: 2026-05-27 — Phase 74 complete; all 6 plans landed (`just check` green); 1 human UAT item (cross-repo session-changed isolation across two windows)*

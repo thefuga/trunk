@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
-status: milestone_complete
-stopped_at: Milestone complete (Phase 73 was final phase)
-last_updated: 2026-05-27T17:14:33.305Z
-last_activity: 2026-05-27 -- Phase 73 Plan 03 shipped (empty-state branching, summary caption, multi-tab coordination)
+status: completed
+stopped_at: "Phase 74 complete — all 6 plans landed, just check green, 1 human UAT item (cross-repo session-changed)"
+last_updated: "2026-05-27T23:20:00.000Z"
+last_activity: 2026-05-27
 progress:
-  total_phases: 9
-  completed_phases: 12
-  total_plans: 157
-  completed_plans: 31
-  percent: 133
+  total_phases: 10
+  completed_phases: 10
+  total_plans: 37
+  completed_plans: 37
+  percent: 100
 ---
 
 # Project State
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** Milestone complete
+**Current focus:** v0.13 tech debt closed; milestone fully complete
 
 ## Current Position
 
-Phase: 73
-Plan: Not started
+Phase: 74 (complete)
+Plan: All 6 landed
 Status: Milestone complete
 Last activity: 2026-05-27
 
@@ -68,6 +68,10 @@ Progress: [██████████] 100%
 | Phase 73 P03 | 6min | 3 tasks | 2 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 74 added: Address v0.13 tech debt: 66/WR-01..04, 70/CR-01, 70/WR-01, biome warnings
 
 ### Decisions
 
@@ -166,7 +170,7 @@ None.
 ## Session Continuity
 
 Last activity: 2026-05-27
-Last session: 2026-05-27T15:53:33.669Z
-Stopped at: Phase 73 Plan 03 complete — phase ready for /gsd:verify-work 73
-Resume file: .planning/phases/73-review-lifecycle-end-review-cold-boot-resume/73-03-SUMMARY.md
-Next action: Execute Plan 73-03 (three-way empty-state branching + summary caption + multi-tab tests); manual smoke tests for Plans 01 + 02 (cold-boot resume + End button danger color) are outstanding per 73-VALIDATION.md but non-blocking for Plan 03
+Last session: 2026-05-27T23:20:00.000Z
+Stopped at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
+Resume file: .planning/phases/74-address-v0-13-tech-debt-66-wr-01-04-70-cr-01-70-wr-01-biome-/74-VERIFICATION.md
+Next action: 1 outstanding human UAT — cross-repo session-changed isolation in two Tauri windows. v0.13 milestone fully closed; ready for /gsd:complete-milestone or v0.14 planning.
