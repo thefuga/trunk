@@ -231,7 +231,7 @@ describe("ReviewPanel", () => {
 		expect(cmds).toContain("resolve_session_comments");
 	});
 
-	it("shows the no-comments empty state when commits exist but no comments", async () => {
+	it("shows the warm-with-commits empty state when commits exist but no comments", async () => {
 		installReads({ commits, comments: [], resolutions: [] });
 		render(ReviewPanel, {
 			props: {
@@ -242,7 +242,7 @@ describe("ReviewPanel", () => {
 			},
 		});
 		await flush();
-		expect(screen.getByText("No comments yet.")).toBeInTheDocument();
+		expect(screen.getByText("Review started.")).toBeInTheDocument();
 	});
 
 	it("shows the no-commits empty state when the session has no commits", async () => {
@@ -1214,5 +1214,159 @@ describe("End review", () => {
 
 		expect(consoleError.mock.calls.length).toBe(0);
 		consoleError.mockRestore();
+	});
+});
+
+// Phase 73-03 — Empty-state branching. Three mutually exclusive empty states
+// gated on the lifecycle rune + groups + comments arity:
+//   sessionState === "none"                          → cold ("No active review")
+//   sessionState !== "none" && groups.length === 0   → warm-no-commits (existing copy preserved)
+//   sessionState !== "none" && !hasAnyComment        → warm-with-commits ("Review started.")
+// REAL timers — these tests use the file-global `flush()` (setTimeout(r,0) + tick).
+describe("empty states", () => {
+	it("renders cold empty state when no session", async () => {
+		installReads({
+			commits: [],
+			comments: [],
+			resolutions: [],
+			status: {
+				state: "none",
+				file_exists: false,
+				canonical_path: "/repo",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		expect(screen.getByText("No active review")).toBeInTheDocument();
+		expect(
+			screen.getByText("Toggle review mode in the toolbar to start."),
+		).toBeInTheDocument();
+		// Warm copy and prior "No comments yet" must NOT be visible in the cold branch.
+		expect(screen.queryByText("Review started.")).toBeNull();
+		expect(screen.queryByText("No comments yet.")).toBeNull();
+	});
+
+	it("renders warm-with-commits empty state when session active and zero comments", async () => {
+		installReads({
+			commits,
+			comments: [],
+			resolutions: [],
+			status: {
+				state: "active",
+				file_exists: true,
+				canonical_path: "/repo",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		expect(screen.getByText("Review started.")).toBeInTheDocument();
+		expect(
+			screen.getByText("Select diff lines or add a commit note to comment."),
+		).toBeInTheDocument();
+		// Cold copy must NOT be visible when a session is active.
+		expect(screen.queryByText("No active review")).toBeNull();
+	});
+
+	it("renders existing warm-no-commits empty state when session active and zero commits", async () => {
+		installReads({
+			commits: [],
+			comments: [],
+			resolutions: [],
+			status: {
+				state: "active",
+				file_exists: true,
+				canonical_path: "/repo",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		expect(
+			screen.getByText("No commits in this review yet."),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("Add commits from the graph to start reviewing."),
+		).toBeInTheDocument();
+	});
+});
+
+// Phase 73-03 — Session summary caption. `{N} comments · {M} commits` above the
+// list whenever sessionState !== "none"; hidden in the cold branch.
+// The middle dot is U+00B7 (literal · character — NOT * or -).
+describe("summary line", () => {
+	it("renders session summary line when session active", async () => {
+		installReads({
+			commits,
+			comments: [
+				lineAnchoredComment("c1", COMMIT_A, "x"),
+				lineAnchoredComment("c2", COMMIT_A, "y"),
+			],
+			resolutions: [resolvable("c1"), resolvable("c2")],
+			status: {
+				state: "active",
+				file_exists: true,
+				canonical_path: "/repo",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		expect(screen.getByText("2 comments · 2 commits")).toBeInTheDocument();
+	});
+
+	it("no summary line when cold", async () => {
+		installReads({
+			commits: [],
+			comments: [],
+			resolutions: [],
+			status: {
+				state: "none",
+				file_exists: false,
+				canonical_path: "/repo",
+			},
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		// The "comments · " substring is unique to the caption — it cannot appear
+		// in the cold-state copy ("No active review" / "Toggle review mode…").
+		expect(screen.queryByText(/comments · /)).toBeNull();
 	});
 });
