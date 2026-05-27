@@ -5,7 +5,7 @@
 // and jump-to-anchor with read-only orphan rows (D-07 / D-08). The panel lives
 // in the center pane (UI-SPEC:133); jump is driven by the host via onJump.
 
-import { Clipboard, MessageSquarePlus } from "@lucide/svelte";
+import { Clipboard, MessageSquarePlus, Trash2 } from "@lucide/svelte";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
@@ -139,6 +139,16 @@ let copyTimer: ReturnType<typeof setTimeout> | null = null;
 // visibility + empty-state gating. Single source of truth; assigned from
 // status.state inside reload() before the resume branch reads it.
 let sessionState = $state<SessionState>("none");
+
+// Phase 73-02 — End-review two-step confirm. First click flips endConfirming
+// true + arms a 3000ms revert timer; second click within the window invokes
+// end_review_session and lets the session-changed listener round-trip drive
+// the panel back to the cold state (D-08 — no manual array clear). Pattern
+// carry-forward from `copied` / `copyTimer` above; the danger is the timer
+// leak on unmount (RESEARCH Pitfall 3) — see the $effect teardown below.
+let endConfirming = $state(false);
+// Plain handle, not $state — only used to clear; reactivity is on `endConfirming`.
+let endTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Type guard for the TrunkError shape thrown by safeInvoke (a plain object with
 // string `code` + `message`, NOT an Error subclass — see lib/invoke.ts). Used
@@ -354,6 +364,49 @@ async function onCopyClick() {
 	}
 }
 
+// Phase 73-02 — End-review two-step confirm. First click arms the confirming
+// state + 3000ms revert; second click fires the IPC and lets the session-changed
+// listener round-trip drive the panel back to the cold state (D-08).
+function startEndConfirm() {
+	// clearTimeout-before-setTimeout discipline (Pattern A): rapid re-clicks
+	// extend the confirm window, not race against the previous revert timer.
+	if (endTimer !== null) clearTimeout(endTimer);
+	endConfirming = true;
+	endTimer = setTimeout(() => {
+		endConfirming = false;
+		endTimer = null;
+	}, 3000);
+}
+
+async function onEndClick() {
+	if (!endConfirming) {
+		startEndConfirm();
+		return;
+	}
+	// Second click: clear the auto-revert timer but KEEP endConfirming = true
+	// so the label stays "Click again to confirm" (frozen during await — UI-SPEC
+	// § End button state machine: In-flight row). On success the session-changed
+	// listener round-trip drives reload() → sessionState === "none" → the {#if}
+	// gate hides the entire button. On failure we explicitly revert.
+	if (endTimer !== null) {
+		clearTimeout(endTimer);
+		endTimer = null;
+	}
+	try {
+		await safeInvoke("end_review_session", { path: repoPath });
+		// No manual mutation of commits/comments/resolutions (D-08) — the
+		// session-changed listener at the $effect below is the canonical refresh.
+	} catch (e) {
+		endConfirming = false;
+		// Match Plan 73-01's resume-fail shape: errorMessage() extracts only
+		// `.message`; the "Failed to end review: " prefix is added by template
+		// literal at the call site (RESEARCH §Pattern 2). The errorMessage
+		// fallback fires only when `e` is neither Error nor TrunkError.
+		const msg = errorMessage(e, "unknown error");
+		showToast(`Failed to end review: ${msg}`, "error");
+	}
+}
+
 async function deleteComment(id: string) {
 	const { ask } = await import("@tauri-apps/plugin-dialog");
 	const confirmed = await ask("Delete this comment? This cannot be undone.", {
@@ -372,6 +425,17 @@ async function deleteComment(id: string) {
 $effect(() => {
 	void repoPath;
 	reload();
+});
+
+// Phase 73-02 — Timer cleanup on component destroy (RESEARCH Pitfall 3). If
+// the panel unmounts mid-confirm (e.g. tab close, repo switch), the pending
+// setTimeout would otherwise fire `endConfirming = false` against a torn-down
+// component and Svelte logs an error. This effect's sole purpose is the
+// teardown return — no reactive body.
+$effect(() => {
+	return () => {
+		if (endTimer !== null) clearTimeout(endTimer);
+	};
 });
 
 // Live coordination: reload on session-changed for this repo's canonical path.
@@ -415,6 +479,19 @@ $effect(() => {
     "
   >
     <span class="preview-spacer" style="flex: 1;"></span>
+    {#if sessionState !== "none"}
+      <button
+        type="button"
+        class="end-button {endConfirming ? 'confirming' : ''} flex items-center"
+        onclick={onEndClick}
+        title={endConfirming
+          ? ""
+          : "End the current review and delete the on-disk session"}
+      >
+        <Trash2 size={14} />
+        <span>{endConfirming ? "Click again to confirm" : "End review"}</span>
+      </button>
+    {/if}
     <button
       type="button"
       class="copy-button flex items-center"
@@ -823,5 +900,38 @@ $effect(() => {
   .copy-button[disabled] {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  /* Phase 73-02 End-review button — danger-tinted sibling of .copy-button.
+     Idle: muted text on transparent (visually subordinate to Copy). Confirming:
+     danger-bg + danger-border + on-accent text per UI-SPEC § Interaction States.
+     All colors via existing :root tokens in src/app.css (no hex/rgb literals). */
+  .end-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  .end-button:hover:not(.confirming):not([disabled]),
+  .end-button:focus-visible:not(.confirming):not([disabled]) {
+    color: var(--color-text);
+    background: var(--color-hover);
+  }
+  .end-button.confirming {
+    color: var(--color-on-accent);
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+  }
+  .end-button.confirming:hover,
+  .end-button.confirming:focus-visible {
+    background: var(--color-danger);
+    border: 1px solid var(--color-danger);
   }
 </style>
