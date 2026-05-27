@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.13
 milestone_name: Code Review Mode
 status: executing
-stopped_at: Phase 73 UI-SPEC approved
-last_updated: "2026-05-27T09:24:34.118Z"
-last_activity: 2026-05-27 -- Phase 73 planning complete
+stopped_at: Phase 73 Plan 01 complete; Plan 02 next (End-review affordance)
+last_updated: "2026-05-27T15:28:56Z"
+last_activity: 2026-05-27 -- Phase 73 Plan 01 shipped (cold-boot resume)
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 31
-  completed_plans: 28
-  percent: 89
+  completed_plans: 29
+  percent: 90
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
 
 ## Current Position
 
-Phase: 73 — Context gathered
-Plan: 0 of 0 (ready for /gsd:plan-phase 73)
-Status: Ready to execute
-Last activity: 2026-05-27 -- Phase 73 planning complete
+Phase: 73 (review-lifecycle-end-review-cold-boot-resume) — EXECUTING
+Plan: 2 of 3 (Plan 01 shipped — cold-boot resume)
+Status: Executing Phase 73
+Last activity: 2026-05-27 -- Phase 73 Plan 01 shipped (cold-boot resume)
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█████████░] 89%
 | Phase 69 P02 | 12min | 2 tasks | 2 files |
 | Phase 69 P04 | 6min | 2 tasks | 2 files |
 | Phase 69 P03 | ~25min | 2 tasks | 2 files |
+| Phase 73 P01 | 7min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,9 @@ Progress: [█████████░] 89%
 - [Phase ?]: 69-04: review-session.svelte.ts rune owns center-pane Review state (rightPaneMode panel|diff, reviewActive) + a RepoView-decoupled jumpTo(comment, deps) via injected JumpDeps callbacks (D-07/D-08)
 - [Phase ?]: 69-03: resolve_all reads the anchor's own commit_oid for line-anchored comments (top-level commit_oid only for commit-level); a (None,None) no-target arm is CommitGone, never a panic
 - [Phase ?]: 69-03: 1-based inclusive line bounds (last line resolvable) per Phase 67/68 capture; resolvability runs git2 off-lock in spawn_blocking, read-only (no emit)
+- [Phase 73]: 73-01: cold-boot resume gated on sessionState === 'resume-available'; recursion-safe because post-resume status is 'active' and the listener-triggered second reload skips the resume branch (RESEARCH Pitfall 1)
+- [Phase 73]: 73-01: errorMessage() returns extracted .message only; "Failed to resume review: " prefix added via template literal at the call site (matches RESEARCH §Pattern 2 canonical shape)
+- [Phase 73]: 73-01: installReads default status = 'active' so 26 pre-existing ReviewPanel tests stay on the warm path without modification; statusAfterResume dispatcher flip models the backend "resume-available" -> "active" transition for recursion-safety assertions
 
 ### Pending Todos
 
@@ -153,8 +157,8 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-05-25
-Last session: 2026-05-27T08:57:30.629Z
-Stopped at: Phase 73 UI-SPEC approved
-Resume file: .planning/phases/73-review-lifecycle-end-review-cold-boot-resume/73-UI-SPEC.md
-Next action: Human runs `just dev` and verifies the attach flow (steps 1-8); type "approved" to resume Plan 04 completion (SUMMARY + state advance)
+Last activity: 2026-05-27
+Last session: 2026-05-27T15:28:56Z
+Stopped at: Phase 73 Plan 01 complete (cold-boot resume shipped)
+Resume file: .planning/phases/73-review-lifecycle-end-review-cold-boot-resume/73-02-PLAN.md
+Next action: Execute Plan 73-02 (End-review two-step button); manual smoke test of cold-boot resume against `just dev` is outstanding per 73-VALIDATION.md but non-blocking for Plan 02

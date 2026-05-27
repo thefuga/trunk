@@ -450,7 +450,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 73-01-PLAN.md — Cold-boot resume in ReviewPanel.reload() + sessionState rune + test-harness extension
+- [x] 73-01-PLAN.md — Cold-boot resume in ReviewPanel.reload() + sessionState rune + test-harness extension
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
