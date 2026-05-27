@@ -159,7 +159,7 @@ fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Emit the `session-changed` Tauri event for `canonical`, logging on failure
 /// (66/WR-04). Phase 65's stance is "never silently destroy" — the previous
-/// `let _ = app.emit(...)` pattern violated it. Failure here is unrecoverable
+/// silent-discard pattern violated it. Failure here is an unrecoverable
 /// runtime fault (dead event bus); the diagnostic goes to stderr because the
 /// codebase has no `log`/`tracing` dependency.
 fn emit_session_changed(app: &AppHandle, canonical: &Path) {
@@ -737,7 +737,7 @@ pub async fn seed_review_range(
 
     seed_review_range_rmw(&data_dir, &canonical, &sessions.0, range_oids)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -757,7 +757,7 @@ pub async fn add_review_commit(
 
     add_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -777,7 +777,7 @@ pub async fn remove_review_commit(
 
     remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -811,7 +811,7 @@ pub async fn add_comment(
     };
     add_comment_inner(&data_dir, &canonical, &sessions.0, req)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -865,7 +865,7 @@ pub async fn add_commit_comment(
     let req = AddCommitCommentRequest { commit_oid, text };
     add_commit_comment_inner(&data_dir, &canonical, &sessions.0, req)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -891,7 +891,7 @@ pub async fn edit_comment(
 
     edit_comment_inner(&data_dir, &canonical, &sessions.0, &id, text)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -915,7 +915,7 @@ pub async fn delete_comment(
 
     delete_comment_inner(&data_dir, &canonical, &sessions.0, &id)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -1141,7 +1141,7 @@ pub async fn start_review_session(
         .lock()
         .unwrap()
         .insert(canonical.clone(), session);
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -1196,7 +1196,7 @@ pub async fn resume_review_session(
             .unwrap());
         }
     }
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
@@ -1218,7 +1218,7 @@ pub async fn end_review_session(
 
     // Disk-first ordering (D-10): _inner deleted the file → drop in-memory → emit.
     sessions.0.lock().unwrap().remove(&canonical);
-    let _ = app.emit("session-changed", canonical.to_string_lossy().into_owned());
+    emit_session_changed(&app, &canonical);
     Ok(())
 }
 
