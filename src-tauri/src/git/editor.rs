@@ -49,6 +49,17 @@ impl EditorHandle {
     }
 }
 
+impl Drop for EditorHandle {
+    fn drop(&mut self) {
+        // Best-effort cleanup — Drop cannot return Result, and any leftover
+        // file in temp_dir() is reaped by the OS eventually. Matches the
+        // `let _ = std::fs::create_dir_all(...)` pattern at
+        // src-tauri/src/commands/interactive_rebase.rs:144.
+        let _ = std::fs::remove_file(&self.script_path);
+        let _ = std::fs::remove_file(&self.msg_path);
+    }
+}
+
 /// Build the script + message file pair, returning a handle that owns cleanup.
 ///
 /// The message file contains `message` verbatim — no whitespace stripping, no
@@ -58,11 +69,80 @@ impl EditorHandle {
 /// On any internal failure, partial state is cleaned up before returning
 /// `Err` — the `Drop` impl only runs once `EditorHandle` is constructed, so
 /// the pre-construction window is handled by hand inside this function.
-pub fn prepare(_message: &str) -> Result<EditorHandle, TrunkError> {
-    Err(TrunkError::new(
-        "not_implemented",
-        "prepare() not implemented yet",
-    ))
+pub fn prepare(message: &str) -> Result<EditorHandle, TrunkError> {
+    // 1. Reserve a non-predictable temp path for the message file.
+    //    `tempfile::Builder` returns a path under `std::env::temp_dir()` with
+    //    enough entropy + O_EXCL semantics to defend the create-then-write
+    //    race (T-75-T01). We take ownership of the path via `.keep()` so the
+    //    auto-cleanup of `NamedTempFile` is replaced by our explicit `Drop`.
+    //    The default Unix permissions are 0o600 (owner read/write only) —
+    //    sufficient for T-75-T02 since only this process and its git child
+    //    (same uid) need to read it. We do NOT chmod it more permissively.
+    let msg_tempfile = tempfile::Builder::new()
+        .prefix("trunk-editor-msg-")
+        .tempfile()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    let (_msg_file, msg_path) = msg_tempfile
+        .keep()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+
+    // 2. Write the payload verbatim. MSG-04: no stripping, no normalisation.
+    if let Err(e) = std::fs::write(&msg_path, message) {
+        let _ = std::fs::remove_file(&msg_path);
+        return Err(TrunkError::new("io_error", e.to_string()));
+    }
+
+    // 3. Reserve a non-predictable temp path for the script. Same TOCTOU
+    //    defence as the msg file. `.sh` suffix is cosmetic — git execs by
+    //    path, not extension.
+    let script_path = match tempfile::Builder::new()
+        .prefix("trunk-editor-")
+        .suffix(".sh")
+        .tempfile()
+    {
+        Ok(tf) => match tf.keep() {
+            Ok((_, p)) => p,
+            Err(e) => {
+                let _ = std::fs::remove_file(&msg_path);
+                return Err(TrunkError::new("io_error", e.to_string()));
+            }
+        },
+        Err(e) => {
+            let _ = std::fs::remove_file(&msg_path);
+            return Err(TrunkError::new("io_error", e.to_string()));
+        }
+    };
+
+    // 4. Write the shell script. The cp arguments are ALWAYS quoted — even
+    //    though `msg_path` comes from `tempfile::Builder` and has no shell
+    //    metacharacters in practice, the quoting is the explicit defence
+    //    against T-75-T04 command-injection via path content. Mirrors
+    //    `interactive_rebase.rs:133`.
+    let script_body = format!("#!/bin/sh\ncp \"{}\" \"$1\"\n", msg_path.display());
+    if let Err(e) = std::fs::write(&script_path, &script_body) {
+        let _ = std::fs::remove_file(&msg_path);
+        let _ = std::fs::remove_file(&script_path);
+        return Err(TrunkError::new("io_error", e.to_string()));
+    }
+
+    // 5. Make the script executable. Tauri is Unix-only for the editor path
+    //    today (matches `interactive_rebase.rs:136-141` gating).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) =
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+        {
+            let _ = std::fs::remove_file(&msg_path);
+            let _ = std::fs::remove_file(&script_path);
+            return Err(TrunkError::new("io_error", e.to_string()));
+        }
+    }
+
+    Ok(EditorHandle {
+        script_path,
+        msg_path,
+    })
 }
 
 #[cfg(test)]
