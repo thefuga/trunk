@@ -25,7 +25,9 @@ describe("MessageEditor", () => {
 
 		ref.open("anything");
 
-		expect(await screen.findByText("Revert commit message")).toBeInTheDocument();
+		expect(
+			await screen.findByText("Revert commit message"),
+		).toBeInTheDocument();
 	});
 
 	it("pre-fills textarea with the default passed to open", async () => {
@@ -34,7 +36,9 @@ describe("MessageEditor", () => {
 
 		ref.open(defaultText);
 
-		const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+		const textarea = (await screen.findByRole(
+			"textbox",
+		)) as HTMLTextAreaElement;
 		expect(textarea.value).toBe(defaultText);
 	});
 
@@ -42,7 +46,9 @@ describe("MessageEditor", () => {
 		const { ref } = mount();
 
 		const promise = ref.open("");
-		const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+		const textarea = (await screen.findByRole(
+			"textbox",
+		)) as HTMLTextAreaElement;
 		await fireEvent.input(textarea, { target: { value: "hello world" } });
 		await fireEvent.click(screen.getByText("Save"));
 
@@ -106,7 +112,9 @@ describe("MessageEditor", () => {
 		const { ref } = mount();
 
 		const promise = ref.open("");
-		const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+		const textarea = (await screen.findByRole(
+			"textbox",
+		)) as HTMLTextAreaElement;
 		await fireEvent.input(textarea, { target: { value: "ship it" } });
 		await fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
 
@@ -117,7 +125,9 @@ describe("MessageEditor", () => {
 		const { ref } = mount();
 
 		const promise = ref.open("");
-		const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+		const textarea = (await screen.findByRole(
+			"textbox",
+		)) as HTMLTextAreaElement;
 		await fireEvent.input(textarea, { target: { value: "ship it" } });
 		await fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
 
@@ -128,7 +138,9 @@ describe("MessageEditor", () => {
 		const { ref } = mount();
 
 		const promise = ref.open("");
-		const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+		const textarea = (await screen.findByRole(
+			"textbox",
+		)) as HTMLTextAreaElement;
 		await fireEvent.input(textarea, { target: { value: "msg\n\n" } });
 		await fireEvent.click(screen.getByText("Save"));
 
