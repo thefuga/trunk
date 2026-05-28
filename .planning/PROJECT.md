@@ -284,4 +284,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-28 after v0.14 Commit Message UX milestone defined*
+*Last updated: 2026-05-28 after Phase 75 Message Editor Infrastructure complete (MessageEditor.svelte modal + git::editor::prepare() Rust helper landed; Phase 76 wires the three op flows next)*
