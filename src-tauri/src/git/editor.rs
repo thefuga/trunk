@@ -70,79 +70,69 @@ impl Drop for EditorHandle {
 /// `Err` — the `Drop` impl only runs once `EditorHandle` is constructed, so
 /// the pre-construction window is handled by hand inside this function.
 pub fn prepare(message: &str) -> Result<EditorHandle, TrunkError> {
-    // 1. Reserve a non-predictable temp path for the message file.
-    //    `tempfile::Builder` returns a path under `std::env::temp_dir()` with
-    //    enough entropy + O_EXCL semantics to defend the create-then-write
-    //    race (T-75-T01). We take ownership of the path via `.keep()` so the
-    //    auto-cleanup of `NamedTempFile` is replaced by our explicit `Drop`.
-    //    The default Unix permissions are 0o600 (owner read/write only) —
-    //    sufficient for T-75-T02 since only this process and its git child
-    //    (same uid) need to read it. We do NOT chmod it more permissively.
-    let msg_tempfile = tempfile::Builder::new()
-        .prefix("trunk-editor-msg-")
-        .tempfile()
-        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-    let (_msg_file, msg_path) = msg_tempfile
-        .keep()
-        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-
-    // 2. Write the payload verbatim. MSG-04: no stripping, no normalisation.
-    if let Err(e) = std::fs::write(&msg_path, message) {
-        let _ = std::fs::remove_file(&msg_path);
-        return Err(TrunkError::new("io_error", e.to_string()));
-    }
-
-    // 3. Reserve a non-predictable temp path for the script. Same TOCTOU
-    //    defence as the msg file. `.sh` suffix is cosmetic — git execs by
-    //    path, not extension.
-    let script_path = match tempfile::Builder::new()
-        .prefix("trunk-editor-")
-        .suffix(".sh")
-        .tempfile()
-    {
-        Ok(tf) => match tf.keep() {
-            Ok((_, p)) => p,
-            Err(e) => {
-                let _ = std::fs::remove_file(&msg_path);
-                return Err(TrunkError::new("io_error", e.to_string()));
-            }
-        },
+    // Reserve both temp paths up-front via `tempfile::Builder` — non-
+    // predictable paths under `std::env::temp_dir()` with O_EXCL semantics
+    // (T-75-T01 TOCTOU defence). `.keep()` hands ownership of the path back
+    // to us so the auto-cleanup of `NamedTempFile` is replaced by our
+    // explicit `Drop`. Default Unix permissions on both files are 0o600,
+    // sufficient for T-75-T02 since only this process and its git child
+    // (same uid) need to read them.
+    let msg_path = reserve_temp_path("trunk-editor-msg-", "")?;
+    let script_path = match reserve_temp_path("trunk-editor-", ".sh") {
+        Ok(p) => p,
         Err(e) => {
             let _ = std::fs::remove_file(&msg_path);
-            return Err(TrunkError::new("io_error", e.to_string()));
+            return Err(e);
         }
     };
 
-    // 4. Write the shell script. The cp arguments are ALWAYS quoted — even
-    //    though `msg_path` comes from `tempfile::Builder` and has no shell
-    //    metacharacters in practice, the quoting is the explicit defence
-    //    against T-75-T04 command-injection via path content. Mirrors
-    //    `interactive_rebase.rs:133`.
-    let script_body = format!("#!/bin/sh\ncp \"{}\" \"$1\"\n", msg_path.display());
-    if let Err(e) = std::fs::write(&script_path, &script_body) {
+    // From here on, both paths exist on disk; any failure must clean both.
+    if let Err(e) = write_artifacts(&msg_path, &script_path, message) {
         let _ = std::fs::remove_file(&msg_path);
         let _ = std::fs::remove_file(&script_path);
-        return Err(TrunkError::new("io_error", e.to_string()));
-    }
-
-    // 5. Make the script executable. Tauri is Unix-only for the editor path
-    //    today (matches `interactive_rebase.rs:136-141` gating).
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) =
-            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
-        {
-            let _ = std::fs::remove_file(&msg_path);
-            let _ = std::fs::remove_file(&script_path);
-            return Err(TrunkError::new("io_error", e.to_string()));
-        }
+        return Err(e);
     }
 
     Ok(EditorHandle {
         script_path,
         msg_path,
     })
+}
+
+/// Reserve a unique temp path with the given prefix + suffix and return it,
+/// leaving the underlying file in place for the caller to write into.
+fn reserve_temp_path(prefix: &str, suffix: &str) -> Result<PathBuf, TrunkError> {
+    let tf = tempfile::Builder::new()
+        .prefix(prefix)
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    let (_file, path) = tf
+        .keep()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    Ok(path)
+}
+
+/// Write the message verbatim, then the shell script, then chmod 0o755 on
+/// Unix. Caller owns cleanup on failure — this helper does NOT remove files.
+fn write_artifacts(msg_path: &Path, script_path: &Path, message: &str) -> Result<(), TrunkError> {
+    // MSG-04: payload flows through verbatim — no stripping, no normalisation.
+    std::fs::write(msg_path, message).map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+
+    // T-75-T04: cp arguments are ALWAYS quoted. Mirrors interactive_rebase.rs:133.
+    let script_body = format!("#!/bin/sh\ncp \"{}\" \"$1\"\n", msg_path.display());
+    std::fs::write(script_path, &script_body)
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+
+    // D-09: chmod 0o755 — gated on unix, matching interactive_rebase.rs:136-141.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(script_path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
