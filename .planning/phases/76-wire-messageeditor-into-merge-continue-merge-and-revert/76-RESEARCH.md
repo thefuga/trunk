@@ -361,16 +361,19 @@ let merge_msg = std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok();
 | A3 | Single `MessageEditor` instance with reactive title (D-04) is preferred over two instances | Architecture Patterns | LOW — D-04 locks single instance; reactive title is the mechanism |
 | A4 | `Ready` variant should carry the graph too (so the wrapper emits uniformly) | Code Examples enum | LOW — alternative is to emit before returning `Ready{message}` without a graph payload; either works as long as the emit happens |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Reactive title vs. two instances for the per-op title (D-03)?**
    - Known: `title` is a `$props()`. D-04 mandates a single instance.
    - Unclear: cleanest Svelte 5 way to set title before `open()` — bind `title={editorTitle}` to a `$state` the host sets, then `await ref.open(default)`.
    - Recommendation: single instance + `$state` title var; set it in `handleOpenMessageEditor(default, title)` before calling `open`.
+   - **RESOLVED (plan 76-03 Task 0):** single RepoView-hosted `MessageEditor` with a reactive `$state` title var set before `await ref.open(default)`.
 
 2. **Where does the Revert OperationBanner Continue handler reach the host modal?** OperationBanner is rendered inside StagingPanel (:909), which is inside RepoView. The new Revert Continue/Abort buttons need: Abort → new `revert_abort` invoke (self-contained); Continue → must reach `RepoView`'s `handleOpenMessageEditor`. Recommendation: thread the `onopenmessageeditor` callback down through StagingPanel → OperationBanner, OR give OperationBanner an `oncontinuerevert` callback prop the parent wires. Confirm the prop-threading path during planning.
+   - **RESOLVED (plan 76-04 Tasks 0/1):** `onopenmessageeditor` callback threaded RepoView → StagingPanel → OperationBanner; Abort wired to the self-contained `revert_abort` invoke.
 
 3. **Does the conflicted-merge path also need `--cleanup=strip` for MSG-01 specifically?** Yes (verified: conflicted MERGE_MSG has `# Conflicts:`). The merge-continue finish (`merge_continue` `Some(msg)` arm) is the MSG-01 commit — it must get `--cleanup=strip` just like the begin-flow finishes. Single shared treatment.
+   - **RESOLVED (plans 76-01/76-02 Task 1):** `--cleanup=strip` applied to every `git commit -m` finish (merge-continue, merge-begin finish, revert finish).
 
 ## Environment Availability
 
