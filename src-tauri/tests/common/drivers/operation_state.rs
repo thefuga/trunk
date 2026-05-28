@@ -1,5 +1,6 @@
 use crate::common::context::TestContext;
 use trunk_lib::commands::operation_state;
+use trunk_lib::commands::operation_state::MergeBeginResult;
 use trunk_lib::error::TrunkError;
 use trunk_lib::git::types::{GraphResult, OperationInfo};
 
@@ -28,8 +29,8 @@ impl TestContext {
         operation_state::rebase_abort_inner(self.path(), self.state_map())
     }
 
-    pub fn merge_branch(&self, branch: &str) -> Result<GraphResult, TrunkError> {
-        operation_state::merge_branch_inner(self.path(), branch, self.state_map())
+    pub fn merge_branch_begin(&self, branch: &str) -> Result<MergeBeginResult, TrunkError> {
+        operation_state::merge_branch_begin_inner(self.path(), branch, self.state_map())
     }
 
     pub fn rebase_branch(&self, branch: &str) -> Result<GraphResult, TrunkError> {

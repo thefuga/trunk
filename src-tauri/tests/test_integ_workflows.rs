@@ -4,6 +4,7 @@
 
 mod common;
 use common::context::TestContext;
+use trunk_lib::commands::operation_state::MergeBeginResult;
 use trunk_lib::git::types::OperationType;
 
 // -- Workflow tests --
@@ -59,8 +60,12 @@ fn workflow_branch_commit_merge() {
     ctx.stage_file("main.txt").unwrap();
     ctx.create_commit("Add main file", None).unwrap();
 
-    let result = ctx.merge_branch("feature");
-    assert!(result.is_ok(), "merge_branch should succeed: {:?}", result);
+    // Two-step merge: begin stages the clean non-ff merge, continue commits it.
+    let message = match ctx.merge_branch_begin("feature").unwrap() {
+        MergeBeginResult::Ready { message, .. } => message,
+        other => panic!("expected Ready for a clean non-ff merge, got {:?}", other),
+    };
+    ctx.merge_continue(Some(&message)).unwrap();
 
     // Verify: feature file exists on main
     ctx.assert_file_content("feature.txt", "feature work");
@@ -287,8 +292,7 @@ fn workflow_search_commit_history() {
 
 #[test]
 fn state_transition_merge_conflict_resolve_commit() {
-    // Use with_conflict builder to reliably set up merge state (avoids
-    // merge_branch_inner stdout/stderr issue documented in test_operation_state.rs)
+    // Use with_conflict builder to set up the conflicted merge state directly.
     let ctx = TestContext::builder()
         .with_file("shared.txt", "original content")
         .with_commit("Initial commit")
@@ -517,9 +521,13 @@ fn state_transition_fast_forward_merge() {
         info.op_type
     );
 
-    // Fast-forward merge (no divergence)
-    let result = ctx.merge_branch("feature");
-    assert!(result.is_ok(), "fast-forward merge should succeed");
+    // Fast-forward merge (no divergence) -> FastForwarded, no editor.
+    let result = ctx.merge_branch_begin("feature").unwrap();
+    assert!(
+        matches!(result, MergeBeginResult::FastForwarded { .. }),
+        "expected FastForwarded, got {:?}",
+        result
+    );
 
     // State after merge: still None (no merge state for ff)
     let info = ctx.get_operation_state().unwrap();

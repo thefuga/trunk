@@ -1,6 +1,7 @@
 mod common;
 
 use common::context::TestContext;
+use trunk_lib::commands::operation_state::MergeBeginResult;
 use trunk_lib::git::types::OperationType;
 
 #[test]
@@ -47,8 +48,9 @@ fn merge_in_progress_reports_merge_state() {
 }
 
 #[test]
-fn merge_branch_non_conflicting_creates_merge_commit() {
-    // Both branches have divergent changes on DIFFERENT files -> no conflict, merge commit
+fn merge_branch_begin_non_conflicting_then_continue_creates_merge_commit() {
+    // Divergent changes on DIFFERENT files -> non-ff clean merge. The two-step
+    // flow stages on begin (Ready), then merge_continue finalizes the commit.
     let ctx = TestContext::builder()
         .with_file("file.txt", "hello")
         .with_commit("Initial commit")
@@ -61,22 +63,29 @@ fn merge_branch_non_conflicting_creates_merge_commit() {
         .with_commit("Main commit")
         .build();
 
-    let result = ctx.merge_branch("feature");
-    assert!(result.is_ok(), "merge_branch should succeed: {:?}", result);
+    let result = ctx.merge_branch_begin("feature").unwrap();
+    let message = match result {
+        MergeBeginResult::Ready { message, .. } => message,
+        other => panic!("expected Ready for a clean non-ff merge, got {:?}", other),
+    };
+    // Begin staged without committing: still mid-merge with MERGE_HEAD set.
+    let info = ctx.get_operation_state().unwrap();
+    assert!(matches!(info.op_type, OperationType::Merge));
 
-    // After successful merge, repo should be clean
+    // Finalize with the default message.
+    ctx.merge_continue(Some(&message)).unwrap();
+
+    // After continue, repo is clean and HEAD is a 2-parent merge commit.
     let info = ctx.get_operation_state().unwrap();
     assert!(matches!(info.op_type, OperationType::None));
-
-    // HEAD should be a merge commit with 2 parents
     let repo = ctx.repo();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head.parent_count(), 2);
 }
 
 #[test]
-fn merge_branch_fast_forward_when_linear() {
-    // Feature has commits that main doesn't, but main hasn't diverged -> fast-forward
+fn merge_branch_begin_fast_forward_when_linear() {
+    // Feature ahead, main not diverged -> fast-forward, no editor, 1-parent HEAD.
     let ctx = TestContext::builder()
         .with_file("file.txt", "hello")
         .with_commit("Initial commit")
@@ -87,20 +96,24 @@ fn merge_branch_fast_forward_when_linear() {
         .checkout("main")
         .build();
 
-    let result = ctx.merge_branch("feature");
-    assert!(result.is_ok(), "merge_branch should succeed: {:?}", result);
+    let result = ctx.merge_branch_begin("feature").unwrap();
+    assert!(
+        matches!(result, MergeBeginResult::FastForwarded { .. }),
+        "expected FastForwarded, got {:?}",
+        result
+    );
 
-    // Fast-forward merge: HEAD has 1 parent (not a merge commit)
+    // Fast-forward merge: HEAD has 1 parent (not a merge commit).
     let repo = ctx.repo();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head.parent_count(), 1);
 }
 
 #[test]
-fn merge_branch_with_conflict_returns_error() {
-    // NOTE: merge_branch_inner has a known issue where git merge outputs CONFLICT
-    // to stdout (not stderr), so the conflict detection in merge_branch_inner fails
-    // and it returns Err. Tests document this actual behavior.
+fn merge_branch_begin_with_conflict_returns_conflicts() {
+    // A conflicting non-ff merge returns the Conflicts variant (NOT an Err) and
+    // leaves MERGE_HEAD set for the continue UI. git writes CONFLICT to stdout,
+    // which merge_branch_begin_inner now scans alongside stderr.
     let ctx = TestContext::builder()
         .with_file("file.txt", "hello")
         .with_commit("Initial commit")
@@ -113,11 +126,14 @@ fn merge_branch_with_conflict_returns_error() {
         .with_commit("Main commit")
         .build();
 
-    let result = ctx.merge_branch("feature");
+    let result = ctx.merge_branch_begin("feature").unwrap();
     assert!(
-        result.is_err(),
-        "merge_branch returns error on conflict (CONFLICT is on stdout, not stderr)"
+        matches!(result, MergeBeginResult::Conflicts { .. }),
+        "expected Conflicts, got {:?}",
+        result
     );
+    let info = ctx.get_operation_state().unwrap();
+    assert!(matches!(info.op_type, OperationType::Merge));
 }
 
 #[test]
