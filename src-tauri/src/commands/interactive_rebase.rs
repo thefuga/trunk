@@ -130,7 +130,12 @@ pub fn start_interactive_rebase_blocking(
 
     // 2. Write GIT_SEQUENCE_EDITOR script (script file for reliable $1 handling)
     let seq_editor_path = session_dir.join("trunk-seq-editor.sh");
-    let seq_editor_script = format!("#!/bin/sh\ncp \"{}\" \"$1\"\n", todo_path.display(),);
+    // T-75-T04 parity: POSIX single-quote the path so $TMPDIR-controlled `"` or `'` cannot
+    // terminate the quoted segment. Shared helper lives in `git::editor`.
+    let seq_editor_script = format!(
+        "#!/bin/sh\ncp {} \"$1\"\n",
+        crate::git::editor::shell_single_quote(&todo_path.display().to_string()),
+    );
     std::fs::write(&seq_editor_path, &seq_editor_script)
         .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
     #[cfg(unix)]
@@ -155,19 +160,22 @@ pub fn start_interactive_rebase_blocking(
         }
     }
 
-    // 4. Write GIT_EDITOR script — consumes the first available message file, or accepts default
+    // 4. Write GIT_EDITOR script — consumes the first available message file, or accepts default.
+    // T-75-T04 parity: bind the queue path into a single-quoted shell variable so embedded
+    // `"` or `'` in $TMPDIR cannot break out into shell syntax.
     let editor_script_path = session_dir.join("trunk-rebase-editor.sh");
     let editor_script = format!(
         r#"#!/bin/sh
-MSG=$(ls -1 "{queue}/" 2>/dev/null | sort | head -1)
+QUEUE={queue}
+MSG=$(ls -1 "$QUEUE/" 2>/dev/null | sort | head -1)
 if [ -n "$MSG" ]; then
-  cp "{queue}/$MSG" "$1"
-  rm "{queue}/$MSG"
+  cp "$QUEUE/$MSG" "$1"
+  rm "$QUEUE/$MSG"
   exit 0
 fi
 exit 0
 "#,
-        queue = msg_queue_dir.display(),
+        queue = crate::git::editor::shell_single_quote(&msg_queue_dir.display().to_string()),
     );
     std::fs::write(&editor_script_path, &editor_script)
         .map_err(|e| TrunkError::new("io_error", e.to_string()))?;

@@ -63,7 +63,6 @@ $effect(() => {
 		dialogEl.showModal();
 	}
 });
-
 </script>
 
 {#if isOpen}

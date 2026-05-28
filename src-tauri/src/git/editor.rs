@@ -70,28 +70,31 @@ impl Drop for EditorHandle {
 /// `Err` — the `Drop` impl only runs once `EditorHandle` is constructed, so
 /// the pre-construction window is handled by hand inside this function.
 pub fn prepare(message: &str) -> Result<EditorHandle, TrunkError> {
-    // Reserve both temp paths up-front via `tempfile::Builder` — non-
-    // predictable paths under `std::env::temp_dir()` with O_EXCL semantics
-    // (T-75-T01 TOCTOU defence). `.keep()` hands ownership of the path back
-    // to us so the auto-cleanup of `NamedTempFile` is replaced by our
-    // explicit `Drop`. Default Unix permissions on both files are 0o600,
-    // sufficient for T-75-T02 since only this process and its git child
-    // (same uid) need to read them.
-    let msg_path = reserve_temp_path("trunk-editor-msg-", "")?;
-    let script_path = match reserve_temp_path("trunk-editor-", ".sh") {
-        Ok(p) => p,
-        Err(e) => {
-            let _ = std::fs::remove_file(&msg_path);
-            return Err(e);
-        }
-    };
+    // T-75-T01 hard mitigation: write through the `tempfile::Builder::tempfile()`
+    // file handle BEFORE `.keep()` hands the path back. This preserves the
+    // O_EXCL guarantee of the original open and closes the symlink-swap window
+    // that a path-based `std::fs::write` would introduce. Default Unix
+    // permissions on both files are 0o600 from tempfile creation, sufficient
+    // for T-75-T02 since only this process and its git child (same uid) need
+    // to read them.
+    let msg_path = write_temp_file("trunk-editor-msg-", "", message.as_bytes())?;
 
-    // From here on, both paths exist on disk; any failure must clean both.
-    if let Err(e) = write_artifacts(&msg_path, &script_path, message) {
-        let _ = std::fs::remove_file(&msg_path);
-        let _ = std::fs::remove_file(&script_path);
-        return Err(e);
-    }
+    // T-75-T04: msg path is POSIX single-quoted, so embedded `"` or `'` in
+    // `$TMPDIR` cannot terminate the quoted segment. Mirrors the helper
+    // shared with interactive_rebase.rs.
+    let script_body = format!(
+        "#!/bin/sh\ncp {} \"$1\"\n",
+        shell_single_quote(&msg_path.display().to_string()),
+    );
+
+    let script_path =
+        match write_executable_temp_file("trunk-editor-", ".sh", script_body.as_bytes()) {
+            Ok(p) => p,
+            Err(e) => {
+                let _ = std::fs::remove_file(&msg_path);
+                return Err(e);
+            }
+        };
 
     Ok(EditorHandle {
         script_path,
@@ -99,13 +102,26 @@ pub fn prepare(message: &str) -> Result<EditorHandle, TrunkError> {
     })
 }
 
-/// Reserve a unique temp path with the given prefix + suffix and return it,
-/// leaving the underlying file in place for the caller to write into.
-fn reserve_temp_path(prefix: &str, suffix: &str) -> Result<PathBuf, TrunkError> {
-    let tf = tempfile::Builder::new()
+/// POSIX-safe single-quoting: wrap in `'…'` and replace embedded `'` with `'\''`.
+///
+/// Used by both `prepare()` here and `interactive_rebase` for shell-script
+/// interpolation of paths rooted at `$TMPDIR`, which a user could in principle
+/// set to a path containing `"` or `'`.
+pub(crate) fn shell_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Reserve a unique temp file and write `contents` through the open file
+/// handle returned by `tempfile`, then `.keep()` the path. Writing before
+/// `.keep()` is what gives us the O_EXCL guarantee.
+fn write_temp_file(prefix: &str, suffix: &str, contents: &[u8]) -> Result<PathBuf, TrunkError> {
+    use std::io::Write;
+    let mut tf = tempfile::Builder::new()
         .prefix(prefix)
         .suffix(suffix)
         .tempfile()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    tf.write_all(contents)
         .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
     let (_file, path) = tf
         .keep()
@@ -113,26 +129,34 @@ fn reserve_temp_path(prefix: &str, suffix: &str) -> Result<PathBuf, TrunkError> 
     Ok(path)
 }
 
-/// Write the message verbatim, then the shell script, then chmod 0o755 on
-/// Unix. Caller owns cleanup on failure — this helper does NOT remove files.
-fn write_artifacts(msg_path: &Path, script_path: &Path, message: &str) -> Result<(), TrunkError> {
-    // MSG-04: payload flows through verbatim — no stripping, no normalisation.
-    std::fs::write(msg_path, message).map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-
-    // T-75-T04: cp arguments are ALWAYS quoted. Mirrors interactive_rebase.rs:133.
-    let script_body = format!("#!/bin/sh\ncp \"{}\" \"$1\"\n", msg_path.display());
-    std::fs::write(script_path, &script_body)
+/// Same as `write_temp_file`, but chmods the resulting file to 0o755 via the
+/// open file handle on Unix (no path-based re-permission window).
+fn write_executable_temp_file(
+    prefix: &str,
+    suffix: &str,
+    contents: &[u8],
+) -> Result<PathBuf, TrunkError> {
+    use std::io::Write;
+    let mut tf = tempfile::Builder::new()
+        .prefix(prefix)
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    tf.write_all(contents)
         .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
 
-    // D-09: chmod 0o755 — gated on unix, matching interactive_rebase.rs:136-141.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(script_path, std::fs::Permissions::from_mode(0o755))
+        tf.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o755))
             .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
     }
 
-    Ok(())
+    let (_file, path) = tf
+        .keep()
+        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -172,11 +196,26 @@ mod tests {
         );
 
         let msg_path_str = handle.msg_path().display().to_string();
-        let expected_cp = format!("cp \"{msg_path_str}\" \"$1\"");
+        let expected_cp = format!("cp {} \"$1\"", shell_single_quote(&msg_path_str));
         assert!(
             script.contains(&expected_cp),
-            "script must contain quoted cp pattern {expected_cp:?} (T-75-T04 mitigation), got: {script:?}",
+            "script must contain shell-quoted cp pattern {expected_cp:?} (T-75-T04 mitigation), got: {script:?}",
         );
+    }
+
+    #[test]
+    fn shell_single_quote_wraps_plain_paths() {
+        assert_eq!(shell_single_quote("/tmp/foo"), "'/tmp/foo'");
+    }
+
+    #[test]
+    fn shell_single_quote_escapes_embedded_single_quotes() {
+        assert_eq!(shell_single_quote("/tmp/it's/foo"), "'/tmp/it'\\''s/foo'");
+    }
+
+    #[test]
+    fn shell_single_quote_passes_double_quotes_through_inert() {
+        assert_eq!(shell_single_quote("/tmp/a\"b"), "'/tmp/a\"b'");
     }
 
     #[test]
