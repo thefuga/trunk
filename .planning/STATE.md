@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.14
-milestone_name: Commit Message UX
-status: planned
-stopped_at: Phase 75 planned (2 plans, wave 1)
-last_updated: "2026-05-28T20:02:34.539Z"
-last_activity: 2026-05-28 — Phase 75 plans generated and verified (75-01 modal, 75-02 rust helper); ready for execution
+milestone_name: milestone
+status: planned (2 plans, wave 1; ready for execution)
+stopped_at: Phase 75 context gathered
+last_updated: "2026-05-28T21:08:42.180Z"
+last_activity: 2026-05-28
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-28 after v0.14 defined)
 
 ## Current Position
 
-Phase: 75 — Message Editor Infrastructure
-Plan: 75-01 (next: MessageEditor.svelte modal — RED/GREEN/REFACTOR)
+Phase: 76
+Plan: Not started
 Status: planned (2 plans, wave 1; ready for execution)
-Last activity: 2026-05-28 — Phase 75 plans generated (75-01 modal, 75-02 rust helper) and verified PASS
+Last activity: 2026-05-28
 
 ## Performance Metrics
 

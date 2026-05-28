@@ -220,7 +220,7 @@ Full details: [milestones/v0.13-ROADMAP.md](milestones/v0.13-ROADMAP.md)
 3. Unit tests cover: default pre-fill, edit + save round-trip, Esc cancel returns null, empty/whitespace-only message returns null (MSG-06 building block), no temp-file leaks under happy or error path
 4. No production code path changed (Phase 76 does the wiring); `just check` passes
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 

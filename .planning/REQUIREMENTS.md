@@ -13,8 +13,8 @@ Requirements for v0.14. Each maps to a roadmap phase.
 - [ ] **MSG-01**: User can edit the commit message at the commit step of `merge --continue` (after resolving all conflicts), with the editor pre-filled from `.git/MERGE_MSG`.
 - [ ] **MSG-02**: User can edit the commit message at the commit step of `merge <branch>` (non-fast-forward merges that produce a merge commit), with the editor pre-filled with `"Merge branch '<branch>'"` (or `"Merge remote-tracking branch 'origin/<branch>'"` for remote branches).
 - [ ] **MSG-03**: User can edit the commit message at the commit step of `revert <oid>`, with the editor pre-filled with `Revert "<original subject>"` followed by `This reverts commit <oid>.`
-- [ ] **MSG-04**: The message editor pre-fills with git's default message for each operation. Source-of-truth defaults: `.git/MERGE_MSG` for continue, constructed string for merge/revert built by the Rust backend (never hardcoded in the frontend).
-- [ ] **MSG-05**: User can cancel the message editor (Esc or Cancel button), leaving the repo in the same state as before opening it — no commit created, no half-finished state, no orphan temp files.
+- [x] **MSG-04**: The message editor pre-fills with git's default message for each operation. Source-of-truth defaults: `.git/MERGE_MSG` for continue, constructed string for merge/revert built by the Rust backend (never hardcoded in the frontend).
+- [x] **MSG-05**: User can cancel the message editor (Esc or Cancel button), leaving the repo in the same state as before opening it — no commit created, no half-finished state, no orphan temp files.
 - [ ] **MSG-06**: Empty or whitespace-only message aborts the operation (matches git CLI behavior where saving an empty `$EDITOR` buffer aborts the commit). Operation must leave repo in a clean state: for merge, repo stays mid-merge with conflicts already resolved on disk (user can edit message and retry, or run Abort); for revert, repo stays in `REVERT_HEAD` state (user can retry or abort).
 
 ## v2 Requirements
@@ -54,11 +54,12 @@ Updated during roadmap creation.
 | MSG-01 | Phase 76 | Pending |
 | MSG-02 | Phase 76 | Pending |
 | MSG-03 | Phase 76 | Pending |
-| MSG-04 | Phase 75 | Pending |
-| MSG-05 | Phase 75 | Pending |
+| MSG-04 | Phase 75 | Complete |
+| MSG-05 | Phase 75 | Complete |
 | MSG-06 | Phase 76 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 6 total
 - Mapped to phases: 6
 - Unmapped: 0 ✓
