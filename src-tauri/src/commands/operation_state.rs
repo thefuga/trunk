@@ -9,6 +9,20 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
+/// Outcome of a two-step merge begin. The async wrapper emits `repo-changed`
+/// for every variant (the repo is mutated before the editor opens). The
+/// frontend (Plan 03) discriminates on the serialized `kind` tag.
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MergeBeginResult {
+    /// Fast-forward already happened — no editor, no merge commit.
+    FastForwarded { graph: GraphResult },
+    /// Merge stopped on conflicts — the merge-continue UI takes over; no editor.
+    Conflicts { graph: GraphResult },
+    /// Clean non-ff merge staged — open the editor pre-filled with `message`.
+    Ready { graph: GraphResult, message: String },
+}
+
 fn open_repo(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
@@ -155,23 +169,18 @@ pub fn merge_continue_inner(
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    let output = if let Some(msg) = message {
-        // Custom message: use git commit directly (works during merge state)
-        std::process::Command::new("git")
-            .args(["commit", "-m", msg])
-            .current_dir(path_buf)
-            .env("PATH", shell_env::system_path())
-            .output()
-            .map_err(|e| TrunkError::new("merge_error", e.to_string()))?
-    } else {
-        std::process::Command::new("git")
-            .args(["merge", "--continue"])
-            .current_dir(path_buf)
-            .env("PATH", shell_env::system_path())
-            .env("GIT_EDITOR", "true")
-            .output()
-            .map_err(|e| TrunkError::new("merge_error", e.to_string()))?
-    };
+    // The editor flow always supplies a message (frontend aborts on null and
+    // never invokes). --cleanup=strip drops git's `# Conflicts:` comment block
+    // so conflicted-merge bodies stay clean (MSG-01 fidelity).
+    let msg = message.ok_or_else(|| {
+        TrunkError::new("merge_error", "merge_continue requires a commit message")
+    })?;
+    let output = std::process::Command::new("git")
+        .args(["commit", "-m", msg, "--cleanup=strip"])
+        .current_dir(path_buf)
+        .env("PATH", shell_env::system_path())
+        .output()
+        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("merge_error", stderr.to_string()));
@@ -289,32 +298,72 @@ pub fn rebase_abort_inner(
 
 // --- Start merge/rebase ---
 
-pub fn merge_branch_inner(
+pub fn get_merge_message_inner(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<Option<String>, TrunkError> {
+    let repo = open_repo(path, state_map)?;
+    // Verbatim read — `# Conflicts:` lines are stripped at commit time via
+    // --cleanup=strip, never here.
+    Ok(std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok())
+}
+
+pub fn merge_branch_begin_inner(
     path: &str,
     branch: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<GraphResult, TrunkError> {
+) -> Result<MergeBeginResult, TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    let output = std::process::Command::new("git")
-        .args(["merge", branch, "--no-edit"])
+
+    // 1. Probe fast-forward (RESEARCH OQ-1). `--ff-only` succeeds silently on an
+    //    ff-able or already-up-to-date merge (no MERGE_HEAD, no merge commit) and
+    //    fails clean on a non-ff merge (exit 128, MERGE_HEAD absent, tree clean).
+    let probe = std::process::Command::new("git")
+        .args(["merge", "--ff-only", branch])
         .current_dir(path_buf)
         .env("PATH", shell_env::system_path())
-        .env("GIT_EDITOR", "true")
         .output()
         .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+    if probe.status.success() {
+        let mut repo = git2::Repository::open(path_buf)?;
+        let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+        return Ok(MergeBeginResult::FastForwarded { graph });
+    }
+
+    // 2. Non-ff: branches are now provably divergent (the ff probe left the tree
+    //    clean), so --no-commit creates a real merge. --no-ff is unnecessary.
+    let output = std::process::Command::new("git")
+        .args(["merge", "--no-commit", branch])
+        .current_dir(path_buf)
+        .env("PATH", shell_env::system_path())
+        .output()
+        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+
     if !output.status.success() {
+        // `git merge` writes the CONFLICT notice to stdout, not stderr — check
+        // both so a conflicted merge is never misclassified as an error.
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.to_lowercase().contains("conflict") {
-            // Conflicts: rebuild graph so UI picks up the merge state
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let is_conflict = stdout.to_lowercase().contains("conflict")
+            || stderr.to_lowercase().contains("conflict");
+        if is_conflict {
+            // Conflicts: rebuild graph so the merge-continue UI picks up the
+            // state. NOT an error, NOT an editor — the message isn't ready yet.
             let mut repo = git2::Repository::open(path_buf)?;
-            return graph::walk_commits(&mut repo, 0, usize::MAX);
+            let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+            return Ok(MergeBeginResult::Conflicts { graph });
         }
         return Err(TrunkError::new("merge_error", stderr.to_string()));
     }
+
+    // Clean non-ff merge staged: read the default message git wrote verbatim.
     let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    let message = std::fs::read_to_string(repo.path().join("MERGE_MSG"))
+        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+    let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+    Ok(MergeBeginResult::Ready { graph, message })
 }
 
 pub fn rebase_branch_inner(
@@ -492,24 +541,47 @@ pub async fn rebase_abort(
 }
 
 #[tauri::command]
-pub async fn merge_branch(
+pub async fn get_merge_message(
+    path: String,
+    state: State<'_, RepoState>,
+) -> Result<Option<String>, String> {
+    let state_map = state.0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || get_merge_message_inner(&path, &state_map))
+        .await
+        .map_err(|e| {
+            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+        })?
+        .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+}
+
+#[tauri::command]
+pub async fn merge_branch_begin(
     path: String,
     branch: String,
     state: State<'_, RepoState>,
     cache: State<'_, CommitCache>,
     app: AppHandle,
-) -> Result<(), String> {
+) -> Result<MergeBeginResult, String> {
     let state_map = state.0.lock().unwrap().clone();
     let path_clone = path.clone();
-    let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        merge_branch_inner(&path_clone, &branch, &state_map)
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        merge_branch_begin_inner(&path_clone, &branch, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
     .map_err(|e| serde_json::to_string(&e).unwrap())?;
-    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    // The begin mutated the repo before the editor opens (ff commit, staged
+    // merge, or conflict markers), so cache the rebuilt graph and emit
+    // repo-changed on EVERY outcome — a later cancel must still surface the
+    // in-progress UI (RESEARCH finding 7 / Pitfall 4).
+    let graph = match &result {
+        MergeBeginResult::FastForwarded { graph }
+        | MergeBeginResult::Conflicts { graph }
+        | MergeBeginResult::Ready { graph, .. } => graph.clone(),
+    };
+    cache.0.lock().unwrap().insert(path.clone(), graph);
     let _ = app.emit("repo-changed", path);
-    Ok(())
+    Ok(result)
 }
 
 #[tauri::command]
@@ -571,9 +643,9 @@ mod tests {
         map
     }
 
-    /// Commit `path`=`content` onto `parents`, leaving the index/worktree clean.
-    /// Writes the blob through the object DB only (no worktree write), so the
-    /// repo stays clean for subsequent subprocess `git merge`.
+    /// Commit `file`=`content` onto `parents`, carrying the first parent's tree
+    /// forward so existing files persist (a faithful linear history, not an
+    /// implicit delete of every other path).
     fn commit_file(
         repo: &Repository,
         message: &str,
@@ -582,7 +654,11 @@ mod tests {
         content: &[u8],
     ) -> git2::Oid {
         let blob_oid = repo.blob(content).unwrap();
-        let mut builder = repo.treebuilder(None).unwrap();
+        // Seed the treebuilder from the first parent's tree so prior files remain.
+        let base_tree = parents
+            .first()
+            .map(|oid| repo.find_commit(*oid).unwrap().tree().unwrap());
+        let mut builder = repo.treebuilder(base_tree.as_ref()).unwrap();
         builder
             .insert(file, blob_oid, git2::FileMode::Blob.into())
             .unwrap();
@@ -614,15 +690,14 @@ mod tests {
     /// A repo where `feature` is strictly ahead of `main` (no divergence) so a
     /// merge is a pure fast-forward. HEAD stays on `main`.
     fn ff_repo() -> (TempDir, Repository) {
+        // init.defaultBranch is honored by Repository::init: the first commit on
+        // HEAD establishes `main` (or whatever the default is) — no force needed.
         let (dir, repo) = make_repo();
         let base = commit_file(&repo, "base", &[], "base.txt", b"base\n");
-        // main stays at base; feature advances.
-        repo.branch("main", &repo.find_commit(base).unwrap(), true)
-            .unwrap();
-        repo.set_head("refs/heads/main").unwrap();
+        // feature advances strictly ahead of main.
         let ahead = commit_file(&repo, "ahead", &[base], "ahead.txt", b"ahead\n");
         set_branch(&repo, "feature", ahead);
-        // Reset HEAD/main back to base so feature is strictly ahead.
+        // Rewind HEAD back to base so feature is strictly ahead (ff-able).
         repo.reset(
             &repo.find_object(base, None).unwrap(),
             git2::ResetType::Hard,
@@ -636,13 +711,10 @@ mod tests {
     fn clean_divergent_repo() -> (TempDir, Repository) {
         let (dir, repo) = make_repo();
         let base = commit_file(&repo, "base", &[], "base.txt", b"base\n");
-        repo.branch("main", &repo.find_commit(base).unwrap(), true)
-            .unwrap();
-        repo.set_head("refs/heads/main").unwrap();
         // feature: add feature.txt
         let feat = commit_file(&repo, "feat", &[base], "feature.txt", b"feature\n");
         set_branch(&repo, "feature", feat);
-        // main: add main.txt (diverges)
+        // main diverges: rewind to base, add main.txt
         repo.reset(
             &repo.find_object(base, None).unwrap(),
             git2::ResetType::Hard,
@@ -650,6 +722,10 @@ mod tests {
         )
         .unwrap();
         commit_file(&repo, "main change", &[base], "main.txt", b"main\n");
+        // Sync worktree + index to the new HEAD so subprocess `git merge` sees a
+        // clean tree (commit_file writes the object DB only).
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
         (dir, repo)
     }
 
@@ -657,9 +733,6 @@ mod tests {
     fn conflict_divergent_repo() -> (TempDir, Repository) {
         let (dir, repo) = make_repo();
         let base = commit_file(&repo, "base", &[], "f.txt", b"base\n");
-        repo.branch("main", &repo.find_commit(base).unwrap(), true)
-            .unwrap();
-        repo.set_head("refs/heads/main").unwrap();
         let feat = commit_file(&repo, "feat", &[base], "f.txt", b"feature side\n");
         set_branch(&repo, "feature", feat);
         repo.reset(
@@ -669,6 +742,8 @@ mod tests {
         )
         .unwrap();
         commit_file(&repo, "main change", &[base], "f.txt", b"main side\n");
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
         (dir, repo)
     }
 
@@ -701,12 +776,19 @@ mod tests {
             MergeBeginResult::Ready { message, .. } => message,
             other => panic!("expected Ready, got {:?}", kind_of(&other)),
         };
-        assert_eq!(message, read_merge_msg(&dir), "message must be MERGE_MSG verbatim");
+        assert_eq!(
+            message,
+            read_merge_msg(&dir),
+            "message must be MERGE_MSG verbatim"
+        );
         assert!(
             message.starts_with("Merge branch 'feature'"),
             "got: {message:?}"
         );
-        assert!(merge_head_path(&dir).exists(), "non-ff merge must set MERGE_HEAD");
+        assert!(
+            merge_head_path(&dir).exists(),
+            "non-ff merge must set MERGE_HEAD"
+        );
     }
 
     #[test]
@@ -761,6 +843,61 @@ mod tests {
             got,
             Some(raw),
             "get_merge_message returns MERGE_MSG verbatim, including # Conflicts: lines"
+        );
+    }
+
+    #[test]
+    fn merge_continue_strips_conflict_comment_block_from_commit_body() {
+        let (dir, repo) = conflict_divergent_repo();
+        let map = state_map_for(&dir);
+        // Begin the conflicted merge so MERGE_HEAD + `# Conflicts:` MERGE_MSG exist.
+        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map).unwrap();
+        assert_eq!(kind_of(&result), "conflicts");
+        // Resolve the conflict by staging a fixed version of the file.
+        let blob = repo.blob(b"resolved\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .add(&git2::IndexEntry {
+                ctime: git2::IndexTime::new(0, 0),
+                mtime: git2::IndexTime::new(0, 0),
+                dev: 0,
+                ino: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+                id: blob,
+                flags: 0,
+                flags_extended: 0,
+                path: b"f.txt".to_vec(),
+            })
+            .unwrap();
+        index.write().unwrap();
+
+        // The default MERGE_MSG carries the `# Conflicts:` block; finish with it.
+        let raw_msg = read_merge_msg(&dir);
+        assert!(
+            raw_msg.contains("# Conflicts:"),
+            "precondition: {raw_msg:?}"
+        );
+        merge_continue_inner(&path_str(&dir), Some(&raw_msg), &map).unwrap();
+
+        // HEAD body must NOT contain any `#`-leading line (--cleanup=strip).
+        let head_msg = repo
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .message()
+            .unwrap()
+            .to_string();
+        assert!(
+            !head_msg.lines().any(|l| l.starts_with('#')),
+            "commit body must not leak the # Conflicts: block; got: {head_msg:?}"
+        );
+        assert!(
+            !merge_head_path(&dir).exists(),
+            "git commit -m clears MERGE_HEAD"
         );
     }
 }
