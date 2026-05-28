@@ -1,5 +1,5 @@
 use crate::common::context::TestContext;
-use trunk_lib::commands::commit_actions;
+use trunk_lib::commands::commit_actions::{self, RevertBeginResult};
 use trunk_lib::error::TrunkError;
 use trunk_lib::git::types::{GraphResult, UndoResult};
 
@@ -29,9 +29,20 @@ impl TestContext {
         commit_actions::cherry_pick_inner(self.path(), oid, self.state_map())
     }
 
-    /// Revert a commit by OID (shells out to git CLI)
-    pub fn revert_commit(&self, oid: &str) -> Result<GraphResult, TrunkError> {
-        commit_actions::revert_commit_inner(self.path(), oid, self.state_map())
+    /// Stage a revert without committing (two-step begin); shells out to git CLI.
+    /// Returns the rebuilt graph + default message read from MERGE_MSG.
+    pub fn revert_commit_begin(&self, oid: &str) -> Result<RevertBeginResult, TrunkError> {
+        commit_actions::revert_commit_begin_inner(self.path(), oid, self.state_map())
+    }
+
+    /// Finish a staged revert with the edited message (git commit -m --cleanup=strip).
+    pub fn revert_continue(&self, message: &str) -> Result<GraphResult, TrunkError> {
+        commit_actions::revert_continue_inner(self.path(), message, self.state_map())
+    }
+
+    /// Abort a staged revert (git revert --abort), restoring a clean tree.
+    pub fn revert_abort(&self) -> Result<GraphResult, TrunkError> {
+        commit_actions::revert_abort_inner(self.path(), self.state_map())
     }
 
     /// Reset HEAD to a commit by OID with the given mode (soft/mixed/hard)

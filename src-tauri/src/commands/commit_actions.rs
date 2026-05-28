@@ -9,6 +9,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
+/// Outcome of a clean two-step revert begin. The async wrapper emits
+/// `repo-changed` (REVERT_HEAD is set before the editor opens), so a later
+/// cancel still surfaces the in-progress UI. A conflicted revert returns
+/// `Err(conflict_state)` instead — there is a single editor outcome, so a
+/// 2-field struct is simpler than a tagged enum here.
+#[derive(Debug, serde::Serialize)]
+pub struct RevertBeginResult {
+    pub graph: GraphResult,
+    pub message: Option<String>,
+}
+
 fn open_repo(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
@@ -140,17 +151,20 @@ pub fn cherry_pick_inner(
     graph::walk_commits(&mut repo, 0, usize::MAX)
 }
 
-pub fn revert_commit_inner(
+pub fn revert_commit_begin_inner(
     path: &str,
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<GraphResult, TrunkError> {
+) -> Result<RevertBeginResult, TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
+    // Stage the revert without committing so the editor can edit the message.
+    // git writes the default message (Revert "<subject>" + full 40-char OID) to
+    // .git/MERGE_MSG. REVERT_HEAD is set; the wrapper emits repo-changed.
     let output = std::process::Command::new("git")
-        .args(["revert", oid, "--no-edit"])
+        .args(["revert", "--no-commit", oid])
         .current_dir(path_buf)
         .env("PATH", shell_env::system_path())
         .output()
@@ -166,6 +180,57 @@ pub fn revert_commit_inner(
         return Err(TrunkError::new(code, stderr.to_string()));
     }
 
+    let mut repo = git2::Repository::open(path_buf)?;
+    // Verbatim default — `# Conflicts:` lines (conflicted revert) are stripped at
+    // commit time via --cleanup=strip, never here.
+    let message = std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok();
+    let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+    Ok(RevertBeginResult { graph, message })
+}
+
+pub fn revert_continue_inner(
+    path: &str,
+    message: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<GraphResult, TrunkError> {
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    // --cleanup=strip drops git's `# Conflicts:` comment block so conflicted
+    // revert bodies stay clean (MSG-03 fidelity). git commit -m clears REVERT_HEAD.
+    let output = std::process::Command::new("git")
+        .args(["commit", "-m", message, "--cleanup=strip"])
+        .current_dir(path_buf)
+        .env("PATH", shell_env::system_path())
+        .output()
+        .map_err(|e| TrunkError::new("revert_error", e.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(TrunkError::new("revert_error", stderr.to_string()));
+    }
+    let mut repo = git2::Repository::open(path_buf)?;
+    graph::walk_commits(&mut repo, 0, usize::MAX)
+}
+
+pub fn revert_abort_inner(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<GraphResult, TrunkError> {
+    let path_buf = state_map
+        .get(path)
+        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    // The MSG-06 recovery path for revert: clears REVERT_HEAD + restores a clean
+    // tree. Without it a cancelled revert traps the user (RESEARCH finding 4).
+    let output = std::process::Command::new("git")
+        .args(["revert", "--abort"])
+        .current_dir(path_buf)
+        .env("PATH", shell_env::system_path())
+        .output()
+        .map_err(|e| TrunkError::new("revert_error", e.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(TrunkError::new("revert_error", stderr.to_string()));
+    }
     let mut repo = git2::Repository::open(path_buf)?;
     graph::walk_commits(&mut repo, 0, usize::MAX)
 }
@@ -318,9 +383,38 @@ pub async fn cherry_pick(
 }
 
 #[tauri::command]
-pub async fn revert_commit(
+pub async fn revert_commit_begin(
     path: String,
     oid: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<RevertBeginResult, String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        revert_commit_begin_inner(&path_clone, &oid, &state_map)
+    })
+    .await
+    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
+    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    // begin mutated the repo (REVERT_HEAD set + staged) before the editor opens,
+    // so cache the rebuilt graph and emit repo-changed — a later cancel must
+    // still surface the in-progress banner (RESEARCH Pitfall 2/4).
+    cache
+        .0
+        .lock()
+        .unwrap()
+        .insert(path.clone(), result.graph.clone());
+    let _ = app.emit("repo-changed", path);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn revert_continue(
+    path: String,
+    message: String,
     state: State<'_, RepoState>,
     cache: State<'_, CommitCache>,
     app: AppHandle,
@@ -328,11 +422,33 @@ pub async fn revert_commit(
     let state_map = state.0.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        revert_commit_inner(&path_clone, &oid, &state_map)
+        revert_continue_inner(&path_clone, &message, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
     .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    cache.0.lock().unwrap().insert(path.clone(), graph_result);
+    let _ = app.emit("repo-changed", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn revert_abort(
+    path: String,
+    state: State<'_, RepoState>,
+    cache: State<'_, CommitCache>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state_map = state.0.lock().unwrap().clone();
+    let path_clone = path.clone();
+    let graph_result =
+        tauri::async_runtime::spawn_blocking(move || revert_abort_inner(&path_clone, &state_map))
+            .await
+            .map_err(|e| {
+                serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
+            })?
+            .map_err(|e| serde_json::to_string(&e).unwrap())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -596,7 +712,11 @@ mod tests {
             message.contains(&format!("This reverts commit {}.", oid_str)),
             "message must carry the FULL 40-char OID, not a short OID; got: {message:?}"
         );
-        assert_eq!(oid_str.len(), 40, "OID under test must be the full 40-char form");
+        assert_eq!(
+            oid_str.len(),
+            40,
+            "OID under test must be the full 40-char form"
+        );
         assert!(
             revert_head_path(&dir).exists(),
             "begin sets REVERT_HEAD (not committed yet)"
@@ -618,7 +738,12 @@ mod tests {
             "git commit -m clears REVERT_HEAD"
         );
         let body = head_body(&repo);
-        assert_eq!(body, edited, "HEAD body must equal the edited message");
+        // git appends a trailing newline; the body is otherwise the edited text.
+        assert_eq!(
+            body.trim_end(),
+            edited,
+            "HEAD body must equal the edited message"
+        );
         assert!(
             !body.lines().any(|l| l.starts_with('#')),
             "no commit body line may start with #; got: {body:?}"

@@ -205,18 +205,69 @@ fn undo_merge_commit_fails() {
     assert_eq!(result.unwrap_err().code, "merge_commit");
 }
 
-// --- revert_commit tests ---
+// --- revert (two-step begin/continue/abort) tests ---
 
 #[test]
-fn revert_commit_removes_changes() {
+fn revert_commit_begin_stages_removal_and_carries_default_message() {
     let (ctx, _first_oid, second_oid) = build_two_commit_ctx();
 
-    let result = ctx.revert_commit(&second_oid);
-    assert!(result.is_ok(), "revert should succeed: {:?}", result.err());
+    let result = ctx.revert_commit_begin(&second_oid);
+    let begin = result.expect("clean revert begin should succeed");
 
-    // The reverted file should not exist
+    // The default message git wrote to MERGE_MSG, including the full OID.
+    let message = begin.message.expect("clean revert carries a message");
+    assert!(
+        message.starts_with("Revert \"Second commit\""),
+        "got: {message:?}"
+    );
+    assert!(
+        message.contains(&format!("This reverts commit {}.", second_oid)),
+        "message must carry the full 40-char OID; got: {message:?}"
+    );
+    // begin stages the revert without committing: REVERT_HEAD set, file gone.
+    assert!(
+        ctx.repo_path().join(".git").join("REVERT_HEAD").exists(),
+        "begin sets REVERT_HEAD (not committed yet)"
+    );
     assert!(
         !ctx.repo_path().join("second.txt").exists(),
-        "second.txt should be removed by revert"
+        "second.txt should be removed by the staged revert"
+    );
+}
+
+#[test]
+fn revert_continue_commits_and_clears_revert_head() {
+    let (ctx, _first_oid, second_oid) = build_two_commit_ctx();
+    ctx.revert_commit_begin(&second_oid)
+        .expect("begin should succeed");
+
+    ctx.revert_continue("Revert \"Second commit\"\n\nedited")
+        .expect("continue should succeed");
+
+    assert!(
+        !ctx.repo_path().join(".git").join("REVERT_HEAD").exists(),
+        "git commit -m clears REVERT_HEAD"
+    );
+    assert!(
+        !ctx.repo_path().join("second.txt").exists(),
+        "second.txt stays removed after the revert is committed"
+    );
+}
+
+#[test]
+fn revert_abort_restores_the_reverted_file() {
+    let (ctx, _first_oid, second_oid) = build_two_commit_ctx();
+    ctx.revert_commit_begin(&second_oid)
+        .expect("begin should succeed");
+
+    ctx.revert_abort().expect("abort should succeed");
+
+    assert!(
+        !ctx.repo_path().join(".git").join("REVERT_HEAD").exists(),
+        "revert --abort clears REVERT_HEAD"
+    );
+    assert!(
+        ctx.repo_path().join("second.txt").exists(),
+        "revert --abort restores the staged removal"
     );
 }
