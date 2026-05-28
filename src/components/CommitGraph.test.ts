@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { makeCommit } from "../__tests__/helpers/factories";
+import { makeCommit, makeRef } from "../__tests__/helpers/factories";
 import { safeInvoke } from "../lib/invoke.js";
 import { showToast } from "../lib/toast.svelte.js";
 import type { SessionStatus } from "../lib/types.js";
@@ -105,16 +105,40 @@ vi.mock("@tauri-apps/api/window", () => ({
 	}),
 }));
 
+// Capture every menu item's { text -> action } so tests can invoke the exact
+// callback the user triggers when picking a context-menu entry. This is the only
+// way the merge/revert handlers (wired through Tauri context menus) are reachable
+// in jsdom; firing the captured action IS the observable user behavior.
+const menuActions = new Map<string, () => unknown>();
+function getMenuAction(text: string): () => unknown {
+	const action = menuActions.get(text);
+	if (!action) {
+		throw new Error(
+			`no menu action captured for "${text}"; captured: ${[...menuActions.keys()].join(", ")}`,
+		);
+	}
+	return action;
+}
 vi.mock("@tauri-apps/api/menu", () => ({
 	Menu: {
 		new: vi.fn().mockResolvedValue({
 			popup: vi.fn().mockResolvedValue(undefined),
 		}),
 	},
-	MenuItem: { new: vi.fn().mockResolvedValue({}) },
+	MenuItem: {
+		new: vi.fn((opts: { text: string; action?: () => unknown }) => {
+			if (opts.action) menuActions.set(opts.text, opts.action);
+			return Promise.resolve({});
+		}),
+	},
 	CheckMenuItem: { new: vi.fn().mockResolvedValue({}) },
 	PredefinedMenuItem: { new: vi.fn().mockResolvedValue({}) },
-	Submenu: { new: vi.fn().mockResolvedValue({}) },
+	Submenu: {
+		new: vi.fn((opts: { text: string }) => {
+			void opts;
+			return Promise.resolve({});
+		}),
+	},
 }));
 
 vi.mock("@tauri-apps/plugin-window-state", () => ({}));
@@ -183,6 +207,7 @@ async function flush() {
 beforeEach(() => {
 	sessionChangedHandler = null;
 	vi.clearAllMocks();
+	menuActions.clear();
 	installReads();
 });
 
@@ -371,6 +396,184 @@ describe("CommitGraph", () => {
 			expect(vi.mocked(showToast)).toHaveBeenCalledWith(
 				expect.stringMatching(/review/i),
 				"error",
+			);
+		});
+	});
+
+	describe("merge/revert routing through MessageEditor (76-03)", () => {
+		// A non-head commit carrying a local branch ref, plus a head commit on
+		// its own branch — the precondition for the "Merge X into Y" menu item
+		// (CommitGraph.svelte: clickedBranch && headBranchName).
+		const FEATURE_COMMIT = makeCommit({
+			oid: "ccc333ccc333ccc3ccc333ccc333ccc3ccc333cc",
+			summary: "feature work",
+			refs: [makeRef({ short_name: "feature", ref_type: "LocalBranch" })],
+		});
+		const HEAD_COMMIT = makeCommit({
+			oid: "aaa111aaa111aaa1aaa111aaa111aaa1aaa111aa",
+			summary: "main tip",
+			is_head: true,
+			refs: [
+				makeRef({ short_name: "main", ref_type: "LocalBranch", is_head: true }),
+			],
+		});
+		const MERGE_FIXTURE = [HEAD_COMMIT, FEATURE_COMMIT];
+
+		async function openContextMenu(rowIndex: number) {
+			const rows = await screen.findAllByTestId("commit-row");
+			await fireEvent.contextMenu(rows[rowIndex]);
+			await flush();
+		}
+
+		it("revert: begin -> editor -> revert_continue with edited message", async () => {
+			const onopenmessageeditor = vi.fn().mockResolvedValue("edited revert");
+			installReads({
+				commits: MERGE_FIXTURE,
+				override: (cmd) =>
+					cmd === "revert_commit_begin"
+						? Promise.resolve({ message: "Revert default" })
+						: undefined,
+			});
+			render(CommitGraph, {
+				props: {
+					repoPath: "/test/repo",
+					clearRedoStack: vi.fn(),
+					onopenmessageeditor,
+				},
+			});
+			await openContextMenu(0);
+			await getMenuAction("Revert")();
+			await flush();
+
+			expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith(
+				"revert_commit_begin",
+				{
+					path: "/test/repo",
+					oid: HEAD_COMMIT.oid,
+				},
+			);
+			expect(onopenmessageeditor).toHaveBeenCalledWith(
+				"Revert default",
+				"Revert commit message",
+			);
+			expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith("revert_continue", {
+				path: "/test/repo",
+				message: "edited revert",
+			});
+		});
+
+		it("revert: cancel (null) does not invoke revert_continue", async () => {
+			const onopenmessageeditor = vi.fn().mockResolvedValue(null);
+			installReads({
+				commits: MERGE_FIXTURE,
+				override: (cmd) =>
+					cmd === "revert_commit_begin"
+						? Promise.resolve({ message: "Revert default" })
+						: undefined,
+			});
+			render(CommitGraph, {
+				props: {
+					repoPath: "/test/repo",
+					clearRedoStack: vi.fn(),
+					onopenmessageeditor,
+				},
+			});
+			await openContextMenu(0);
+			await getMenuAction("Revert")();
+			await flush();
+
+			expect(onopenmessageeditor).toHaveBeenCalled();
+			expect(vi.mocked(safeInvoke)).not.toHaveBeenCalledWith(
+				"revert_continue",
+				expect.anything(),
+			);
+		});
+
+		it("merge ready: begin -> editor -> merge_continue with edited message", async () => {
+			const onopenmessageeditor = vi.fn().mockResolvedValue("edited merge");
+			installReads({
+				commits: MERGE_FIXTURE,
+				override: (cmd) =>
+					cmd === "merge_branch_begin"
+						? Promise.resolve({ kind: "ready", message: "Merge default" })
+						: undefined,
+			});
+			render(CommitGraph, {
+				props: {
+					repoPath: "/test/repo",
+					clearRedoStack: vi.fn(),
+					onopenmessageeditor,
+				},
+			});
+			await openContextMenu(1);
+			await getMenuAction("Merge feature into main")();
+			await flush();
+
+			expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith("merge_branch_begin", {
+				path: "/test/repo",
+				branch: "feature",
+			});
+			expect(onopenmessageeditor).toHaveBeenCalledWith(
+				"Merge default",
+				"Merge commit message",
+			);
+			expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith("merge_continue", {
+				path: "/test/repo",
+				message: "edited merge",
+			});
+		});
+
+		it("merge fast_forwarded: no editor, no merge_continue", async () => {
+			const onopenmessageeditor = vi.fn();
+			installReads({
+				commits: MERGE_FIXTURE,
+				override: (cmd) =>
+					cmd === "merge_branch_begin"
+						? Promise.resolve({ kind: "fast_forwarded" })
+						: undefined,
+			});
+			render(CommitGraph, {
+				props: {
+					repoPath: "/test/repo",
+					clearRedoStack: vi.fn(),
+					onopenmessageeditor,
+				},
+			});
+			await openContextMenu(1);
+			await getMenuAction("Merge feature into main")();
+			await flush();
+
+			expect(onopenmessageeditor).not.toHaveBeenCalled();
+			expect(vi.mocked(safeInvoke)).not.toHaveBeenCalledWith(
+				"merge_continue",
+				expect.anything(),
+			);
+		});
+
+		it("merge conflicts: no editor opened", async () => {
+			const onopenmessageeditor = vi.fn();
+			installReads({
+				commits: MERGE_FIXTURE,
+				override: (cmd) =>
+					cmd === "merge_branch_begin"
+						? Promise.resolve({ kind: "conflicts" })
+						: undefined,
+			});
+			render(CommitGraph, {
+				props: {
+					repoPath: "/test/repo",
+					clearRedoStack: vi.fn(),
+					onopenmessageeditor,
+				},
+			});
+			await openContextMenu(1);
+			await getMenuAction("Merge feature into main")();
+			await flush();
+
+			expect(onopenmessageeditor).not.toHaveBeenCalled();
+			expect(vi.mocked(safeInvoke)).not.toHaveBeenCalledWith(
+				"merge_continue",
+				expect.anything(),
 			);
 		});
 	});

@@ -64,6 +64,10 @@ interface Props {
 	refreshSignal?: number;
 	selectedCommitOid?: string | null;
 	onopenrebaseeditor?: (baseOid: string, inclusive?: boolean) => void;
+	onopenmessageeditor?: (
+		defaultValue: string,
+		title: string,
+	) => Promise<string | null>;
 	clearRedoStack: () => void;
 }
 
@@ -76,6 +80,7 @@ let {
 	refreshSignal,
 	selectedCommitOid,
 	onopenrebaseeditor,
+	onopenmessageeditor,
 	clearRedoStack,
 }: Props = $props();
 
@@ -541,7 +546,19 @@ async function handleCherryPick(commit: GraphCommit) {
 async function handleRevert(commit: GraphCommit) {
 	clearRedoStack();
 	try {
-		await safeInvoke("revert_commit", { path: repoPath, oid: commit.oid });
+		// Two-step: begin stages the revert and emits repo-changed, then the user
+		// edits the message in the host MessageEditor. A null return (cancel/empty)
+		// leaves the repo in its recoverable in-progress state — no continue (D-02).
+		const result = await safeInvoke<{ message: string | null }>(
+			"revert_commit_begin",
+			{ path: repoPath, oid: commit.oid },
+		);
+		const msg = await onopenmessageeditor?.(
+			result.message ?? "",
+			"Revert commit message",
+		);
+		if (msg == null) return;
+		await safeInvoke("revert_continue", { path: repoPath, message: msg });
 	} catch (e) {
 		const err = e as TrunkError;
 		await message(
@@ -589,7 +606,20 @@ async function handleReset(
 
 async function handleMergeBranch(branch: string) {
 	try {
-		await safeInvoke("merge_branch", { path: repoPath, branch });
+		const result = await safeInvoke<{ kind: string; message?: string }>(
+			"merge_branch_begin",
+			{ path: repoPath, branch },
+		);
+		// fast_forwarded / conflicts open no editor — the begin's repo-changed emit
+		// drives the UI. Only a clean non-ff merge ("ready") needs a commit message.
+		if (result.kind === "ready") {
+			const msg = await onopenmessageeditor?.(
+				result.message ?? "",
+				"Merge commit message",
+			);
+			if (msg == null) return; // cancel/empty leaves the merge in progress (D-02)
+			await safeInvoke("merge_continue", { path: repoPath, message: msg });
+		}
 		// No toast on success -- graph refresh via repo-changed event is sufficient
 	} catch (e) {
 		const err = e as TrunkError;

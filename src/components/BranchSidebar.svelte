@@ -14,6 +14,10 @@ interface Props {
 	onrefnavigate?: (refNameOrOid: string) => void;
 	refreshSignal?: number;
 	onopenrebaseeditor?: (baseOid: string, inclusive?: boolean) => void;
+	onopenmessageeditor?: (
+		defaultValue: string,
+		title: string,
+	) => Promise<string | null>;
 }
 
 let {
@@ -23,6 +27,7 @@ let {
 	onrefnavigate,
 	refreshSignal,
 	onopenrebaseeditor,
+	onopenmessageeditor,
 }: Props = $props();
 
 let refs = $state<RefsResponse | null>(null);
@@ -394,7 +399,20 @@ async function handleDeleteTag(tagName: string) {
 
 async function handleMergeBranch(branch: string) {
 	try {
-		await safeInvoke("merge_branch", { path: repoPath, branch });
+		const result = await safeInvoke<{ kind: string; message?: string }>(
+			"merge_branch_begin",
+			{ path: repoPath, branch },
+		);
+		// fast_forwarded / conflicts open no editor — the begin's repo-changed emit
+		// drives the UI. Only a clean non-ff merge ("ready") needs a commit message.
+		if (result.kind === "ready") {
+			const msg = await onopenmessageeditor?.(
+				result.message ?? "",
+				"Merge commit message",
+			);
+			if (msg == null) return; // cancel/empty leaves the merge in progress (D-02)
+			await safeInvoke("merge_continue", { path: repoPath, message: msg });
+		}
 		// No toast on success -- graph refresh via repo-changed event is sufficient
 		await loadRefs(repoPath);
 		onrefreshed?.();
