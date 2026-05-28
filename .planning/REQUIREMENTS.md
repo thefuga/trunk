@@ -51,8 +51,8 @@ Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSG-01 | Phase 76 | Pending |
-| MSG-02 | Phase 76 | Pending |
+| MSG-01 | Phase 76 | In Progress (76-01 backend: merge_continue --cleanup=strip; frontend wiring pending 76-03) |
+| MSG-02 | Phase 76 | In Progress (76-01 backend: merge_branch_begin + verbatim MERGE_MSG; frontend wiring pending 76-03) |
 | MSG-03 | Phase 76 | Pending |
 | MSG-04 | Phase 75 | Complete |
 | MSG-05 | Phase 75 | Complete |

@@ -248,7 +248,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 76-01-PLAN.md — merge-side backend: get_merge_message + MergeBeginResult + merge_branch_begin (ff probe), merge_continue --cleanup=strip, drop GIT_EDITOR (MSG-01/MSG-02)
+- [x] 76-01-PLAN.md — merge-side backend: get_merge_message + MergeBeginResult + merge_branch_begin (ff probe), merge_continue --cleanup=strip, drop GIT_EDITOR (MSG-01/MSG-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

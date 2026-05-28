@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.14
 milestone_name: milestone
 status: executing
-stopped_at: Phase 76 context gathered
-last_updated: "2026-05-28T22:45:21.447Z"
-last_activity: 2026-05-28 -- Phase 76 execution started
+stopped_at: Completed 76-01-PLAN.md (merge-side backend)
+last_updated: "2026-05-29T00:00:00.000Z"
+last_activity: 2026-05-29 -- Phase 76 Plan 01 executed
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-28 after v0.14 defined)
 ## Current Position
 
 Phase: 76 (wire-messageeditor-into-merge-continue-merge-and-revert) — EXECUTING
-Plan: 1 of 4
+Plan: 2 of 4 (76-01 complete)
 Status: Executing Phase 76
-Last activity: 2026-05-28 -- Phase 76 execution started
+Last activity: 2026-05-29 -- Phase 76 Plan 01 (merge-side backend) executed
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Last activity: 2026-05-28 -- Phase 76 execution started
 | Phase 73 P01 | 7min | 3 tasks | 2 files |
 | Phase 73 P02 | 6min | 2 tasks | 2 files |
 | Phase 73 P03 | 6min | 3 tasks | 2 files |
+| Phase 76 P01 | 22min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,11 @@ Last activity: 2026-05-28 -- Phase 76 execution started
 - [Phase 73]: 73-03: three-way empty-state branching specificity-first (cold → warm-no-commits → warm-with-commits-zero-comments) consumes Plan 01 sessionState rune + groups + hasAnyComment; no new state shapes; warm-no-commits copy preserved verbatim
 - [Phase 73]: 73-03: session-summary caption '{N} comments · {M} commits' (U+00B7) above empty-state block, gated on sessionState !== 'none' — single span with var(--color-text-muted)/font-size:11px, no new IPC, no PII (T-73-11 accepted)
 - [Phase 73]: 73-03: multi-tab coordination emergent — Plan 01 sessionState rune + untouched session-changed listener (D-09 byte-for-byte across all three plans) + Plan 03 empty-state branching compose into tab-A End → tab-B cold render. Test 1 uses per-test closure dispatcher; Test 2 asserts safeInvoke call-count delta to prove canonicalPath filter held without coupling to reload() internals
+- [Phase 76]: 76-01: MergeBeginResult is a serde internally-tagged enum (tag="kind", snake_case: fast_forwarded/conflicts/ready) — first such enum in the codebase, frozen as the Plan 03 frontend discriminant; tests assert the serialized `kind` string, not just the Rust variant
+- [Phase 76]: 76-01: merge_branch_begin wrapper emits repo-changed UNCONDITIONALLY after an all-arm match that extracts .graph from every variant (ff/conflicts/ready) — a cancelled begin must still surface the in-progress UI (RESEARCH finding 7)
+- [Phase 76]: 76-01: git merge writes the CONFLICT notice to STDOUT not stderr (git 2.54.0) — conflict detection must scan both streams; the old merge_branch stderr-only check would misclassify conflicts as Err
+- [Phase 76]: 76-01: merge_continue commit uses --cleanup=strip (drops # Conflicts: block); GIT_EDITOR=true else-branch removed — None message now returns Err (contract violation), not a silent bypass
+- [Phase 76]: 76-01: lib.rs dropped merge_branch registration while frontend still invokes it (CommitGraph:592, BranchSidebar:397) — expected wave seam, repointed in Plan 03
 
 ### Pending Todos
 
@@ -197,12 +203,12 @@ v0.13-specific outstanding work:
 
 ## Session Continuity
 
-Last activity: 2026-05-28
-Last session: 2026-05-28T21:45:04.651Z
-Stopped at: Phase 76 context gathered
-Resume file: .planning/phases/76-wire-messageeditor-into-merge-continue-merge-and-revert/76-CONTEXT.md
-Next action: /gsd:plan-phase 75
+Last activity: 2026-05-29
+Last session: 2026-05-29T00:00:00.000Z
+Stopped at: Completed 76-01-PLAN.md (merge-side backend)
+Resume file: .planning/phases/76-wire-messageeditor-into-merge-continue-merge-and-revert/76-02-PLAN.md
+Next action: execute 76-02 (revert backend)
 
 ## Operator Next Steps
 
-- /gsd:plan-phase 75 (build plan from CONTEXT.md)
+- Execute Plan 76-02 (revert_commit_begin / revert_continue / revert_abort backend)
