@@ -41,3 +41,7 @@ Preserve these from the existing implementation when relocating:
 ## Scope
 
 Independent UI relocation. Likely a small Phase 72 (or a discrete plan within a broader "review-pane UX" phase that also closes the G-71-B dead-button issue below).
+
+## Resolution (2026-05-28)
+
+Closed by Phase 72. `ReviewDocPreview.svelte` was deleted (Plan 04). The Copy affordance now lives on `ReviewPanel.svelte` (Phase 72 Copy state at line 131; explicit "deleted Phase 71 preview component" note at line 889), carrying forward the awaited writeText + try/catch + 1500ms re-clickable-affordance pattern from 71.

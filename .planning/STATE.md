@@ -4,8 +4,8 @@ milestone: v0.13
 milestone_name: Code Review Mode
 status: Awaiting next milestone
 stopped_at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
-last_updated: "2026-05-27T22:05:45.136Z"
-last_activity: 2026-05-27 — Milestone v0.13 completed and archived
+last_updated: "2026-05-28T00:00:00.000Z"
+last_activity: 2026-05-28 — Stale debug/todo cleanup: 5 debug + 2 todos moved to resolved/done after verifying fixes already shipped
 progress:
   total_phases: 10
   completed_phases: 10
@@ -138,7 +138,7 @@ Last activity: 2026-05-27 — Milestone v0.13 completed and archived
 
 ### Pending Todos
 
-None.
+1 — `.planning/todos/pending/2026-04-14-collect-commit-messages-for-merge-revert-instead-of-bypassing-editor.md` (real future work, not v0.13-blocking).
 
 ### Known Limitations
 
@@ -167,24 +167,26 @@ None.
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-05-28 (40 total — all pre-existing, none v0.13-specific blockers):
+Items acknowledged and deferred at milestone close on 2026-05-28. Audited again on 2026-05-28 — 7 entries (5 debug + 2 todos) were already fixed in code; status files moved to `.planning/debug/resolved/` and `.planning/todos/done/` with verification evidence.
 
 | Category | Item | Status |
 |----------|------|--------|
-| debug_sessions | context-menu-take-all-no-resolve | diagnosed |
-| debug_sessions | graph-dot-zoom-drift | awaiting_human_verify |
-| debug_sessions | merge-editor-manual-edit-overridden | diagnosed |
-| debug_sessions | overflow-pill-context-menu | diagnosed |
-| debug_sessions | shift-click-text-selection | investigating |
-| debug_sessions | stash-dashed-branch-lines | diagnosed |
+| debug_sessions | graph-dot-zoom-drift | awaiting_human_verify (fix landed; needs in-app smoke at non-100% zoom) |
 | quick_tasks | 21 entries (most already shipped, slug-index marker stale) | missing |
-| todos | 2026-04-14-collect-commit-messages-for-merge-revert | open |
-| todos | 2026-05-26-relocate-copy-action-off-preview-pane | open (likely closed by Phase 72) |
-| todos | 2026-05-26-review-pane-navigation-and-dead-review-button | open (likely closed by Phase 72) |
+| todos | 2026-04-14-collect-commit-messages-for-merge-revert | open (real future work; needs commit-message modal + temp-editor-script plumbing) |
 | uat_gaps | Phase 65 (1 open scenario) | partial |
 | uat_gaps | Phase 66 (10 open scenarios) | partial |
 | uat_gaps | Phase 70 (3 open scenarios) | partial |
 | verification_gaps | Phases 65, 66, 70, 71, 72, 73, 74 | human_needed |
+
+Closed on 2026-05-28 cleanup pass:
+- debug/merge-editor-manual-edit-overridden — fixed in Phase 38-07 (commit 6c76bbf)
+- debug/context-menu-take-all-no-resolve — fixed by StagingPanel `onfileresolved`/`onfileadvance` callbacks wired in RepoView
+- debug/shift-click-text-selection — fixed via `onmousedown` shift+preventDefault in HunkView/SplitView/FullFileView
+- debug/overflow-pill-context-menu — fixed by per-ref oncontextmenu wiring in CommitGraph overflow expansion
+- debug/stash-dashed-branch-lines — fixed structurally by graph algorithm rewrite (stash_lanes HashSet removed)
+- todos/relocate-copy-action-off-preview-pane — closed by Phase 72 (preview pane deleted, Copy on ReviewPanel)
+- todos/review-pane-navigation-and-dead-review-button — closed by Phases 72 + 73 (toolbar/menu entry, in-pane End-review button)
 
 v0.13-specific outstanding work:
 

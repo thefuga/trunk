@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Overflow pill context menus missing - right-click on expanded overflow pill branch names shows no context menu"
 created: 2026-03-15T00:00:00Z
-updated: 2026-03-15T00:00:00Z
+updated: 2026-05-28T00:00:00Z
+verified_at: 2026-05-28
 ---
 
 ## Current Focus
@@ -59,6 +60,7 @@ root_cause: |
   Each ref inside is rendered with {#each hoveredPill.allRefs as ref} (line 824) as a
   simple div containing only an icon and text — no oncontextmenu binding.
 
-fix: (not applied — diagnosis only)
-verification: (not applied — diagnosis only)
-files_changed: []
+fix: The `{#each hoveredPill.allRefs as ref}` loop in CommitGraph.svelte now adapts each `RefLabel` to a `RefInfo` via a local `refFromLabel(ref)` helper (line 1035) and wires `oncontextmenu={(e) => showRefContextMenu(e, ri)}` on each expanded ref div (line 1909). Double-click checkout was wired in the same pass for parity with single pills.
+verification: Verified 2026-05-28 against src/components/CommitGraph.svelte:1904-1910 — each overflow ref has oncontextmenu + ondblclick bindings.
+files_changed:
+- src/components/CommitGraph.svelte

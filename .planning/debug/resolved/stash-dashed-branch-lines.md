@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Branches that have stashes render the entire branch line as dashed instead of only the stash-to-commit connector being dashed."
 created: 2026-03-15T00:00:00Z
-updated: 2026-03-15T00:00:00Z
+updated: 2026-05-28T00:00:00Z
+verified_at: 2026-05-28
 ---
 
 ## Current Focus
@@ -60,6 +61,7 @@ started: Unknown exact start, present in current code.
 ## Resolution
 
 root_cause: In src-tauri/src/git/graph.rs, the `stash_lanes` HashSet tracks columns allocated to branched stashes so their edges are rendered as dashed. However, `stash_lanes` is only removed during fork-in cleanup (line 305), which requires the stash's parent to be at a DIFFERENT column. For non-HEAD branches, when a stash branches to col N and claims its parent at col N (via pending_parents), the parent inherits that column. Since parent and stash are in the same column, no fork-in occurs, and `stash_lanes` is never cleared for col N. All subsequent commits at col N (the entire branch ancestry) get `dashed: true` from the check `stash_lanes.contains(&col)` at lines 335, 351, and 374. HEAD-chain branches are immune because their commits are pre-reserved at col 0 and never assigned to the stash column.
-fix:
-verification:
-files_changed: []
+fix: The graph algorithm was rewritten — the offending `stash_lanes` HashSet no longer exists in src-tauri/src/git/graph.rs (0 references). Dashed state is now carried per-slot as `active_lanes[col] = Some((oid, dashed))`, set by the commit that creates or takes over the lane (graph.rs:13-15, 135-136, 248-265). The original lifecycle bug — `stash_lanes` persisting after a stash's parent inherited its column — is structurally impossible under the new representation.
+verification: Verified 2026-05-28 against src-tauri/src/git/graph.rs (`grep -c stash_lanes` returns 0; dashed propagation is per-slot).
+files_changed:
+- src-tauri/src/git/graph.rs

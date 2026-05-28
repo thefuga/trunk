@@ -1,8 +1,9 @@
 ---
-status: investigating
+status: resolved
 trigger: "Text selection on shift+click in DiffPanel"
 created: 2026-03-18T23:00:00Z
-updated: 2026-03-18T23:00:00Z
+updated: 2026-05-28T00:00:00Z
+verified_at: 2026-05-28
 ---
 
 ## Current Focus
@@ -42,6 +43,9 @@ started: After line selection feature was added (phase 34-02)
 ## Resolution
 
 root_cause: The `e.preventDefault()` is called on the `click` event (line 162), but browser text selection on shift+click is initiated during the `mousedown` event, which fires before `click`. By the time the click handler runs, the browser has already extended the native text selection. The `user-select: none` CSS on individual selectable lines partially helps, but context lines (origin === 'Context') have `user-select: auto`, and shift+click range selection can still select text across those context lines and parent containers.
-fix: Add an `onmousedown` handler to the diff line divs (line 557 area) that calls `e.preventDefault()` when `e.shiftKey` is true. This intercepts the selection before it starts. The existing `user-select: none` CSS and the `onclick` preventDefault can remain as defense-in-depth, but the `onmousedown` preventDefault is the critical fix.
-verification:
-files_changed: []
+fix: Each selectable diff-line div now binds `onmousedown={(e) => { if (isSelectable && e.shiftKey) e.preventDefault(); }}` — intercepting browser text selection during the mousedown phase before it starts, while leaving non-selectable context lines text-selectable for copy.
+verification: Verified 2026-05-28 across all three diff-line renderers: src/components/diff/HunkView.svelte:352, src/components/diff/SplitView.svelte:353, src/components/diff/FullFileView.svelte:173.
+files_changed:
+- src/components/diff/HunkView.svelte
+- src/components/diff/SplitView.svelte
+- src/components/diff/FullFileView.svelte

@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Manual editing in Output textarea does NOT disable auto-recompute. Toggling hunk/line overrides manual edits."
 created: 2026-03-23T00:00:00Z
-updated: 2026-03-23T00:00:00Z
+updated: 2026-05-28T00:00:00Z
+verified_at: 2026-05-28
 ---
 
 ## Current Focus
@@ -37,6 +38,7 @@ started: Present in current code
 ## Resolution
 
 root_cause: Every hunk/line toggle handler (handleToggleHunk, handleToggleLine, handleTakeAllCurrent, handleTakeAllIncoming) unconditionally sets manualEdit = false. When the user has manually edited the Output textarea (manualEdit = true, manualText holds their edits), clicking any toggle in the Current/Incoming panels resets manualEdit to false, causing the outputText derived value to fall through to computeOutput(regions, takenLines), which overwrites the manual edits.
-fix:
-verification:
-files_changed: []
+fix: Phase 38-07 (commit 6c76bbf "fix(38-07): preserve manualEdit flag in toggle/take handlers") removed the `manualEdit = false` line from handleTakeAllCurrent, handleTakeAllIncoming, handleToggleHunk, and handleToggleLine. The flag is now only reset in handleReset and the initial-load `.then()` block in MergeEditor.svelte. Once the user manually edits the Output textarea, outputText stays bound to manualText regardless of subsequent hunk/line toggles.
+verification: Verified 2026-05-28 against src/components/MergeEditor.svelte (toggle handlers at lines 303, 307, 311, 317 — none reset manualEdit).
+files_changed:
+- src/components/MergeEditor.svelte

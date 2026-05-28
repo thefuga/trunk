@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Take All Current / Take All Incoming context menu items on conflicted files only select lines in merge editor, don't auto-save and resolve"
 created: 2026-03-23T00:00:00Z
-updated: 2026-03-23T00:00:00Z
+updated: 2026-05-28T00:00:00Z
+verified_at: 2026-05-28
 ---
 
 ## Current Focus
@@ -94,6 +95,8 @@ ACTUALLY — re-reading the user's report one more time: "only select all lines 
 ## Resolution
 
 root_cause: When the MergeEditor is already open (user left-clicked a conflicted file), and the user then right-clicks the same file in the StagingPanel and selects "Take All Current" or "Take All Incoming" from the context menu, resolveConflictedFile (StagingPanel.svelte:155) DOES correctly save the resolved content and stage the file via save_merge_result + loadStatus. However, the MergeEditor in the center pane does NOT close or refresh, because: (1) resolveConflictedFile does not call any callback to notify App.svelte that the file was resolved — contrast with MergeEditor's handleSaveAndResolve (line 281) which calls onresolved(), triggering App.svelte's handleFileResolved (line 137) which clears/advances selectedFile; (2) App.svelte's selectedFile still holds {path, kind:'conflicted'}, so showMergeEditor (line 67) remains true and the MergeEditor stays mounted; (3) The MergeEditor's $effect (line 157) depends on filePath which hasn't changed, so it doesn't re-fetch. The user sees a stale MergeEditor showing unresolved state, concludes the action didn't work, and manually clicks "Save and Mark Resolved." The file was actually resolved on disk, but the UI doesn't reflect it.
-fix:
-verification:
-files_changed: []
+fix: StagingPanel now exposes `onfileresolved` and `onfileadvance` callbacks (StagingPanel.svelte:35-38). `resolveConflictedFile` invokes both after a successful save_merge_result (lines 436-437). RepoView.svelte:912-913 wires them into `handleFileResolved`, which clears `selectedFile`, causing App.svelte's `showMergeEditor` derived to flip false and dismount the stale MergeEditor.
+verification: Verified 2026-05-28 against src/components/StagingPanel.svelte (callbacks defined and invoked) and src/components/RepoView.svelte:912-913 (callbacks wired).
+files_changed:
+- src/components/StagingPanel.svelte
+- src/components/RepoView.svelte

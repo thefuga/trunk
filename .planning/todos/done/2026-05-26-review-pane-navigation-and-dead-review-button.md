@@ -45,3 +45,7 @@ grep -rn -iE 'review.*button|button.*review' src/components/ src/App.svelte
 ```
 
 Identifies the dead button before deciding wire-vs-remove.
+
+## Resolution (2026-05-28)
+
+Closed by Phases 72 + 73. Review pane entry/exit now goes through the Toolbar Review button and the View → Start/End Code Review menu item (RepoView.svelte:812 references both routes). Phase 73-02 added the in-pane End-review button as a danger-tinted sibling of the Copy button (ReviewPanel.svelte:913). The "dead blue Review button" referenced in 71-UAT no longer appears in the current ReviewPanel.
