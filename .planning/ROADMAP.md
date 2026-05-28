@@ -242,6 +242,15 @@ Plans:
 5. Fast-forward merges continue to skip the editor (matches CLI behavior — no merge commit means no message needed)
 6. `just check` passes — fmt, biome, svelte-check, clippy, cargo-test, vitest all green
 
+**Plans:** 4 plans (4 waves)
+
+Plans:
+
+- [ ] 76-01-PLAN.md — merge-side backend: get_merge_message + MergeBeginResult + merge_branch_begin (ff probe), merge_continue --cleanup=strip, drop GIT_EDITOR (MSG-01/MSG-02)
+- [ ] 76-02-PLAN.md — revert-side backend: revert_commit_begin/continue/abort, --cleanup=strip, recovery path (MSG-03/MSG-06)
+- [ ] 76-03-PLAN.md — host MessageEditor in RepoView; route CommitGraph + BranchSidebar merge/revert triggers (MSG-02/MSG-03/MSG-06)
+- [ ] 76-04-PLAN.md — replace StagingPanel inline merge form + OperationBanner revert Continue/Abort affordance (MSG-01/MSG-06)
+
 Full details: [milestones/v0.14-ROADMAP.md](milestones/v0.14-ROADMAP.md) (created at milestone close)
 
 </details>
@@ -263,8 +272,8 @@ Full details: [milestones/v0.14-ROADMAP.md](milestones/v0.14-ROADMAP.md) (create
 | v0.11 Infrastructure | 53-58 | 16/16 | Complete | 2026-03-27 |
 | v0.12 Better Diffs | 59-64 | 14/14 | Complete | 2026-03-30 |
 | v0.13 Code Review Mode | 65-74 | 37/37 | Complete | 2026-05-27 |
-| v0.14 Commit Message UX | 75-76 | 0/0 | In Progress | — |
+| v0.14 Commit Message UX | 75-76 | 2/6 | In Progress | — |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-05-28 — v0.14 Commit Message UX milestone started (Phases 75-76, MSG-01..06).*
+*Last updated: 2026-05-29 — Phase 76 planned (4 plans, 4 waves; MSG-01/02/03/06).*
