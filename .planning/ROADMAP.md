@@ -246,9 +246,20 @@ Plans:
 
 Plans:
 
+**Wave 1**
+
 - [ ] 76-01-PLAN.md — merge-side backend: get_merge_message + MergeBeginResult + merge_branch_begin (ff probe), merge_continue --cleanup=strip, drop GIT_EDITOR (MSG-01/MSG-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 76-02-PLAN.md — revert-side backend: revert_commit_begin/continue/abort, --cleanup=strip, recovery path (MSG-03/MSG-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 76-03-PLAN.md — host MessageEditor in RepoView; route CommitGraph + BranchSidebar merge/revert triggers (MSG-02/MSG-03/MSG-06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 76-04-PLAN.md — replace StagingPanel inline merge form + OperationBanner revert Continue/Abort affordance (MSG-01/MSG-06)
 
 Full details: [milestones/v0.14-ROADMAP.md](milestones/v0.14-ROADMAP.md) (created at milestone close)
