@@ -1,34 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.13
-milestone_name: Code Review Mode
-status: Awaiting next milestone
-stopped_at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
+milestone: v0.14
+milestone_name: Commit Message UX
+status: planning
+stopped_at: Milestone v0.14 defined; awaiting roadmap
 last_updated: "2026-05-28T00:00:00.000Z"
-last_activity: 2026-05-28 — Stale debug/todo cleanup: 5 debug + 2 todos moved to resolved/done after verifying fixes already shipped
+last_activity: 2026-05-28 — Milestone v0.14 Commit Message UX started
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 37
-  completed_plans: 37
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-30 after v0.12 shipped)
+See: .planning/PROJECT.md (updated 2026-05-28 after v0.14 defined)
 
 **Core value:** A developer can open any Git repository, browse its full commit history as a visual graph, stage files, and create commits -- all without touching the terminal.
-**Current focus:** v0.13 tech debt closed; milestone fully complete
+**Current focus:** v0.14 Commit Message UX — match terminal `$EDITOR` behavior for merge/continue, merge, and revert
 
 ## Current Position
 
-Phase: Milestone v0.13 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-27 — Milestone v0.13 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-28 — Milestone v0.14 started
 
 ## Performance Metrics
 
@@ -196,12 +196,12 @@ v0.13-specific outstanding work:
 
 ## Session Continuity
 
-Last activity: 2026-05-27
-Last session: 2026-05-27T23:20:00.000Z
-Stopped at: Phase 74 complete — all 6 plans landed, verifier passed (13/13 must-haves), just check exits 0
-Resume file: .planning/phases/74-address-v0-13-tech-debt-66-wr-01-04-70-cr-01-70-wr-01-biome-/74-VERIFICATION.md
-Next action: 1 outstanding human UAT — cross-repo session-changed isolation in two Tauri windows. v0.13 milestone fully closed; ready for /gsd:complete-milestone or v0.14 planning.
+Last activity: 2026-05-28
+Last session: 2026-05-28T00:00:00.000Z
+Stopped at: Milestone v0.14 Commit Message UX defined; awaiting REQUIREMENTS.md + ROADMAP.md
+Resume file: .planning/PROJECT.md (v0.14 section)
+Next action: Define REQUIREMENTS.md for MSG-01..06, then ROADMAP.md (continues phase numbering from 74 → Phase 75 onward).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- After roadmap approval: /gsd:discuss-phase 75 (or /gsd:plan-phase 75)

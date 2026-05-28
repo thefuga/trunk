@@ -126,6 +126,22 @@ A developer can open any Git repository, browse its full commit history as a vis
 
 (Defined in REQUIREMENTS.md for current milestone)
 
+## Current Milestone: v0.14 Commit Message UX
+
+**Goal:** Make `merge --continue`, `merge <branch>`, and `revert <oid>` open a pre-populated commit-message editor matching git's terminal `$EDITOR` behavior, eliminating the `GIT_EDITOR=true` / `--no-edit` bypasses that silently swallow the message.
+
+**Target features:**
+- New MessageEditor modal component (pre-filled default, edit, save, cancel/abort)
+- Default-message construction in Rust per operation (read `.git/MERGE_MSG` for continue; construct `"Merge branch 'X'"` and `"Revert \"<subject>\""` defaults for the other two)
+- Reusable temp-editor-script Rust plumbing generalized from `interactive_rebase.rs:157-172` (file-based IPC, `GIT_EDITOR=<script>`)
+- Removal of `GIT_EDITOR=true` and `--no-edit` bypasses across three IPC commands
+- UI wiring at three trigger sites (Continue Merge, Merge Branch across six menu surfaces, Revert in commit context menu)
+
+**Constraints carried in:**
+- Empty/whitespace-only message must abort the git operation cleanly (matches CLI behavior)
+- Esc must leave the repo in a clean state (either aborted or not started)
+- Established pattern: file-based IPC for git editor (interactive_rebase.rs), silent-success on merge/rebase ops
+
 ## Current Milestone: v0.13 Code Review Mode (SHIPPED 2026-05-27)
 
 **Goal:** Collect commit/file/line-anchored comments in a review session, then render one markdown file — framed for an AI coding agent — to copy to the clipboard.
@@ -268,4 +284,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-28 after v0.13 Code Review Mode shipped*
+*Last updated: 2026-05-28 after v0.14 Commit Message UX milestone defined*
