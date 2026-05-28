@@ -214,6 +214,7 @@ Full details: [milestones/v0.13-ROADMAP.md](milestones/v0.13-ROADMAP.md)
 **Why infrastructure first:** Lets us TDD the editor and Rust helper in isolation. The three op wirings in Phase 76 then become mechanical applications of the established pattern instead of three concurrent designs.
 
 **Success criteria:**
+
 1. `MessageEditor.svelte` modal renders with a provided default, save returns the edited text, cancel returns `null` — all driven through a host-owned `open(default) → Promise<string | null>` API
 2. Rust temp-editor helper (extracted from `interactive_rebase.rs:157-172` into `src-tauri/src/git/editor.rs` or similar) produces a script-file-based `GIT_EDITOR=<script>` target that swaps the user-edited content into git's commit-message file, and cleans up temp files on both success and error paths
 3. Unit tests cover: default pre-fill, edit + save round-trip, Esc cancel returns null, empty/whitespace-only message returns null (MSG-06 building block), no temp-file leaks under happy or error path
@@ -222,8 +223,9 @@ Full details: [milestones/v0.13-ROADMAP.md](milestones/v0.13-ROADMAP.md)
 **Plans:** 2 plans
 
 Plans:
-- [ ] 75-01-PLAN.md — MessageEditor.svelte modal + vitest suite (MSG-04/MSG-05 in the UI; MSG-06 null-on-empty building block)
-- [ ] 75-02-PLAN.md — Rust src-tauri/src/git/editor.rs helper + #[cfg(test)] block (MSG-04/MSG-05 in the Rust layer; Drop cleanup invariant)
+
+- [x] 75-01-PLAN.md — MessageEditor.svelte modal + vitest suite (MSG-04/MSG-05 in the UI; MSG-06 null-on-empty building block)
+- [x] 75-02-PLAN.md — Rust src-tauri/src/git/editor.rs helper + #[cfg(test)] block (MSG-04/MSG-05 in the Rust layer; Drop cleanup invariant)
 
 ### Phase 76: Wire MessageEditor into merge/continue, merge, and revert
 
@@ -232,6 +234,7 @@ Plans:
 **Requirements:** MSG-01, MSG-02, MSG-03, MSG-06
 
 **Success criteria:**
+
 1. **Continue Merge** opens the editor pre-filled from `.git/MERGE_MSG`; edited message lands in the merge commit; `operation_state.rs:171` no longer sets `GIT_EDITOR=true`
 2. **Merge Branch** (non-fast-forward only) opens the editor pre-filled with `"Merge branch 'X'"` (or `"Merge remote-tracking branch 'origin/X'"` for remotes); edited message lands in the merge commit; `operation_state.rs:301,304` no longer use `--no-edit` or `GIT_EDITOR=true`
 3. **Revert Commit** opens the editor pre-filled with `Revert "<subject>"\n\nThis reverts commit <oid>.`; edited message lands in the revert commit; `commit_actions.rs:153` no longer uses `--no-edit`
