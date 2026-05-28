@@ -532,3 +532,235 @@ pub async fn rebase_branch(
     let _ = app.emit("repo-changed", path);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use git2::{Repository, Signature};
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    // Temp-repo harness (mirrors git/review.rs:662 make_repo). Real git2 +
+    // tempfile, no mocks (classical TDD). The code-under-test shells out to
+    // `git`, so the repo config must carry a committer identity — git2
+    // Signatures do not satisfy the subprocess `git commit`.
+
+    fn make_repo() -> (TempDir, Repository) {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        {
+            let mut config = repo.config().unwrap();
+            config.set_str("user.name", "Test").unwrap();
+            config.set_str("user.email", "test@example.com").unwrap();
+        }
+        (dir, repo)
+    }
+
+    fn sig() -> Signature<'static> {
+        Signature::new("Test", "test@example.com", &git2::Time::new(0, 0)).unwrap()
+    }
+
+    /// Path string used to key the state_map (what open_repo looks up).
+    fn path_str(dir: &TempDir) -> String {
+        dir.path().to_str().unwrap().to_string()
+    }
+
+    fn state_map_for(dir: &TempDir) -> HashMap<String, PathBuf> {
+        let mut map = HashMap::new();
+        map.insert(path_str(dir), dir.path().to_path_buf());
+        map
+    }
+
+    /// Commit `path`=`content` onto `parents`, leaving the index/worktree clean.
+    /// Writes the blob through the object DB only (no worktree write), so the
+    /// repo stays clean for subsequent subprocess `git merge`.
+    fn commit_file(
+        repo: &Repository,
+        message: &str,
+        parents: &[git2::Oid],
+        file: &str,
+        content: &[u8],
+    ) -> git2::Oid {
+        let blob_oid = repo.blob(content).unwrap();
+        let mut builder = repo.treebuilder(None).unwrap();
+        builder
+            .insert(file, blob_oid, git2::FileMode::Blob.into())
+            .unwrap();
+        let tree = repo.find_tree(builder.write().unwrap()).unwrap();
+        let parent_commits: Vec<_> = parents
+            .iter()
+            .map(|oid| repo.find_commit(*oid).unwrap())
+            .collect();
+        let parent_refs: Vec<&git2::Commit> = parent_commits.iter().collect();
+        let s = sig();
+        repo.commit(Some("HEAD"), &s, &s, message, &tree, &parent_refs)
+            .unwrap()
+    }
+
+    /// Point `branch` at `oid` (creating it) without moving HEAD.
+    fn set_branch(repo: &Repository, branch: &str, oid: git2::Oid) {
+        let commit = repo.find_commit(oid).unwrap();
+        repo.branch(branch, &commit, true).unwrap();
+    }
+
+    fn merge_head_path(dir: &TempDir) -> PathBuf {
+        dir.path().join(".git").join("MERGE_HEAD")
+    }
+
+    fn read_merge_msg(dir: &TempDir) -> String {
+        std::fs::read_to_string(dir.path().join(".git").join("MERGE_MSG")).unwrap()
+    }
+
+    /// A repo where `feature` is strictly ahead of `main` (no divergence) so a
+    /// merge is a pure fast-forward. HEAD stays on `main`.
+    fn ff_repo() -> (TempDir, Repository) {
+        let (dir, repo) = make_repo();
+        let base = commit_file(&repo, "base", &[], "base.txt", b"base\n");
+        // main stays at base; feature advances.
+        repo.branch("main", &repo.find_commit(base).unwrap(), true)
+            .unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        let ahead = commit_file(&repo, "ahead", &[base], "ahead.txt", b"ahead\n");
+        set_branch(&repo, "feature", ahead);
+        // Reset HEAD/main back to base so feature is strictly ahead.
+        repo.reset(
+            &repo.find_object(base, None).unwrap(),
+            git2::ResetType::Hard,
+            None,
+        )
+        .unwrap();
+        (dir, repo)
+    }
+
+    /// Divergent branches that merge cleanly (different files). HEAD on `main`.
+    fn clean_divergent_repo() -> (TempDir, Repository) {
+        let (dir, repo) = make_repo();
+        let base = commit_file(&repo, "base", &[], "base.txt", b"base\n");
+        repo.branch("main", &repo.find_commit(base).unwrap(), true)
+            .unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        // feature: add feature.txt
+        let feat = commit_file(&repo, "feat", &[base], "feature.txt", b"feature\n");
+        set_branch(&repo, "feature", feat);
+        // main: add main.txt (diverges)
+        repo.reset(
+            &repo.find_object(base, None).unwrap(),
+            git2::ResetType::Hard,
+            None,
+        )
+        .unwrap();
+        commit_file(&repo, "main change", &[base], "main.txt", b"main\n");
+        (dir, repo)
+    }
+
+    /// Conflicting divergent branches (same file, different content). HEAD on `main`.
+    fn conflict_divergent_repo() -> (TempDir, Repository) {
+        let (dir, repo) = make_repo();
+        let base = commit_file(&repo, "base", &[], "f.txt", b"base\n");
+        repo.branch("main", &repo.find_commit(base).unwrap(), true)
+            .unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        let feat = commit_file(&repo, "feat", &[base], "f.txt", b"feature side\n");
+        set_branch(&repo, "feature", feat);
+        repo.reset(
+            &repo.find_object(base, None).unwrap(),
+            git2::ResetType::Hard,
+            None,
+        )
+        .unwrap();
+        commit_file(&repo, "main change", &[base], "f.txt", b"main side\n");
+        (dir, repo)
+    }
+
+    fn kind_of(result: &MergeBeginResult) -> String {
+        serde_json::to_value(result).unwrap()["kind"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn merge_branch_begin_fast_forwards_without_editor() {
+        let (dir, _repo) = ff_repo();
+        let map = state_map_for(&dir);
+        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map).unwrap();
+        assert_eq!(kind_of(&result), "fast_forwarded");
+        assert!(
+            !merge_head_path(&dir).exists(),
+            "fast-forward must not leave MERGE_HEAD"
+        );
+    }
+
+    #[test]
+    fn merge_branch_begin_non_ff_clean_returns_ready_with_verbatim_message() {
+        let (dir, _repo) = clean_divergent_repo();
+        let map = state_map_for(&dir);
+        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map).unwrap();
+        assert_eq!(kind_of(&result), "ready");
+        let message = match result {
+            MergeBeginResult::Ready { message, .. } => message,
+            other => panic!("expected Ready, got {:?}", kind_of(&other)),
+        };
+        assert_eq!(message, read_merge_msg(&dir), "message must be MERGE_MSG verbatim");
+        assert!(
+            message.starts_with("Merge branch 'feature'"),
+            "got: {message:?}"
+        );
+        assert!(merge_head_path(&dir).exists(), "non-ff merge must set MERGE_HEAD");
+    }
+
+    #[test]
+    fn merge_branch_begin_into_non_default_branch_has_into_suffix() {
+        let (dir, repo) = clean_divergent_repo();
+        // Re-point HEAD onto a non-default branch `devel` at the current tip.
+        let head_oid = repo.head().unwrap().target().unwrap();
+        set_branch(&repo, "devel", head_oid);
+        repo.set_head("refs/heads/devel").unwrap();
+        let map = state_map_for(&dir);
+        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map).unwrap();
+        let message = match result {
+            MergeBeginResult::Ready { message, .. } => message,
+            other => panic!("expected Ready, got {:?}", kind_of(&other)),
+        };
+        assert!(
+            message.contains("into devel"),
+            "verbatim MERGE_MSG must carry the current-branch suffix; got: {message:?}"
+        );
+    }
+
+    #[test]
+    fn merge_branch_begin_conflict_returns_conflicts_not_err() {
+        let (dir, _repo) = conflict_divergent_repo();
+        let map = state_map_for(&dir);
+        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map).unwrap();
+        assert_eq!(kind_of(&result), "conflicts");
+        assert!(
+            merge_head_path(&dir).exists(),
+            "conflicted merge leaves MERGE_HEAD for the continue UI"
+        );
+    }
+
+    #[test]
+    fn get_merge_message_returns_merge_msg_verbatim() {
+        let (dir, _repo) = conflict_divergent_repo();
+        // Start a conflicted merge so MERGE_MSG carries a `# Conflicts:` block.
+        let _ = Command::new("git")
+            .args(["merge", "--no-commit", "feature"])
+            .current_dir(dir.path())
+            .env("PATH", shell_env::system_path())
+            .output()
+            .unwrap();
+        let raw = read_merge_msg(&dir);
+        assert!(
+            raw.contains("# Conflicts:"),
+            "setup precondition: conflicted MERGE_MSG should carry the comment block; got: {raw:?}"
+        );
+        let map = state_map_for(&dir);
+        let got = get_merge_message_inner(&path_str(&dir), &map).unwrap();
+        assert_eq!(
+            got,
+            Some(raw),
+            "get_merge_message returns MERGE_MSG verbatim, including # Conflicts: lines"
+        );
+    }
+}
