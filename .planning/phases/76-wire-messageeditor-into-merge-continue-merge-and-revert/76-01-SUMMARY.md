@@ -30,6 +30,9 @@ key-files:
   modified:
     - src-tauri/src/commands/operation_state.rs
     - src-tauri/src/lib.rs
+    - src-tauri/tests/common/drivers/operation_state.rs
+    - src-tauri/tests/test_operation_state.rs
+    - src-tauri/tests/test_integ_workflows.rs
 
 key-decisions:
   - "merge_continue_inner returns Err on message=None instead of the old GIT_EDITOR=true bypass — None is now a contract violation, not a silent fallback"
@@ -57,8 +60,8 @@ completed: 2026-05-29
 - **Duration:** ~22 min
 - **Started:** 2026-05-29
 - **Completed:** 2026-05-29
-- **Tasks:** 2 (TDD: RED + GREEN)
-- **Files modified:** 2
+- **Tasks:** 2 (TDD: RED + GREEN) + 1 ownership follow-up commit (integration-suite migration)
+- **Files modified:** 5
 
 ## Accomplishments
 - `MergeBeginResult` serde tagged enum — the frozen contract Plan 03's frontend discriminates against (`fast_forwarded` / `conflicts` / `ready`).
@@ -72,8 +75,11 @@ completed: 2026-05-29
 
 1. **Task 0: RED — failing tests for merge_branch_begin + get_merge_message** — `4bb0056` (test)
 2. **Task 1: GREEN — implement get_merge_message, MergeBeginResult, merge_branch_begin; cleanup=strip; drop GIT_EDITOR; register in lib.rs** — `f5e4c21` (feat)
+3. **Ownership follow-up: migrate the `src-tauri/tests/` integration suite to the two-step `merge_branch_begin` semantics** — `166feb1` (test)
 
-_TDD plan: RED commit established the failing compile gate; GREEN commit made all 6 tests pass._
+_TDD plan: RED commit established the failing compile gate; GREEN commit made all 6 unit tests pass. The follow-up `test` commit repaired the pre-existing integration suite that referenced the renamed `merge_branch_inner` (ownership.md: caused-by-this-change, fixed before done)._
+
+**Plan metadata:** (this docs commit)
 
 ## Files Created/Modified
 - `src-tauri/src/commands/operation_state.rs` — `MergeBeginResult` enum; `get_merge_message[_inner]` query; `merge_branch_begin[_inner]` (replaces `merge_branch[_inner]`); `merge_continue_inner` `--cleanup=strip` + else-branch removal; `#[cfg(test)]` temp-repo suite.
@@ -90,13 +96,13 @@ None affecting scope — the plan was executed as written. Two within-task auto-
 
 ### Auto-fixed Issues
 
-**1. [Rule 1 - Bug] Conflict notice read from stdout, not just stderr**
-- **Found during:** Task 1 (GREEN — `merge_branch_begin_inner`)
-- **Issue:** The restructured inner copied the original `merge_branch_inner`'s stderr-only conflict check. `git merge --no-commit` emits `CONFLICT` on stdout, so a conflicted merge returned `Err(merge_error, "")` instead of the `Conflicts` variant — two tests failed.
-- **Fix:** Scan both `stdout` and `stderr` (lowercased) for `conflict` before classifying as an error.
-- **Files modified:** src-tauri/src/commands/operation_state.rs
-- **Verification:** `merge_branch_begin_conflict_returns_conflicts_not_err` and the `--cleanup=strip` regression test pass.
-- **Committed in:** f5e4c21 (Task 1 GREEN commit)
+**1. [Rule 1 - Bug] Conflict notice read from stdout, not just stderr (+ stale integration tests encoding the old bug)**
+- **Found during:** Task 1 (GREEN — `merge_branch_begin_inner`), and again when running the full `just check` gate.
+- **Issue:** The restructured inner copied the original `merge_branch_inner`'s stderr-only conflict check. `git merge --no-commit` emits `CONFLICT` on stdout (verified git 2.54.0), so a conflicted merge returned `Err(merge_error, "")` instead of the `Conflicts` variant — two unit tests failed. The pre-existing integration suite (`src-tauri/tests/`) had a `merge_branch_with_conflict_returns_error` test plus two code comments that explicitly **documented this bug as expected behavior**, and its driver referenced the renamed `merge_branch_inner` (compile break).
+- **Fix:** Scan both `stdout` and `stderr` (lowercased) for `conflict` before classifying as an error. Migrated the integration driver to `merge_branch_begin` (returns `MergeBeginResult`); rewrote the three affected tests to the two-step begin+continue semantics; **inverted** `merge_branch_with_conflict_returns_error` → `merge_branch_begin_with_conflict_returns_conflicts`; deleted the two stale "known bug" comments.
+- **Files modified:** src-tauri/src/commands/operation_state.rs, src-tauri/tests/common/drivers/operation_state.rs, src-tauri/tests/test_operation_state.rs, src-tauri/tests/test_integ_workflows.rs
+- **Verification:** `merge_branch_begin_conflict_returns_conflicts_not_err` + the `--cleanup=strip` unit test pass; the full integration suite (14 + 8 tests) passes with the inverted conflict assertion confirming `Conflicts` against the TestContext builder; `just check` green.
+- **Committed in:** f5e4c21 (inner fix, GREEN commit) + 166feb1 (integration-suite migration, ownership follow-up)
 
 **2. [Rule 1 - Bug] Test fixtures left the worktree out of sync with HEAD**
 - **Found during:** Task 1 (GREEN — fixture setup)
@@ -108,8 +114,8 @@ None affecting scope — the plan was executed as written. Two within-task auto-
 
 ---
 
-**Total deviations:** 2 auto-fixed (both Rule 1, both in the test harness). The frozen `MergeBeginResult` contract and the production command signatures match the plan's `<interfaces>` block exactly.
-**Impact on plan:** No scope creep; no contract drift. The stdout-conflict fix is a real correctness improvement that the old `merge_branch` path also needed.
+**Total deviations:** 2 auto-fixed (both Rule 1). One touches production (`merge_branch_begin_inner` stdout-conflict scan, which the old `merge_branch` path also needed); the other is the test harness/fixtures. Migrating the pre-existing integration suite was required by ownership.md (the rename broke its compile) — same root cause as the stdout fix. The frozen `MergeBeginResult` contract and the production command signatures match the plan's `<interfaces>` block exactly.
+**Impact on plan:** No scope creep; no contract drift. The stdout-conflict fix is a real correctness improvement, and inverting the stale integration test removed a test that asserted the old wrong behavior.
 
 ## Wave-ordering Note (expected, not a defect)
 
@@ -128,7 +134,8 @@ None — this plan ships complete backend behavior. (`editor.rs` remains intenti
 - `grep -c cleanup=strip operation_state.rs` — 4 (commit arg + test assertions).
 - `grep 'editor::prepare\|EditorHandle' operation_state.rs` — none.
 - `cargo build` — succeeds (no orphan `merge_branch` reference).
-- `cargo fmt --check` — clean. `cargo clippy --lib` — no warnings on the changed file.
+- `grep -rn 'merge_branch\b' src-tauri/` (excluding `merge_branch_begin`) — only frontend Svelte callers remain (Plan 03 targets); no surviving Rust reference.
+- **`just check` — fully green** (cargo fmt, biome, svelte-check, clippy, all cargo tests incl. integration suites, 566 vitest tests).
 
 ## Next Phase Readiness
 - `MergeBeginResult` is the frozen contract for Plan 03's frontend (`result.kind === "ready" | "fast_forwarded" | "conflicts"`).

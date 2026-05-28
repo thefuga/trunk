@@ -64,7 +64,7 @@ Last activity: 2026-05-29 -- Phase 76 Plan 01 (merge-side backend) executed
 | Phase 73 P01 | 7min | 3 tasks | 2 files |
 | Phase 73 P02 | 6min | 2 tasks | 2 files |
 | Phase 73 P03 | 6min | 3 tasks | 2 files |
-| Phase 76 P01 | 22min | 2 tasks | 2 files |
+| Phase 76 P01 | 30min | 2 tasks + 1 ownership | 5 files |
 
 ## Accumulated Context
 
@@ -141,6 +141,7 @@ Last activity: 2026-05-29 -- Phase 76 Plan 01 (merge-side backend) executed
 - [Phase 76]: 76-01: git merge writes the CONFLICT notice to STDOUT not stderr (git 2.54.0) — conflict detection must scan both streams; the old merge_branch stderr-only check would misclassify conflicts as Err
 - [Phase 76]: 76-01: merge_continue commit uses --cleanup=strip (drops # Conflicts: block); GIT_EDITOR=true else-branch removed — None message now returns Err (contract violation), not a silent bypass
 - [Phase 76]: 76-01: lib.rs dropped merge_branch registration while frontend still invokes it (CommitGraph:592, BranchSidebar:397) — expected wave seam, repointed in Plan 03
+- [Phase 76]: 76-01: renaming merge_branch_inner broke the pre-existing src-tauri/tests integration suite (driver + 4 call sites); migrated to merge_branch_begin two-step semantics and INVERTED merge_branch_with_conflict_returns_error (which asserted the now-fixed stdout-conflict bug) — gate is `just check`, not filtered cargo test
 
 ### Pending Todos
 
