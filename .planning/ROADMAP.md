@@ -260,7 +260,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 76-04-PLAN.md — replace StagingPanel inline merge form + OperationBanner revert Continue/Abort affordance (MSG-01/MSG-06)
+- [x] 76-04-PLAN.md — replace StagingPanel inline merge form + OperationBanner revert Continue/Abort affordance (MSG-01/MSG-06)
 
 Full details: [milestones/v0.14-ROADMAP.md](milestones/v0.14-ROADMAP.md) (created at milestone close)
 
