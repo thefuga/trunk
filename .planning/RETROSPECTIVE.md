@@ -538,6 +538,46 @@
 
 ---
 
+## Milestone: v0.14 — Commit Message UX
+
+**Shipped:** 2026-05-29
+**Phases:** 2 | **Plans:** 6 | **Timeline:** 2 days (2026-05-28 → 2026-05-29)
+
+### What Was Built
+- Host-owned Svelte 5 `MessageEditor` modal: `open(default) → Promise<string|null>`, uniform null-resolve on Esc/Cancel/backdrop/empty (Phase 75)
+- Two-step backend pattern (D-01, direct — `editor.rs` GIT_EDITOR script built in 75 but intentionally unused): `merge_branch_begin` (`git merge --ff-only` probe → `--no-commit` → `MergeBeginResult` tagged enum) and `revert_commit_begin` (`git revert --no-commit`), each returning git's verbatim `.git/MERGE_MSG` default and emitting `repo-changed` on every outcome
+- `--cleanup=strip` finishes that clear `MERGE_HEAD`/`REVERT_HEAD` and drop the `# Conflicts:` block; new `revert_abort` recovery command (MSG-06 was unsatisfiable for revert without it)
+- Single RepoView-hosted modal with reactive per-op title threaded to every trigger site; StagingPanel inline form replaced; OperationBanner gained Revert Continue/Abort
+- All three `GIT_EDITOR=true`/`--no-edit` bypasses removed
+
+### What Worked
+- **Research scoped to the open questions with the mechanism locked**: the phase-researcher was fenced to OQ-1..4 with D-01 declared final, so it spent its budget on scratch-repo verification instead of re-litigating the decided approach — and surfaced 5 load-bearing CONTEXT corrections (missing `revert_abort`, `--cleanup=strip`, dead trigger site, emit-on-begin, ff-probe) *before* any code was written
+- **Sequential single-plan waves on the main tree**: the strict 76-01→04 dependency chain had zero parallelism to gain, so skipping worktree isolation avoided the entire merge/cleanup machinery for no cost
+- **In-app UAT caught what tests structurally cannot**: the modal-centering bug (Tailwind v4 preflight wiping `dialog:modal { margin: auto }`) passed 584 vitest tests and still rendered under the window controls — only a real screenshot found it
+
+### What Was Inefficient
+- **A UI component shipped visually broken behind green tests**: the Phase 75 modal was never rendered in the app (no live trigger until Phase 76), so its centering bug sat latent through a "complete" phase. jsdom has no layout engine — tests-green ≠ looks-right
+- **SUMMARY one_liner leakage recurred** (v0.13 Key Lesson 3, not internalized): a `1. [Rule 3 - Blocking] …` review-deviation note landed in the 76-03 SUMMARY one_liner and propagated verbatim into MILESTONES.md again, requiring the same manual cleanup as last milestone
+- **The commit helper auto-created a `phase-76-plan` branch despite `branching_strategy: none`**: surprise branch detected via reflog mid-session; harmless (clean ff back to main) but unexpected
+- **The open-artifact audit flagged 22 items, all noise**: 20 stale quick-task `status` markers (the quick workflow writes `done`/nothing but `audit-open` only treats `complete` as closed) + 1 resolved-but-stale CONTEXT heading + 1 carried-forward debug deferral — none real v0.14 gaps
+
+### Patterns Established
+- **Two-step begin/finish IPC with emit-on-every-outcome**: when a "begin" mutates the repo before a modal opens, its wrapper must emit `repo-changed` on *every* arm (incl. cancel) or it leaves an invisible in-progress trap
+- **Reactive-title single modal host**: one `<MessageEditor bind:this>` in the parent, `$state` title set before `await open()`, callback threaded to N trigger sites (mirrors `onopenrebaseeditor`) — avoids N modal instances
+- **`--cleanup=strip` for git-faithful commit bodies**: matches the terminal editor's stripping of `#`-comment lines from `.git/MERGE_MSG`
+
+### Key Lessons
+1. **A "frozen"/"done" UI primitive still needs one real visual render before it's trusted** — add an in-app screenshot to the verify loop for any user-visible component; green unit tests don't cover layout
+2. **Reconcile status-marker conventions, don't just re-defer them**: the quick-task audit noise had accumulated across milestones because the marker (`done`) never matched the audit's predicate (`complete`); fixing the *data* (truthful `status: complete`) cleared it — the durable tool fix lives in vendored, gitignored code and isn't ours to fork
+3. **Research before planning when CONTEXT predates research**: a confident-but-pre-research CONTEXT under-scoped the phase in 5 ways; the cheap fix was fencing the researcher to the open questions, not trusting the CONTEXT
+4. **SUMMARY one_liner is still a published artifact** (third milestone this has bitten): treat the field as milestone-facing copy and scrub review-process leakage before close
+
+### Cost Observations
+- Model mix: Opus for plan/research/execute orchestration + executors, Sonnet for plan-checking
+- Notable: a full plan→execute→verify→milestone-close cycle run end-to-end in one session; the biggest single time sink was the latent UI bug that automated gates couldn't see
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution

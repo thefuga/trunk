@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.14
 milestone_name: milestone
-status: Phase 76 complete & verified (UAT 6/6 passed); v0.14 ready for /gsd:complete-milestone
-stopped_at: Phase 76 verified — all 5 UAT scenarios passed; MessageEditor centering fix applied; work on branch phase-76-plan pending merge to main
-last_updated: "2026-05-29T12:00:00.000Z"
-last_activity: 2026-05-29 -- Phase 76 verified (manual UAT all passed); MSG-01/02/03/06 Complete
+status: Awaiting next milestone
+stopped_at: Completed 76-03-PLAN.md (frontend merge/revert wiring)
+last_updated: "2026-05-29T13:09:04.528Z"
+last_activity: 2026-05-29 — Milestone v0.14 completed and archived
 progress:
   total_phases: 2
   completed_phases: 2
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-28 after v0.14 defined)
 
 ## Current Position
 
-Phase: 76 (wire-messageeditor-into-merge-continue-merge-and-revert) — COMPLETE & VERIFIED
-Plan: 4 of 4 complete (76-01, 76-02, 76-03, 76-04)
-Status: Verified (UAT 6/6 passed) — see 76-VERIFICATION.md. Work on branch phase-76-plan, pending merge to main.
-Last activity: 2026-05-29
+Phase: Milestone v0.14 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-29 — Milestone v0.14 completed and archived
 
 ## Performance Metrics
 
@@ -218,4 +218,4 @@ Next action: execute 76-04 (StagingPanel merge-continue + OperationBanner revert
 
 ## Operator Next Steps
 
-- Execute Plan 76-04 (StagingPanel merge-continue editor replacing the inline form, OperationBanner Revert Continue/Abort buttons consuming onopenmessageeditor + revert_abort, then UAT checkpoint)
+- Start the next milestone with /gsd:new-milestone

@@ -121,26 +121,18 @@ A developer can open any Git repository, browse its full commit history as a vis
 - ✓ Awaited clipboard copy with ✓ Copied affordance and failure toast (OUT-01) — v0.13
 - ✓ Toolbar Review toggle with active state, copy directly on the comments view (Phase 72) — v0.13
 - ✓ Cold-boot resume and two-step End-review lifecycle endpoints (Phase 73) — v0.13
+- ✓ Editable commit message for `merge --continue`, `merge <branch>` (non-ff), and `revert <oid>`, pre-filled from git's own defaults via the host-owned MessageEditor modal (MSG-01/02/03) — v0.14
+- ✓ Empty/whitespace message aborts cleanly leaving a recoverable repo state; fast-forward merges skip the editor; `GIT_EDITOR`/`--no-edit` bypasses removed (MSG-04/05/06) — v0.14
 
 ### Active
 
 (Defined in REQUIREMENTS.md for current milestone)
 
-## Current Milestone: v0.14 Commit Message UX
+## Current Milestone: v0.14 Commit Message UX (SHIPPED 2026-05-29)
 
 **Goal:** Make `merge --continue`, `merge <branch>`, and `revert <oid>` open a pre-populated commit-message editor matching git's terminal `$EDITOR` behavior, eliminating the `GIT_EDITOR=true` / `--no-edit` bypasses that silently swallow the message.
 
-**Target features:**
-- New MessageEditor modal component (pre-filled default, edit, save, cancel/abort)
-- Default-message construction in Rust per operation (read `.git/MERGE_MSG` for continue; construct `"Merge branch 'X'"` and `"Revert \"<subject>\""` defaults for the other two)
-- Reusable temp-editor-script Rust plumbing generalized from `interactive_rebase.rs:157-172` (file-based IPC, `GIT_EDITOR=<script>`)
-- Removal of `GIT_EDITOR=true` and `--no-edit` bypasses across three IPC commands
-- UI wiring at three trigger sites (Continue Merge, Merge Branch across six menu surfaces, Revert in commit context menu)
-
-**Constraints carried in:**
-- Empty/whitespace-only message must abort the git operation cleanly (matches CLI behavior)
-- Esc must leave the repo in a clean state (either aborted or not started)
-- Established pattern: file-based IPC for git editor (interactive_rebase.rs), silent-success on merge/rebase ops
+**Delivered:** All 6 requirements (MSG-01..06) shipped across 2 phases (6 plans). A host-owned Svelte 5 `MessageEditor` modal (`open(default) → Promise<string|null>`, uniform null-on-empty/Esc/cancel/backdrop) hosted once in RepoView with a reactive per-op title, wired to every merge/revert trigger site. Backend uses a direct two-step pattern (decision D-01, **not** the Phase-75 `GIT_EDITOR` script which is intentionally unused): `merge_branch_begin` (a `git merge --ff-only` probe → `--no-commit` → `MergeBeginResult` tagged enum) and `revert_commit_begin` (`git revert --no-commit`), each returning git's verbatim `.git/MERGE_MSG` default and emitting `repo-changed` on every outcome; finishes run `git commit -m --cleanup=strip` (strips the `# Conflicts:` block) clearing `MERGE_HEAD`/`REVERT_HEAD`; a new `revert_abort` provides the cancelled-revert recovery path. Empty/whitespace aborts cleanly leaving a recoverable state; fast-forward merges skip the editor. The three `GIT_EDITOR=true`/`--no-edit` bypasses are removed. A latent Phase-75 modal-centering bug (Tailwind v4 preflight wiping `dialog:modal { margin: auto }`) was caught and fixed during UAT.
 
 ## Current Milestone: v0.13 Code Review Mode (SHIPPED 2026-05-27)
 
@@ -170,7 +162,7 @@ A developer can open any Git repository, browse its full commit history as a vis
 ## Context
 
 - **Stack**: Tauri 2 + Svelte 5 (Vite SPA, not SvelteKit) + Rust with `git2` crate (libgit2 bindings)
-- **Current state**: v0.13 Code Review Mode shipped (2026-05-27). Per-repo code review sessions live in `app_data_dir/sessions/<FNV-1a hash>.json` (atomic tmp+rename, schema v2 with stable uuid `id` per comment, canonical-path keying, corrupt-quarantine + newer-version-refusal). Comments anchor to either a diff line range (Phase 67 source-line adapter) or a full-file blob line range (Phase 68 absolute-line adapter), with side-aware orphan classification. Pure Rust markdown renderer (`src-tauri/src/git/review.rs`) re-resolves excerpts per source type with collision-safe fence length and a trailing unresolvable section. ReviewPanel in the center pane with Toolbar toggle, cold-boot resume, two-step End-review, and one-click Copy. Stack carries forward from v0.12: syntect + similar (diff/syntax), 5 display toggles, all preferences via LazyStore. ~16,000 LOC TypeScript/Svelte, ~12,000 LOC Rust. 547+ frontend tests, 200+ Rust integration tests. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 547+ frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
+- **Current state**: v0.14 Commit Message UX shipped (2026-05-29) — `merge --continue`/`merge <branch>`/`revert` now route through a host-owned MessageEditor modal with git-faithful defaults, empty-message abort, and a new `revert_abort` recovery path; `GIT_EDITOR`/`--no-edit` bypasses removed. v0.13 Code Review Mode shipped (2026-05-27). Per-repo code review sessions live in `app_data_dir/sessions/<FNV-1a hash>.json` (atomic tmp+rename, schema v2 with stable uuid `id` per comment, canonical-path keying, corrupt-quarantine + newer-version-refusal). Comments anchor to either a diff line range (Phase 67 source-line adapter) or a full-file blob line range (Phase 68 absolute-line adapter), with side-aware orphan classification. Pure Rust markdown renderer (`src-tauri/src/git/review.rs`) re-resolves excerpts per source type with collision-safe fence length and a trailing unresolvable section. ReviewPanel in the center pane with Toolbar toggle, cold-boot resume, two-step End-review, and one-click Copy. Stack carries forward from v0.12: syntect + similar (diff/syntax), 5 display toggles, all preferences via LazyStore. ~16,000 LOC TypeScript/Svelte, ~12,000 LOC Rust. 547+ frontend tests, 200+ Rust integration tests. Full testing infrastructure: 167+ Rust integration tests (GOOS harness), 547+ frontend unit tests (vitest), 18 serde round-trip tests, 14 multi-step workflow tests, 4 watcher integration tests, 10 E2E tests (WebdriverIO). Criterion benchmarks for 7 operations + IPC round-trip + startup sequence with CI regression detection. Coverage reporting via cargo-llvm-cov + @vitest/coverage-v8.
 - **Architecture**: Svelte UI communicates with Rust backend via Tauri `invoke` (commands) and `listen` (events). Rust holds `RepoState` (path-keyed PathBuf registry), `CommitCache` (cached GraphResult with max_columns), `WatcherState` (filesystem watchers), and `RunningOp` (active remote process PID) in managed state.
 - **Remote ops**: `git2` for all local read/write; git CLI subprocess for remote operations (fetch/pull/push) and cherry-pick/revert with `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND=ssh -o BatchMode=yes`
 - **Graph rendering (v0.5)**: Single SVG overlay spanning full graph height inside virtual list scroll container. Rust lane algorithm (O(n), ~5ms for 10k commits) outputs GraphCommit[]; TypeScript Active Lanes transformation computes global grid coordinates with edge coalescing. Cubic bezier curves for cross-lane connections, continuous vertical rails for same-lane. Three-layer z-ordered `<g>` groups (rails → edges → dots). Virtualized element filtering with O(1) range-intersection. SVG ref pills with Canvas text measurement and hover expansion.
@@ -284,4 +276,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-28 after Phase 75 Message Editor Infrastructure complete (MessageEditor.svelte modal + git::editor::prepare() Rust helper landed; Phase 76 wires the three op flows next)*
+*Last updated: 2026-05-29 after v0.14 Commit Message UX milestone (Phases 75-76, MSG-01..06 shipped)*

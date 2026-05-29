@@ -1,5 +1,20 @@
 # Milestones
 
+## v0.14 Commit Message UX (Shipped: 2026-05-29)
+
+**Phases completed:** 2 phases, 6 plans, 14 tasks
+
+**Key accomplishments:**
+
+- Svelte 5 commit-message modal with host-owned `open(default: string): Promise<string | null>` API and uniform null-resolve abort across Esc/Cancel/backdrop/empty — covered by 13 vitest behaviors and ready for Phase 76 wiring.
+- `git::editor::prepare()` + `EditorHandle` RAII type extracted from `interactive_rebase.rs` queue pattern, with `tempfile::Builder` TOCTOU defence and Drop-based cleanup proven by 8 unit tests.
+- Two-step `merge_branch_begin` (`--ff-only` probe -> `--no-commit` -> `MergeBeginResult` tagged enum) plus a verbatim `get_merge_message` query and a `--cleanup=strip` merge-continue finish path — all proven against temp git repos, with the GIT_EDITOR/`--no-edit` bypasses removed.
+- Two-step `revert_commit_begin` (`git revert --no-commit` -> verbatim `.git/MERGE_MSG` default with the full 40-char OID, emits `repo-changed`), a `revert_continue` finish (`git commit -m --cleanup=strip`, clears `REVERT_HEAD`), and a NEW `revert_abort` (`git revert --abort`) that makes MSG-06 satisfiable for revert — all proven against temp git repos, with the `--no-edit` bypass removed.
+- A single RepoView-hosted MessageEditor with a reactive per-operation title, threaded via `onopenmessageeditor` to every merge/revert trigger site (CommitGraph, BranchSidebar, StagingPanel→OperationBanner); cancel/empty makes no commit (D-02).
+- StagingPanel's inline merge-commit form is replaced by a single modal-routed merge-continue button (default verbatim from `get_merge_message`, cancel makes no commit), and OperationBanner now renders Continue + Abort buttons for a Revert state (previously zero buttons), giving the cancelled-revert recovery path MSG-06 requires.
+
+---
+
 ## v0.13 Code Review Mode (Shipped: 2026-05-27)
 
 **Phases completed:** 10 phases, 37 plans, 65 tasks | **Timeline:** 3 days (2026-05-25 → 2026-05-27) | **Commits:** 290
