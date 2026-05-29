@@ -61,7 +61,9 @@ All three operations follow one pattern:
 - `CommitGraph.svelte:592` and `BranchSidebar.svelte:397` (merge_branch — TWO sites, both must get the editor)
 - `StagingPanel.svelte:593` and `OperationBanner.svelte:33` (merge_continue — TWO sites)
 
-### Open questions for the researcher (mechanism is decided; these are sub-mechanics)
+### Researcher sub-mechanics — RESOLVED (see 76-RESEARCH.md; all implemented + UAT-passed in Phase 76)
+
+> All four resolved in `76-RESEARCH.md` and shipped: OQ-1 → `git merge --ff-only` probe; OQ-2 → `MergeBeginResult`/`RevertBeginResult` two-step begin/finish commands; OQ-3 → confirmed `git commit -m` clears `REVERT_HEAD`/`MERGE_HEAD` (scratch-repo verified); OQ-4 → all three bypasses removed. Verified 2026-05-29.
 
 - **OQ-1 — Fast-forward detection (MSG criterion 5).** Must NOT use `--no-ff` (that would force a merge commit on a ff-able merge and wrongly trigger the editor). Decide the detection approach: e.g., try `git merge --ff-only <branch>` first (succeeds silently = ff done, no editor; fails cleanly = non-ff, then `git merge --no-commit <branch>` → editor), OR an ancestry check before merging. Pick the one that leaves the repo untouched when detection says "ff" and never half-starts a merge. Verify in a scratch repo.
 - **OQ-2 — Default-surfacing flow / IPC shape.** merge --continue can read `.git/MERGE_MSG` from the *already* in-progress state (one read; `get_operation_state_inner` already reads MERGE_MSG at operation_state.rs:59 — extend or add a small command). merge <branch> and revert generate the default only AFTER running `--no-commit`, so they need a two-step "begin (run --no-commit, return default) → finish (commit with message) / abort (leave state)" command shape. Decide whether to add new commands (e.g. `merge_branch_begin`/`revert_begin` + reuse `merge_continue` for the commit step) or restructure the existing ones. Keep the existing `merge_continue(message: Option<String>)` signature — it already does `git commit -m` when message is `Some`.

@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: quick
 plan: 2
 subsystem: commit-graph-ui

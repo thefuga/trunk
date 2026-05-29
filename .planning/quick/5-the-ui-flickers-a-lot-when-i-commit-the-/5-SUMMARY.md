@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: quick
 plan: 5
 subsystem: commit-graph-refresh

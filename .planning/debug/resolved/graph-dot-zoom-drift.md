@@ -1,9 +1,20 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "graph-dot-zoom-drift: Commit graph dots drift out of alignment with commit row text when scrolling down thousands of commits at non-100% zoom levels"
 created: 2026-04-05T00:00:00Z
-updated: 2026-04-05T00:00:00Z
+updated: 2026-05-29T00:00:00Z
+resolved: 2026-05-29
+resolution: code-verified
 ---
+
+## Resolution (2026-05-29)
+
+Confirmed CONFIRMED hypothesis fix is present in `src/components/CommitGraph.svelte`:
+- `let svgRowHeight = $state(displaySettings.rowHeight)` (line ~107) — tracks the real measured height instead of the fixed `ROW_HEIGHT=26`.
+- `const cy = (row) => row * svgRowHeight + svgRowHeight / 2` (line ~1288) — SVG dot/path Y-math now uses the measured height.
+- `bind:measuredItemHeight={svgRowHeight}` (line ~1990) — VirtualList feeds its measured fractional row height back to the overlay.
+
+This directly removes the fixed-vs-measured mismatch identified as the confirmed root cause, so cumulative drift at non-100% zoom cannot accumulate. Closed on code evidence per operator decision (2026-05-29). **Low-risk follow-up:** a one-time visual smoke (zoom ~125%, scroll a large repo) would be the ideal final confirmation; not blocking.
 
 ## Current Focus
 
