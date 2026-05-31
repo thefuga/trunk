@@ -179,6 +179,26 @@ function gutterWidth(maxNum: number): string {
             {@const hunkKey = `${fd.path}-${hunkIdx}`}
             {@const hasSelection = selectedHunkKey === hunkKey && selectedCount > 0}
             {#if hasSelection}
+              <!-- Working-tree Comment affordance (260531-k4j): reuses the
+                   commit-mode Comment button markup/styles verbatim (no new color).
+                   New-side scope + Old-side guard live in the host. Leads the action
+                   cluster (260531-l02 UX: Comment to the left of staging). -->
+              <button
+                style="
+                  background: var(--color-accent-bg, var(--color-surface));
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-accent);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: pointer;
+                  white-space: nowrap;
+                "
+                onclick={() => oncommentlines(fd.path, hunkIdx)}
+              >
+                Comment ({selectedCount})
+              </button>
               <button
                 disabled={stagingDisabled}
               title={stagingDisabledTitle}
@@ -217,9 +237,11 @@ function gutterWidth(maxNum: number): string {
               >
                 Stage Lines ({selectedCount})
               </button>
-              <!-- Working-tree Comment affordance (260531-k4j): reuses the
-                   commit-mode Comment button markup/styles verbatim (no new color).
-                   New-side scope + Old-side guard live in the host. -->
+            {:else}
+              <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
+                   without selecting lines. Reuses the line-level accent button
+                   markup verbatim (no new color); host synthesizes the full-hunk
+                   selection + applies the New-side guard. Leads the action cluster. -->
               <button
                 style="
                   background: var(--color-accent-bg, var(--color-surface));
@@ -232,11 +254,10 @@ function gutterWidth(maxNum: number): string {
                   cursor: pointer;
                   white-space: nowrap;
                 "
-                onclick={() => oncommentlines(fd.path, hunkIdx)}
+                onclick={() => oncommenthunk(fd.path, hunkIdx)}
               >
-                Comment ({selectedCount})
+                Comment
               </button>
-            {:else}
               <button
                 disabled={stagingDisabled}
               title={stagingDisabledTitle}
@@ -274,26 +295,6 @@ function gutterWidth(maxNum: number): string {
                 onclick={() => onstagehunk(fd.path, hunkIdx)}
               >
                 Stage Hunk
-              </button>
-              <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
-                   without selecting lines. Reuses the line-level accent button
-                   markup verbatim (no new color); host synthesizes the full-hunk
-                   selection + applies the New-side guard. -->
-              <button
-                style="
-                  background: var(--color-accent-bg, var(--color-surface));
-                  border: 1px solid var(--color-border);
-                  border-radius: 3px;
-                  color: var(--color-accent);
-                  font-size: 11px;
-                  font-family: var(--font-sans, sans-serif);
-                  padding: 2px 8px;
-                  cursor: pointer;
-                  white-space: nowrap;
-                "
-                onclick={() => oncommenthunk(fd.path, hunkIdx)}
-              >
-                Comment
               </button>
             {/if}
           {:else if diffKind === 'staged'}

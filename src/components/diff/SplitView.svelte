@@ -244,6 +244,15 @@ const pairedData = $derived(
               {@const hunkKey = `${fd.path}-${section.hunkIdx}`}
               {@const hasSelection = selectedHunkKey === hunkKey && selectedCount > 0}
               {#if hasSelection}
+                <!-- Working-tree Comment affordance (260531-k4j): reuses the
+                     commit-mode accent button class verbatim (no new color).
+                     New-side scope + Old-side guard live in the host. Leads the
+                     action cluster (260531-l02 UX: Comment left of staging). -->
+                <button
+                  class="staging-btn accent-btn"
+                  style="cursor: pointer;"
+                  onclick={() => oncommentlines(fd.path, section.hunkIdx)}
+                >Comment ({selectedCount})</button>
                 <button
                   disabled={stagingDisabled}
                   title={stagingDisabledTitle}
@@ -258,15 +267,16 @@ const pairedData = $derived(
                   style="cursor: {stagingDisabled ? 'not-allowed' : 'pointer'}; opacity: {stagingDisabled ? 0.4 : 1};"
                   onclick={() => onstagelines(fd.path, section.hunkIdx)}
                 >Stage Lines ({selectedCount})</button>
-                <!-- Working-tree Comment affordance (260531-k4j): reuses the
-                     commit-mode accent button class verbatim (no new color).
-                     New-side scope + Old-side guard live in the host. -->
+              {:else}
+                <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
+                     without selecting lines. Reuses the accent button class
+                     verbatim (no new color); host applies the New-side guard.
+                     Leads the action cluster. -->
                 <button
                   class="staging-btn accent-btn"
                   style="cursor: pointer;"
-                  onclick={() => oncommentlines(fd.path, section.hunkIdx)}
-                >Comment ({selectedCount})</button>
-              {:else}
+                  onclick={() => oncommenthunk(fd.path, section.hunkIdx)}
+                >Comment</button>
                 <button
                   disabled={stagingDisabled}
                   title={stagingDisabledTitle}
@@ -281,14 +291,6 @@ const pairedData = $derived(
                   style="cursor: {stagingDisabled ? 'not-allowed' : 'pointer'}; opacity: {stagingDisabled ? 0.4 : 1};"
                   onclick={() => onstagehunk(fd.path, section.hunkIdx)}
                 >Stage Hunk</button>
-                <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
-                     without selecting lines. Reuses the accent button class
-                     verbatim (no new color); host applies the New-side guard. -->
-                <button
-                  class="staging-btn accent-btn"
-                  style="cursor: pointer;"
-                  onclick={() => oncommenthunk(fd.path, section.hunkIdx)}
-                >Comment</button>
               {/if}
             {:else if diffKind === 'staged'}
               {@const hunkKey = `${fd.path}-${section.hunkIdx}`}
