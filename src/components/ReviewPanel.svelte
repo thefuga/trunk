@@ -481,15 +481,22 @@ $effect(() => {
   >
     <span class="preview-spacer" style="flex: 1;"></span>
     {#if sessionState !== "none"}
-      <button
-        type="button"
-        class="snapshot-button flex items-center"
-        onclick={onReviewWorkingTreeClick}
-        title="Snapshot the current uncommitted changes as a review target"
-      >
-        <FilePlus size={14} />
-        <span>Review uncommitted changes</span>
-      </button>
+      <!-- Snapshot requires an ACTIVE in-memory session: add_working_tree_review
+           rejects with no_session otherwise. A stuck "resume-available" state
+           (resume kept failing) must NOT show a button that errors into a toast,
+           so gate the snapshot button on === "active", not !== "none". End-review
+           stays !== "none" (it deletes the on-disk session regardless of memory). -->
+      {#if sessionState === "active"}
+        <button
+          type="button"
+          class="snapshot-button flex items-center"
+          onclick={onReviewWorkingTreeClick}
+          title="Snapshot the current uncommitted changes as a review target"
+        >
+          <FilePlus size={14} />
+          <span>Review uncommitted changes</span>
+        </button>
+      {/if}
       <button
         type="button"
         class="end-button {endConfirming ? 'confirming' : ''} flex items-center"
