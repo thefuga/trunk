@@ -14,6 +14,12 @@ interface Props {
 	hunkIdx?: number;
 	selectedLineIndices?: Set<number>;
 	commitOid: string;
+	// Deferred commit_oid resolver (260531-l02 lag fix). When present, submit calls it
+	// to get the anchor's real commit_oid — for the working tree this starts the
+	// session and creates/reuses the snapshot commit, work kept OFF the open path so
+	// the composer appears instantly. Returns null on failure (submit aborts, draft
+	// kept). When absent, the anchor's own commit_oid is used as-is.
+	resolveCommitOid?: () => Promise<string | null>;
 	repoPath: string;
 	onclose: () => void;
 }
@@ -24,6 +30,7 @@ let {
 	hunkIdx,
 	selectedLineIndices,
 	commitOid,
+	resolveCommitOid,
 	repoPath,
 	onclose,
 }: Props = $props();
@@ -90,10 +97,19 @@ async function handleSubmit() {
 		draftTimer = null;
 	}
 	try {
+		// Resolve the anchor's commit_oid now (deferred from open): for the working
+		// tree this starts the session + creates/reuses the snapshot. Null = failure
+		// (a toast already fired); keep the composer + draft open so nothing is lost.
+		let anchor = capturedResult.anchor;
+		if (resolveCommitOid) {
+			const oid = await resolveCommitOid();
+			if (oid === null) return;
+			anchor = { ...anchor, commit_oid: oid };
+		}
 		await safeInvoke("add_comment", {
 			path: repoPath,
 			text,
-			anchor: capturedResult.anchor,
+			anchor,
 			cachedExcerpt: capturedResult.cachedExcerpt,
 		});
 	} catch (e) {

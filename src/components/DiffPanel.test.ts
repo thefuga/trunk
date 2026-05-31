@@ -1627,7 +1627,16 @@ describe("DiffPanel comment affordance (commit diffs)", () => {
 		await fireEvent.click(screen.getByText("const x = 2;"));
 		await tick();
 		await fireEvent.click(screen.getByRole("button", { name: /^Comment \(/ }));
-		// ensureActiveSession awaits status + start/resume before opening.
+		// Opening is synchronous now (260531-l02 lag fix) — no session start here.
+		await tick();
+	}
+
+	// Submit the open composer and settle the async resolve→snapshot→add_comment chain.
+	async function submitComposer(note: string) {
+		const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+		await fireEvent.input(textarea, { target: { value: note } });
+		await tick();
+		await fireEvent.click(screen.getByRole("button", { name: /submit/i }));
 		await new Promise((r) => setTimeout(r, 0));
 		await tick();
 	}
@@ -1636,7 +1645,7 @@ describe("DiffPanel comment affordance (commit diffs)", () => {
 		return vi.mocked(safeInvoke).mock.calls.map((c) => c[0] as string);
 	}
 
-	it("auto-starts a session (start_review_session) when none is active, then the composer opens and add_comment succeeds", async () => {
+	it("defers session start to submit: opening costs no IPC, then submit starts a session and add_comment succeeds", async () => {
 		mockSessionState("none");
 		render(DiffPanel, {
 			props: {
@@ -1651,19 +1660,18 @@ describe("DiffPanel comment affordance (commit diffs)", () => {
 
 		await openComposerOnAddLine();
 
+		// Deferred (lag fix): the open path starts no session — that work waits for submit.
+		expect(calledCommands()).not.toContain("start_review_session");
+		expect(screen.getByRole("textbox")).toBeTruthy();
+
+		await submitComposer("first note");
+
 		expect(calledCommands()).toContain("start_review_session");
 		expect(calledCommands()).not.toContain("resume_review_session");
-
-		// Composer opened; submit reaches add_comment.
-		const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-		await fireEvent.input(textarea, { target: { value: "first note" } });
-		await tick();
-		await fireEvent.click(screen.getByRole("button", { name: /submit/i }));
-		await tick();
 		expect(calledCommands()).toContain("add_comment");
 	});
 
-	it("resumes a saved session (resume_review_session, not start) when one is available", async () => {
+	it("resumes a saved session (resume_review_session, not start) at submit when one is available", async () => {
 		mockSessionState("resume-available");
 		render(DiffPanel, {
 			props: {
@@ -1677,10 +1685,15 @@ describe("DiffPanel comment affordance (commit diffs)", () => {
 		await flushPrefs();
 
 		await openComposerOnAddLine();
+		expect(screen.getByRole("textbox")).toBeTruthy();
+		// Opening does not touch the session lifecycle; resume happens at submit.
+		expect(calledCommands()).not.toContain("resume_review_session");
+
+		await submitComposer("a note");
 
 		expect(calledCommands()).toContain("resume_review_session");
 		expect(calledCommands()).not.toContain("start_review_session");
-		expect(screen.getByRole("textbox")).toBeTruthy();
+		expect(calledCommands()).toContain("add_comment");
 	});
 
 	it("does not start or resume when a session is already active", async () => {
@@ -1697,9 +1710,13 @@ describe("DiffPanel comment affordance (commit diffs)", () => {
 		await flushPrefs();
 
 		await openComposerOnAddLine();
+		expect(screen.getByRole("textbox")).toBeTruthy();
 
+		await submitComposer("a note");
+
+		// Active session: submit neither starts nor resumes, but still writes.
 		expect(calledCommands()).not.toContain("start_review_session");
 		expect(calledCommands()).not.toContain("resume_review_session");
-		expect(screen.getByRole("textbox")).toBeTruthy();
+		expect(calledCommands()).toContain("add_comment");
 	});
 });

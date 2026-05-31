@@ -102,13 +102,12 @@ const commitOid = $derived(
 );
 const isMerge = $derived((commitDetail?.parent_oids.length ?? 0) > 1);
 let composerOpen = $state(false);
-// The diff-path capture is built ONCE when the composer opens, from a snapshot of the
-// selection taken BEFORE any await, and injected as a stable `captured` result — NOT
-// derived reactively from selectedLineIndices. A working-tree comment writes a snapshot
-// commit to .git/objects, which the fs watcher reports as repo-changed; that refetches
-// the diff and fires clearSelection() ~200ms later. Deriving the anchor reactively then
-// recomputed it over the emptied selection → Math.min(...[]) = Infinity (260531-l02 bug).
-// Capturing up-front severs that dependency for both the line and whole-hunk paths.
+// The diff-path capture is built ONCE, synchronously, when the composer opens (range +
+// excerpt from the hunk) and injected as a stable `captured` result — NOT derived
+// reactively from selectedLineIndices. The commit_oid is left empty here and filled at
+// submit by resolveCommentCommitOid. Capturing up-front keeps the range immune to a
+// later selection clear (e.g. a repo-changed-driven diff refetch), which otherwise
+// recomputed it over an emptied selection → Math.min(...[]) = Infinity (260531-l02).
 let diffCaptured = $state<DiffAnchorResult | null>(null);
 let composer = $state<CommentComposer | null>(null);
 
@@ -182,11 +181,13 @@ async function ensureActiveSession(): Promise<boolean> {
 	}
 }
 
-// Shared diff-path composer open. Builds the anchor ONCE from a STABLE `indices`
-// snapshot (captured by the caller before any await), so a repo-changed-driven
-// clearSelection during the snapshot fetch can never corrupt it (260531-l02). Used
-// by both the line-selection and whole-hunk Comment affordances.
-async function openDiffComposer(
+// Open the comment composer SYNCHRONOUSLY. The composer only needs the line range,
+// which comes from the hunk — so nothing async runs here: no session start, no
+// snapshot. The expensive working-tree snapshot + session start are DEFERRED to
+// submit (resolveCommentCommitOid). That is what removes the click-to-open lag and
+// stops the .git write (and its self-inflicted repo-changed reload) from happening
+// while composing; a Cancel now costs nothing (no session, no commit created).
+function openDiffComposer(
 	fd: FileDiff,
 	hunkIndex: number,
 	indices: Set<number>,
@@ -194,10 +195,9 @@ async function openDiffComposer(
 	if (isMerge) return;
 	if (indices.size === 0) return;
 
-	// Working-tree (unstaged) scope guard (260531-k4j): New-side only this pass.
-	// Use the SAME exported resolveSide buildDiffAnchor uses so the guard and the
-	// anchor agree on the mixed Add+Delete → New edge case. An Old-side (pure-delete
-	// / Deleted file) selection is a no-op + toast. Commit-mode is NOT guarded.
+	// Working-tree (unstaged) scope guard (260531-k4j): New-side only this pass. Use
+	// the SAME exported resolveSide buildDiffAnchor uses so guard and anchor agree on
+	// the mixed Add+Delete → New edge case. Commit-mode is NOT guarded.
 	if (diffKind === "unstaged") {
 		const hunkLines = fd.hunks[hunkIndex]?.lines ?? [];
 		const selected = Array.from(indices)
@@ -209,74 +209,57 @@ async function openDiffComposer(
 		}
 	}
 
-	const ready = await ensureActiveSession();
-	if (!ready) return;
-
-	// Resolve the anchor's commit_oid: the get-or-create snapshot for the working
-	// tree, else the viewed commit. The unstaged snapshot IPC is what triggers
-	// repo-changed — but `indices` is already a stable snapshot, so the clear is moot.
-	let oid = commitDetail?.oid ?? "";
-	if (diffKind === "unstaged") {
-		try {
-			oid = await safeInvoke<string>("ensure_working_tree_snapshot", {
-				path: repoPath,
-			});
-			workingTreeSnapshotOid = oid;
-		} catch (e) {
-			showToast(
-				(e as TrunkError).message ?? "Failed to snapshot working tree",
-				"error",
-			);
-			return;
-		}
-	}
-
-	diffCaptured = buildDiffAnchor(oid, fd, hunkIndex, indices);
+	// commit_oid is filled at submit by resolveCommentCommitOid; the range + excerpt
+	// (all the composer renders) come from the hunk and are stable from this instant.
+	diffCaptured = buildDiffAnchor("", fd, hunkIndex, indices);
 	composerOpen = true;
 }
 
+// Deferred submit-time resolution (260531-l02 lag fix): start the review session and,
+// for the working tree, create/reuse the snapshot commit — returning the anchor's
+// commit_oid. Runs ONLY when the user submits, so opening is instant and Cancel is
+// free. Returns null on failure; the composer stays open so the draft isn't lost.
+async function resolveCommentCommitOid(): Promise<string | null> {
+	const ready = await ensureActiveSession();
+	if (!ready) return null;
+	if (diffKind !== "unstaged") return commitDetail?.oid ?? "";
+	try {
+		const oid = await safeInvoke<string>("ensure_working_tree_snapshot", {
+			path: repoPath,
+		});
+		workingTreeSnapshotOid = oid;
+		return oid;
+	} catch (e) {
+		showToast(
+			(e as TrunkError).message ?? "Failed to snapshot working tree",
+			"error",
+		);
+		return null;
+	}
+}
+
 // Comment on the user's current line selection.
-async function handleCommentLines(filePath: string, hunkIndex: number) {
+function handleCommentLines(filePath: string, hunkIndex: number) {
 	const fd = fileDiffs.find((f) => f.path === filePath);
 	if (!fd) return;
-	// Snapshot the selection BEFORE awaiting — see openDiffComposer / diffCaptured.
-	await openDiffComposer(fd, hunkIndex, new Set(selectedLineIndices));
+	openDiffComposer(fd, hunkIndex, new Set(selectedLineIndices));
 }
 
 // Whole-hunk Comment affordance (260531-l02): comment a hunk without first
 // selecting lines. Synthesize the hunk's selectable (non-context) indices and open
-// the composer with that stable set. Does NOT mutate the visible selection — that
-// avoids the select→clear flicker and the Infinity-range bug.
-async function handleCommentHunk(filePath: string, hunkIndex: number) {
+// the composer with that stable set. Does NOT mutate the visible selection.
+function handleCommentHunk(filePath: string, hunkIndex: number) {
 	const fd = fileDiffs.find((f) => f.path === filePath);
 	const hunk = fd?.hunks[hunkIndex];
 	if (!fd || !hunk) return;
-	await openDiffComposer(fd, hunkIndex, hunkSelectableIndices(hunk));
+	openDiffComposer(fd, hunkIndex, hunkSelectableIndices(hunk));
 }
 
-// Full-file analog of handleCommentLines. NO isMerge guard — merge commits are
-// valid for full-file capture (L-05). NO Old-side guard — full-file is always
-// New-side by construction (buildFullFileAnchor, Phase 68). Reuses the same
-// ensureActiveSession().
-async function handleCommentFullFile(filePath: string, indices: Set<number>) {
-	const ready = await ensureActiveSession();
-	if (!ready) return;
-
-	if (diffKind === "unstaged") {
-		try {
-			workingTreeSnapshotOid = await safeInvoke<string>(
-				"ensure_working_tree_snapshot",
-				{ path: repoPath },
-			);
-		} catch (e) {
-			showToast(
-				(e as TrunkError).message ?? "Failed to snapshot working tree",
-				"error",
-			);
-			return;
-		}
-	}
-
+// Full-file analog. NO isMerge guard (merge commits are valid for full-file, L-05),
+// NO Old-side guard (full-file is always New-side, buildFullFileAnchor). Opens
+// synchronously; the session start + working-tree snapshot are deferred to submit
+// (resolveCommentCommitOid), same as the diff path (260531-l02 lag fix).
+function handleCommentFullFile(filePath: string, indices: Set<number>) {
 	fullFileComposerPath = filePath;
 	fullFileSelectedIndices = indices;
 	fullFileComposerOpen = true;
@@ -724,6 +707,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 			bind:this={composer}
 			captured={diffCaptured}
 			{commitOid}
+			resolveCommitOid={resolveCommentCommitOid}
 			{repoPath}
 			onclose={closeComposer}
 		/>
@@ -732,6 +716,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 			bind:this={composer}
 			captured={fullFileCaptured}
 			{commitOid}
+			resolveCommitOid={resolveCommentCommitOid}
 			{repoPath}
 			onclose={closeComposer}
 		/>
