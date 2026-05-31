@@ -127,9 +127,11 @@ function gutterWidth(maxNum: number): string {
         Binary file — no diff available
       </div>
     {:else}
-      <!-- Full-file Comment affordance (L-05: no isMerge disable). Appears only for
-           commit diffs once a selection exists. -->
-      {#if diffKind === 'commit' && fileSelected}
+      <!-- Full-file Comment affordance (L-05: no isMerge disable). Appears for
+           commit diffs and unstaged working-tree diffs (260531-k4j) once a
+           selection exists. Full-file is always New-side (buildFullFileAnchor) so
+           no Old-side guard is needed for the unstaged case. -->
+      {#if (diffKind === 'commit' || diffKind === 'unstaged') && fileSelected}
         <div style="display: flex; justify-content: flex-end; padding: 4px 8px;">
           <button
             style="

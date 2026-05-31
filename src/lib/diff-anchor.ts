@@ -27,7 +27,7 @@ export interface DiffAnchorResult {
  * For Modified/Untracked/Unknown, derive from origins: any Add -> New,
  * else any Delete -> Old, else a defensive New default.
  */
-function resolveSide(status: DiffStatus, selected: DiffLine[]): Side {
+export function resolveSide(status: DiffStatus, selected: DiffLine[]): Side {
 	if (status === "Added") return "New";
 	if (status === "Deleted") return "Old";
 	if (status === "Renamed") return "New";

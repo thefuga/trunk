@@ -215,6 +215,25 @@ function gutterWidth(maxNum: number): string {
               >
                 Stage Lines ({selectedCount})
               </button>
+              <!-- Working-tree Comment affordance (260531-k4j): reuses the
+                   commit-mode Comment button markup/styles verbatim (no new color).
+                   New-side scope + Old-side guard live in the host. -->
+              <button
+                style="
+                  background: var(--color-accent-bg, var(--color-surface));
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-accent);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: pointer;
+                  white-space: nowrap;
+                "
+                onclick={() => oncommentlines(fd.path, hunkIdx)}
+              >
+                Comment ({selectedCount})
+              </button>
             {:else}
               <button
                 disabled={stagingDisabled}

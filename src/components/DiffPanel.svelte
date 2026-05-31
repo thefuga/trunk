@@ -1,4 +1,5 @@
 <script lang="ts">
+import { resolveSide } from "../lib/diff-anchor.js";
 import { buildFullFileAnchor } from "../lib/full-file-anchor.js";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
 import {
@@ -83,7 +84,17 @@ let collapsedFiles = $state<Set<string>>(new Set());
 // Commit-diff comment composer host state (Phase 67). `commitOid` and `isMerge`
 // derive from the threaded commitDetail; the composer opens for a specific
 // (file, hunk) when the user clicks the Comment affordance.
-const commitOid = $derived(commitDetail?.oid ?? "");
+//
+// Working-tree (unstaged) commenting (260531-k4j): the anchor's commit_oid is the
+// get-or-create snapshot OID returned by ensure_working_tree_snapshot, not a
+// commitDetail oid (commitDetail is null for the working tree). Scope commitOid
+// to the mode so a stale snapshot oid can never leak into staged/commit views.
+let workingTreeSnapshotOid = $state<string | null>(null);
+const commitOid = $derived(
+	diffKind === "unstaged"
+		? (workingTreeSnapshotOid ?? "")
+		: (commitDetail?.oid ?? ""),
+);
 const isMerge = $derived((commitDetail?.parent_oids.length ?? 0) > 1);
 let composerOpen = $state(false);
 let composerFilePath = $state<string | null>(null);
@@ -124,6 +135,7 @@ function closeComposer() {
 	fullFileComposerOpen = false;
 	fullFileComposerPath = null;
 	fullFileSelectedIndices = new Set();
+	workingTreeSnapshotOid = null;
 	clearSelection();
 }
 
@@ -168,18 +180,72 @@ async function ensureActiveSession(): Promise<boolean> {
 
 async function handleCommentLines(filePath: string, hunkIndex: number) {
 	if (isMerge) return;
+
+	// Working-tree (unstaged) scope guard (260531-k4j): New-side only this pass.
+	// Compute the side with the SAME exported resolveSide buildDiffAnchor uses so
+	// the guard and the anchor agree on the mixed Add+Delete → New edge case. An
+	// Old-side (pure-delete / Deleted file) unstaged selection is a no-op + toast,
+	// NOT an Old-side comment. Commit-mode is NOT guarded (byte-for-byte intact).
+	if (diffKind === "unstaged") {
+		const fd = fileDiffs.find((f) => f.path === filePath);
+		const hunkLines = fd?.hunks[hunkIndex]?.lines ?? [];
+		const selected = Array.from(selectedLineIndices)
+			.sort((a, b) => a - b)
+			.map((i) => hunkLines[i]);
+		if (fd && resolveSide(fd.status, selected) === "Old") {
+			showToast("Commenting on removed lines isn't supported yet", "error");
+			return;
+		}
+	}
+
 	const ready = await ensureActiveSession();
 	if (!ready) return;
+
+	// For the working tree, anchor to a get-or-create snapshot OID. Set it BEFORE
+	// composerOpen so the composer reads the snapshot oid reactively as commitOid.
+	if (diffKind === "unstaged") {
+		try {
+			workingTreeSnapshotOid = await safeInvoke<string>(
+				"ensure_working_tree_snapshot",
+				{ path: repoPath },
+			);
+		} catch (e) {
+			showToast(
+				(e as TrunkError).message ?? "Failed to snapshot working tree",
+				"error",
+			);
+			return;
+		}
+	}
+
 	composerFilePath = filePath;
 	composerHunkIdx = hunkIndex;
 	composerOpen = true;
 }
 
 // Full-file analog of handleCommentLines. NO isMerge guard — merge commits are
-// valid for full-file capture (L-05). Reuses the same ensureActiveSession().
+// valid for full-file capture (L-05). NO Old-side guard — full-file is always
+// New-side by construction (buildFullFileAnchor, Phase 68). Reuses the same
+// ensureActiveSession().
 async function handleCommentFullFile(filePath: string, indices: Set<number>) {
 	const ready = await ensureActiveSession();
 	if (!ready) return;
+
+	if (diffKind === "unstaged") {
+		try {
+			workingTreeSnapshotOid = await safeInvoke<string>(
+				"ensure_working_tree_snapshot",
+				{ path: repoPath },
+			);
+		} catch (e) {
+			showToast(
+				(e as TrunkError).message ?? "Failed to snapshot working tree",
+				"error",
+			);
+			return;
+		}
+	}
+
 	fullFileComposerPath = filePath;
 	fullFileSelectedIndices = indices;
 	fullFileComposerOpen = true;
