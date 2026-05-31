@@ -4,8 +4,8 @@ milestone: v0.14
 milestone_name: milestone
 status: Awaiting next milestone
 stopped_at: Completed 76-03-PLAN.md (frontend merge/revert wiring)
-last_updated: "2026-05-29T13:09:04.528Z"
-last_activity: 2026-05-29 — Milestone v0.14 completed and archived
+last_updated: "2026-05-31T01:17:29.489Z"
+last_activity: 2026-05-31 — Completed quick task 260531-4kk: review uncommitted changes (working tree as review target)
 progress:
   total_phases: 2
   completed_phases: 2
@@ -177,6 +177,7 @@ Last activity: 2026-05-29 — Milestone v0.14 completed and archived
 | 260405-ik1 | Fix tree view folder staging to stage all files (bulk stage_files/unstage_files) | 2026-04-05 | 96013e7 | [260405-ik1-fix-tree-view-folder-staging-to-stage-al](./quick/260405-ik1-fix-tree-view-folder-staging-to-stage-al/) |
 | 260405-j41 | Fix diff view horizontal scroll to scroll entire view together | 2026-04-05 | c458fd3 | [260405-j41-fix-diff-view-horizontal-scroll-scroll-e](./quick/260405-j41-fix-diff-view-horizontal-scroll-scroll-e/) |
 | 260514-356 | VSCode-style recent projects picker (Cmd/Ctrl+R) | 2026-05-14 | 045de1f | [260514-356-build-a-recent-projects-picker-vscode-ct](./quick/260514-356-build-a-recent-projects-picker-vscode-ct/) |
+| 260531-4kk | Review uncommitted changes — working tree as a review target (dangling-commit snapshot) | 2026-05-31 | fe5b679 | [260531-4kk-add-review-uncommitted-changes-to-the-co](./quick/260531-4kk-add-review-uncommitted-changes-to-the-co/) |
 
 ## Deferred Items
 
