@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDiffAnchor } from "./diff-anchor.js";
-import type { DiffLine, DiffStatus, FileDiff } from "./types.js";
+import { buildDiffAnchor, hunkSelectableIndices } from "./diff-anchor.js";
+import type { DiffHunk, DiffLine, DiffStatus, FileDiff } from "./types.js";
 
 function addLine(newLineno: number, content: string): DiffLine {
 	return {
@@ -231,5 +231,47 @@ describe("buildDiffAnchor", () => {
 		]);
 		expect(anchor.source).toBe("Diff");
 		expect(anchor.commit_oid).toBe(OID);
+	});
+});
+
+function hunk(lines: DiffLine[]): DiffHunk {
+	return {
+		header: "@@ -1,1 +1,1 @@",
+		old_start: 1,
+		old_lines: lines.length,
+		new_start: 1,
+		new_lines: lines.length,
+		lines,
+	};
+}
+
+describe("hunkSelectableIndices", () => {
+	it("returns only the non-context indices of a mixed Add/Delete/Context hunk", () => {
+		const h = hunk([
+			contextLine(40, 40, "ctx"),
+			deleteLine(41, "gone"),
+			addLine(41, "new"),
+			contextLine(42, 42, "ctx"),
+		]);
+
+		expect(hunkSelectableIndices(h)).toEqual(new Set([1, 2]));
+	});
+
+	it("returns every index of a pure-Add hunk", () => {
+		const h = hunk([addLine(1, "a"), addLine(2, "b")]);
+
+		expect(hunkSelectableIndices(h)).toEqual(new Set([0, 1]));
+	});
+
+	it("returns every index of a pure-Delete hunk", () => {
+		const h = hunk([deleteLine(1, "a"), deleteLine(2, "b")]);
+
+		expect(hunkSelectableIndices(h)).toEqual(new Set([0, 1]));
+	});
+
+	it("returns an empty set for a pure-context hunk", () => {
+		const h = hunk([contextLine(1, 1, "a"), contextLine(2, 2, "b")]);
+
+		expect(hunkSelectableIndices(h)).toEqual(new Set());
 	});
 });

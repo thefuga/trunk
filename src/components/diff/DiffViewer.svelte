@@ -45,6 +45,7 @@ interface Props {
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
 	oncommentlines: (filePath: string, hunkIndex: number) => void;
+	oncommenthunk: (filePath: string, hunkIndex: number) => void;
 	commitOid: string;
 	repoPath: string;
 	oncommentfullfile: (filePath: string, selectedIndices: Set<number>) => void;
@@ -78,6 +79,7 @@ let {
 	onunstagelines,
 	ondiscardlines,
 	oncommentlines,
+	oncommenthunk,
 	commitOid,
 	repoPath,
 	oncommentfullfile,
@@ -121,6 +123,7 @@ let {
       onunstagelines={onunstagelines}
       ondiscardlines={ondiscardlines}
       oncommentlines={oncommentlines}
+      oncommenthunk={oncommenthunk}
     />
   {:else if layoutMode === "inline" && contentMode === "full"}
     <FullFileView
@@ -142,6 +145,6 @@ let {
       {onfilecollapsetoggle} {onlineclick}
       onstagehunk={onstagehunk} onunstagehunk={onunstagehunk} ondiscardhunk={ondiscardhunk}
       onstagelines={onstagelines} onunstagelines={onunstagelines} ondiscardlines={ondiscardlines}
-      oncommentlines={oncommentlines} />
+      oncommentlines={oncommentlines} oncommenthunk={oncommenthunk} />
   {/if}
 </div>

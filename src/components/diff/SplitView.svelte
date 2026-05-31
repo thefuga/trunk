@@ -43,6 +43,7 @@ interface Props {
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
 	oncommentlines: (filePath: string, hunkIndex: number) => void;
+	oncommenthunk: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
@@ -69,6 +70,7 @@ let {
 	onunstagelines,
 	ondiscardlines,
 	oncommentlines,
+	oncommenthunk,
 }: Props = $props();
 
 const syncedCols: Set<HTMLElement> = new Set();
@@ -279,6 +281,14 @@ const pairedData = $derived(
                   style="cursor: {stagingDisabled ? 'not-allowed' : 'pointer'}; opacity: {stagingDisabled ? 0.4 : 1};"
                   onclick={() => onstagehunk(fd.path, section.hunkIdx)}
                 >Stage Hunk</button>
+                <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
+                     without selecting lines. Reuses the accent button class
+                     verbatim (no new color); host applies the New-side guard. -->
+                <button
+                  class="staging-btn accent-btn"
+                  style="cursor: pointer;"
+                  onclick={() => oncommenthunk(fd.path, section.hunkIdx)}
+                >Comment</button>
               {/if}
             {:else if diffKind === 'staged'}
               {@const hunkKey = `${fd.path}-${section.hunkIdx}`}
@@ -311,6 +321,16 @@ const pairedData = $derived(
                   style="cursor: {isMerge ? 'not-allowed' : 'pointer'}; opacity: {isMerge ? 0.4 : 1};"
                   onclick={() => oncommentlines(fd.path, section.hunkIdx)}
                 >Comment ({selectedCount})</button>
+              {:else}
+                <!-- Whole-hunk Comment in commit diffs (260531-l02): same accent
+                     class + isMerge disable guard as the line-level commit Comment. -->
+                <button
+                  disabled={isMerge}
+                  title={isMerge ? "Diff comments aren't available on merge commits" : ""}
+                  class="staging-btn accent-btn"
+                  style="cursor: {isMerge ? 'not-allowed' : 'pointer'}; opacity: {isMerge ? 0.4 : 1};"
+                  onclick={() => oncommenthunk(fd.path, section.hunkIdx)}
+                >Comment</button>
               {/if}
             {/if}
           </div>

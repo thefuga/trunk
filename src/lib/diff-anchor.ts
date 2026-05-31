@@ -14,7 +14,14 @@
  *   selection, so dropped `-` lines and in-between context still appear (L-06).
  */
 
-import type { Anchor, DiffLine, DiffStatus, FileDiff, Side } from "./types.js";
+import type {
+	Anchor,
+	DiffHunk,
+	DiffLine,
+	DiffStatus,
+	FileDiff,
+	Side,
+} from "./types.js";
 
 export interface DiffAnchorResult {
 	anchor: Anchor;
@@ -48,6 +55,22 @@ function prefixLine(line: DiffLine): string {
 	if (line.origin === "Add") return `+${line.content}`;
 	if (line.origin === "Delete") return `-${line.content}`;
 	return ` ${line.content}`;
+}
+
+/**
+ * The set of line indices a user could select within a hunk: every non-context
+ * line (origin !== 'Context'). This is the same `isSelectable` convention the
+ * diff views use for click targets. Used to synthesize a full-hunk selection
+ * when commenting on a whole hunk without first picking individual lines —
+ * including Delete lines, so a pure-deletion hunk still resolves to the Old
+ * side and trips the existing New-side scope guard.
+ */
+export function hunkSelectableIndices(hunk: DiffHunk): Set<number> {
+	const indices = new Set<number>();
+	hunk.lines.forEach((line, i) => {
+		if (line.origin !== "Context") indices.add(i);
+	});
+	return indices;
 }
 
 /**

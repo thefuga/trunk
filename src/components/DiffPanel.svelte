@@ -1,5 +1,5 @@
 <script lang="ts">
-import { resolveSide } from "../lib/diff-anchor.js";
+import { hunkSelectableIndices, resolveSide } from "../lib/diff-anchor.js";
 import { buildFullFileAnchor } from "../lib/full-file-anchor.js";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
 import {
@@ -221,6 +221,26 @@ async function handleCommentLines(filePath: string, hunkIndex: number) {
 	composerFilePath = filePath;
 	composerHunkIdx = hunkIndex;
 	composerOpen = true;
+}
+
+// Whole-hunk Comment affordance (260531-l02): comment a hunk without first
+// selecting lines. Synthesize a full-hunk selection (every non-context line,
+// the same lines the user could click) then DELEGATE to handleCommentLines, so
+// the isMerge guard, the unstaged Old-side scope guard (pure-delete → toast),
+// ensureActiveSession, the snapshot fetch, and the composer are all reused
+// verbatim — zero duplicated logic. A degenerate hunk with no selectable lines
+// opens nothing.
+async function handleCommentHunk(filePath: string, hunkIndex: number) {
+	const fd = fileDiffs.find((f) => f.path === filePath);
+	const hunk = fd?.hunks[hunkIndex];
+	if (!hunk) return;
+
+	const indices = hunkSelectableIndices(hunk);
+	if (indices.size === 0) return;
+
+	selectedHunkKey = `${filePath}-${hunkIndex}`;
+	selectedLineIndices = indices;
+	await handleCommentLines(filePath, hunkIndex);
 }
 
 // Full-file analog of handleCommentLines. NO isMerge guard — merge commits are
@@ -683,6 +703,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 		onunstagelines={handleUnstageLines}
 		ondiscardlines={handleDiscardLines}
 		oncommentlines={handleCommentLines}
+		oncommenthunk={handleCommentHunk}
 		{commitOid}
 		{repoPath}
 		oncommentfullfile={handleCommentFullFile}

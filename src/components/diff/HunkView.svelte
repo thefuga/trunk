@@ -35,6 +35,7 @@ interface Props {
 	onunstagelines: (filePath: string, hunkIndex: number) => void;
 	ondiscardlines: (filePath: string, hunkIndex: number) => void;
 	oncommentlines: (filePath: string, hunkIndex: number) => void;
+	oncommenthunk: (filePath: string, hunkIndex: number) => void;
 }
 
 let {
@@ -60,6 +61,7 @@ let {
 	onunstagelines,
 	ondiscardlines,
 	oncommentlines,
+	oncommenthunk,
 }: Props = $props();
 
 const stagingDisabled = $derived(hunkOperationInFlight || ignoreWhitespace);
@@ -273,6 +275,26 @@ function gutterWidth(maxNum: number): string {
               >
                 Stage Hunk
               </button>
+              <!-- Whole-hunk Comment affordance (260531-l02): comment the hunk
+                   without selecting lines. Reuses the line-level accent button
+                   markup verbatim (no new color); host synthesizes the full-hunk
+                   selection + applies the New-side guard. -->
+              <button
+                style="
+                  background: var(--color-accent-bg, var(--color-surface));
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-accent);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: pointer;
+                  white-space: nowrap;
+                "
+                onclick={() => oncommenthunk(fd.path, hunkIdx)}
+              >
+                Comment
+              </button>
             {/if}
           {:else if diffKind === 'staged'}
             {@const hunkKey = `${fd.path}-${hunkIdx}`}
@@ -340,6 +362,28 @@ function gutterWidth(maxNum: number): string {
                 onclick={() => oncommentlines(fd.path, hunkIdx)}
               >
                 Comment ({selectedCount})
+              </button>
+            {:else}
+              <!-- Whole-hunk Comment in commit diffs (260531-l02): same accent
+                   button + isMerge disable guard as the line-level commit Comment. -->
+              <button
+                disabled={isMerge}
+                title={isMerge ? "Diff comments aren't available on merge commits" : ""}
+                style="
+                  background: var(--color-accent-bg, var(--color-surface));
+                  border: 1px solid var(--color-border);
+                  border-radius: 3px;
+                  color: var(--color-accent);
+                  font-size: 11px;
+                  font-family: var(--font-sans, sans-serif);
+                  padding: 2px 8px;
+                  cursor: {isMerge ? 'not-allowed' : 'pointer'};
+                  opacity: {isMerge ? 0.4 : 1};
+                  white-space: nowrap;
+                "
+                onclick={() => oncommenthunk(fd.path, hunkIdx)}
+              >
+                Comment
               </button>
             {/if}
           {/if}
