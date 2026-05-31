@@ -332,6 +332,21 @@ describe("DiffPanel", () => {
 		expect(screen.getByText("Comment File")).toBeInTheDocument();
 	});
 
+	it("shows a Comment File button for commit diffs", async () => {
+		render(DiffPanel, {
+			props: {
+				fileDiffs: [testDiff],
+				commitDetail: null,
+				onclose: vi.fn(),
+				diffKind: "commit",
+				repoPath: "/test/repo",
+				selectedPath: "src/main.ts",
+			},
+		});
+		await flushPrefs();
+		expect(screen.getByText("Comment File")).toBeInTheDocument();
+	});
+
 	// Comment File anchors the WHOLE file: every new-side line. testDiff's new side is
 	// new_lineno 1,2,3,4 (Context 1, Add 2, Add 3, Context 4), so the composer opens
 	// over lines 1-4 — not a single hunk's sub-range.

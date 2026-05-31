@@ -105,17 +105,17 @@ let {
     <TextWrap size={14} />
   </button>
 
-  {#if diffKind === 'unstaged' || diffKind === 'staged'}
-    <!-- One-click whole-file Comment (260531-l02e): leads the staging action like
-         the hunk toolbar's Comment button. Comments every change in the file;
-         not gated on whitespace-ignore since it never stages. -->
-    <button
-      class="action-btn comment-btn"
-      onclick={oncommentfile}
-    >
-      Comment File
-    </button>
-  {/if}
+  <!-- One-click whole-file Comment (260531-l02e/l02f): comments every change in the
+       file in one click. Available for every diff kind — commit diffs as well as the
+       dirty tree (selectedPath is always set when this toolbar renders). Leads the
+       staging action like the hunk toolbar's Comment; never gated on
+       whitespace-ignore since it never stages. -->
+  <button
+    class="action-btn comment-btn"
+    onclick={oncommentfile}
+  >
+    Comment File
+  </button>
 
   {#if diffKind === 'unstaged'}
     <button
