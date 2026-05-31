@@ -5,7 +5,7 @@ milestone_name: milestone
 status: Awaiting next milestone
 stopped_at: Completed 76-03-PLAN.md (frontend merge/revert wiring)
 last_updated: "2026-05-31T01:17:29.489Z"
-last_activity: 2026-05-31 — Quick task 260531-k4j: in-diff Comment for unstaged changes (code complete, in-app UAT pending)
+last_activity: 2026-05-31 — Quick task 260531-l02: hunk-level Comment in diff toolbar (code complete, consolidated UAT with k4j pending)
 progress:
   total_phases: 2
   completed_phases: 2
@@ -179,6 +179,7 @@ Last activity: 2026-05-29 — Milestone v0.14 completed and archived
 | 260514-356 | VSCode-style recent projects picker (Cmd/Ctrl+R) | 2026-05-14 | 045de1f | [260514-356-build-a-recent-projects-picker-vscode-ct](./quick/260514-356-build-a-recent-projects-picker-vscode-ct/) |
 | 260531-4kk | Review uncommitted changes — working tree as a review target (dangling-commit snapshot) | 2026-05-31 | fe5b679 | [260531-4kk-add-review-uncommitted-changes-to-the-co](./quick/260531-4kk-add-review-uncommitted-changes-to-the-co/) |
 | 260531-k4j | Move uncommitted-changes Comment into the working-tree diff toolbar (get-or-create snapshot); remove v1 panel button — code complete, in-app UAT pending | 2026-05-31 | 6349d2d | [260531-k4j-move-uncommitted-changes-comment-afforda](./quick/260531-k4j-move-uncommitted-changes-comment-afforda/) |
+| 260531-l02 | Hunk-level Comment button in the no-selection diff toolbar (unstaged + commit) — code complete, in-app UAT pending (consolidated with k4j) | 2026-05-31 | 5d236c3 | [260531-l02-hunk-level-comment-button-in-the-no-sele](./quick/260531-l02-hunk-level-comment-button-in-the-no-sele/) |
 
 ## Deferred Items
 
