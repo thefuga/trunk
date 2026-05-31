@@ -499,10 +499,16 @@ fn remove_review_commit_rmw(
     })
 }
 
-/// Set the session's single working-tree snapshot to `new_oid`, REPLACING any
-/// prior snapshot (locked decision: at most one snapshot, never stacked). The
-/// remove-old + add-new + field-update run in ONE `mutate_session_rmw` closure
-/// so disk and memory stay consistent and the session never holds two snapshots.
+/// Point the session's working-tree snapshot at `new_oid` with GET-OR-CREATE,
+/// never-orphan semantics (locked decision): apply_add the new snapshot oid and
+/// set the field to it, but NEVER apply_remove the prior snapshot. Earlier
+/// snapshots stay in `commits` so comments anchored to them never orphan when the
+/// file changes mid-review; the field always tracks the LATEST snapshot.
+///
+/// When `decide_snapshot` reused the prior (unchanged workdir), `new_oid` is
+/// already in `commits` → apply_add is a no-op and the field is unchanged. The
+/// add + field-update run in ONE `mutate_session_rmw` closure so disk and memory
+/// stay consistent.
 fn set_working_tree_snapshot_rmw(
     data_dir: &Path,
     canonical: &Path,
@@ -510,9 +516,6 @@ fn set_working_tree_snapshot_rmw(
     new_oid: &str,
 ) -> Result<(), TrunkError> {
     mutate_session_rmw(data_dir, canonical, sessions, |session| {
-        if let Some(old) = session.working_tree_snapshot.take() {
-            apply_remove(&mut session.commits, &old);
-        }
         apply_add(&mut session.commits, new_oid);
         session.working_tree_snapshot = Some(new_oid.to_string());
     })
@@ -781,42 +784,53 @@ pub async fn add_review_commit(
     Ok(())
 }
 
-/// Capture the current working tree (staged + unstaged + untracked-not-ignored)
-/// as a dangling snapshot commit (parent = HEAD) and add it to the active
-/// session as a reviewable target, REPLACING any prior snapshot (never stacks).
+/// Get-or-create the working-tree snapshot for the active session and return its
+/// OID. On an UNCHANGED workdir the existing snapshot is reused (no redundant
+/// commit); on a changed workdir a fresh dangling snapshot commit (parent = HEAD)
+/// is created. The prior snapshot is NEVER removed — earlier comments anchored to
+/// it never orphan. This is the SINGLE working-tree-snapshot command.
 #[tauri::command]
-pub async fn add_working_tree_review(
+pub async fn ensure_working_tree_snapshot(
     path: String,
     state: State<'_, RepoState>,
     sessions: State<'_, ReviewSessionsState>,
     app: AppHandle,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
     let canonical =
         canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
 
     // Fast-fail precheck (mirrors seed_review_range): bail before the git2 work
-    // when no session exists. The RMW would surface `no_session` anyway, but the
-    // snapshot commit would already be in the ODB — pointless work.
-    {
+    // when no session exists. Also read the prior snapshot oid under the same
+    // short lock, then DROP the guard before any git2 work — the read-prior-then-
+    // decide TOCTOU is benign (worst case one redundant snapshot), so it is NOT
+    // pulled into the lock.
+    let prior_oid = {
         let map = sessions.0.lock().unwrap();
-        if !map.contains_key(&canonical) {
-            return Err(serde_json::to_string(&TrunkError::new(
-                "no_session",
-                "No active review session for this repository",
-            ))
-            .unwrap());
+        match map.get(&canonical) {
+            None => {
+                return Err(serde_json::to_string(&TrunkError::new(
+                    "no_session",
+                    "No active review session for this repository",
+                ))
+                .unwrap());
+            }
+            Some(session) => session.working_tree_snapshot.clone(),
         }
-    }
+    };
 
-    // git2::Repository is not Sync; do the snapshot off the async runtime and
-    // never hold a lock across spawn_blocking (same constraint as seed_review_range).
+    // git2::Repository is not Sync; decide off the async runtime and never hold a
+    // lock across spawn_blocking (same constraint as seed_review_range).
     let path_for_blocking = path.clone();
     let snapshot_oid =
         tauri::async_runtime::spawn_blocking(move || -> Result<String, TrunkError> {
             let repo = git2::Repository::open(&path_for_blocking).map_err(TrunkError::from)?;
-            let oid = crate::git::workdir_snapshot::snapshot_working_tree(&repo)?;
+            let prior = match prior_oid {
+                Some(s) => Some(git2::Oid::from_str(&s).map_err(TrunkError::from)?),
+                None => None,
+            };
+            let (oid, _created) = crate::git::workdir_snapshot::decide_snapshot(&repo, prior)?;
             Ok(oid.to_string())
         })
         .await
@@ -828,7 +842,7 @@ pub async fn add_working_tree_review(
     set_working_tree_snapshot_rmw(&data_dir, &canonical, &sessions.0, &snapshot_oid)
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
     emit_session_changed(&app, &canonical);
-    Ok(())
+    Ok(snapshot_oid)
 }
 
 /// Remove a single commit from the session (SEL-03).
@@ -1704,7 +1718,7 @@ mod tests {
     }
 
     #[test]
-    fn working_tree_snapshot_replaces_not_stacks() {
+    fn working_tree_snapshot_never_orphans_prior() {
         let data_dir = TempDir::new().unwrap();
         let canonical = data_dir.path().join("repo-canonical");
         let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
@@ -1726,11 +1740,12 @@ mod tests {
 
         let in_memory = sessions.lock().unwrap();
         let session = in_memory.get(&canonical).unwrap();
-        // The first snapshot oid was removed; only the second remains alongside
-        // the unrelated hand-picked commit — exactly one snapshot, never stacked.
+        // GET-OR-CREATE never-orphan: BOTH snapshot oids stay in commits so
+        // comments anchored to the earlier snapshot never orphan; the field
+        // tracks the latest. The unrelated hand-picked commit is undisturbed.
         assert!(
-            !session.commits.contains(&first),
-            "the replaced snapshot oid must be removed from commits"
+            session.commits.contains(&first),
+            "the prior snapshot oid must REMAIN in commits (never orphaned)"
         );
         assert!(
             session.commits.contains(&second),
