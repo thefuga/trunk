@@ -5,7 +5,7 @@ milestone_name: milestone
 status: Awaiting next milestone
 stopped_at: Completed 76-03-PLAN.md (frontend merge/revert wiring)
 last_updated: "2026-05-31T01:17:29.489Z"
-last_activity: 2026-05-31 — Quick task 260531-l02: hunk-level Comment in diff toolbar (code complete, consolidated UAT with k4j pending)
+last_activity: 2026-05-31 — Quick task 260531-l02: hunk Comment + review fixes (lag/button/GC) + staged commenting via index snapshot (code complete, in-app UAT pending)
 progress:
   total_phases: 2
   completed_phases: 2
