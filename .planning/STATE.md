@@ -179,7 +179,7 @@ Last activity: 2026-05-29 — Milestone v0.14 completed and archived
 | 260514-356 | VSCode-style recent projects picker (Cmd/Ctrl+R) | 2026-05-14 | 045de1f | [260514-356-build-a-recent-projects-picker-vscode-ct](./quick/260514-356-build-a-recent-projects-picker-vscode-ct/) |
 | 260531-4kk | Review uncommitted changes — working tree as a review target (dangling-commit snapshot) | 2026-05-31 | fe5b679 | [260531-4kk-add-review-uncommitted-changes-to-the-co](./quick/260531-4kk-add-review-uncommitted-changes-to-the-co/) |
 | 260531-k4j | Move uncommitted-changes Comment into the working-tree diff toolbar (get-or-create snapshot); remove v1 panel button — code complete, in-app UAT pending | 2026-05-31 | 6349d2d | [260531-k4j-move-uncommitted-changes-comment-afforda](./quick/260531-k4j-move-uncommitted-changes-comment-afforda/) |
-| 260531-l02 | Hunk-level Comment button in the no-selection diff toolbar (unstaged + commit); fixed reactive Infinity-anchor bug (capture before await) — code complete, in-app UAT pending (consolidated with k4j) | 2026-05-31 | e706e8b | [260531-l02-hunk-level-comment-button-in-the-no-sele](./quick/260531-l02-hunk-level-comment-button-in-the-no-sele/) |
+| 260531-l02 | Hunk-level Comment button + adversarial-review fixes: Infinity-anchor (capture-at-open), click-lag (defer snapshot+session to submit, open synchronously), Comment button moved left of staging, GC-orphan fix (snapshot keepalive refs under refs/trunk/review-snapshots). See ADVERSARIAL-REVIEW.md. Code complete, in-app UAT pending | 2026-05-31 | dde9107 | [260531-l02-hunk-level-comment-button-in-the-no-sele](./quick/260531-l02-hunk-level-comment-button-in-the-no-sele/) |
 
 ## Deferred Items
 
