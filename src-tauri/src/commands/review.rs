@@ -831,6 +831,8 @@ pub async fn ensure_working_tree_snapshot(
                 None => None,
             };
             let (oid, _created) = crate::git::workdir_snapshot::decide_snapshot(&repo, prior)?;
+            // Pin the snapshot so gc can't prune it and orphan its comments (C3).
+            crate::git::workdir_snapshot::keep_snapshot_ref(&repo, oid)?;
             Ok(oid.to_string())
         })
         .await
@@ -1294,12 +1296,22 @@ pub async fn end_review_session(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
+    let path_for_refs = path.clone();
     let canonical = tauri::async_runtime::spawn_blocking(move || {
         end_review_session_inner(&data_dir, &path, &state_map)
     })
     .await
     .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
     .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    // Best-effort: drop the working-tree snapshot keepalive refs (C3). The session is
+    // already ended; a failure here only delays gc reachability, so it never aborts End.
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        if let Ok(repo) = git2::Repository::open(&path_for_refs) {
+            let _ = crate::git::workdir_snapshot::clear_snapshot_refs(&repo);
+        }
+    })
+    .await;
 
     // Disk-first ordering (D-10): _inner deleted the file → drop in-memory → emit.
     sessions.0.lock().unwrap().remove(&canonical);

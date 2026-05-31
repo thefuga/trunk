@@ -88,8 +88,9 @@ pub fn snapshot_working_tree(repo: &git2::Repository) -> Result<git2::Oid, Trunk
     let sig = git2::Signature::now("Trunk", "review@trunk.local")?;
     let msg = format!("Uncommitted changes — {}", sig.when().seconds());
 
-    // 6. `None` target ref => DANGLING commit (no ref litter; GC degradation is
-    //    the accepted locked tradeoff).
+    // 6. `None` target ref => the commit is created dangling. The session command
+    //    (ensure_working_tree_snapshot) then pins it via keep_snapshot_ref so gc can't
+    //    prune a snapshot that still has comments anchored to it (260531-l02 C3).
     let oid = repo.commit(None, &sig, &sig, &msg, &tree, &parents)?;
     Ok(oid)
 }
@@ -101,6 +102,40 @@ fn is_head_unborn(repo: &git2::Repository) -> bool {
         Err(e) => e.code() == git2::ErrorCode::UnbornBranch,
         Ok(_) => false,
     }
+}
+
+/// Ref namespace that pins working-tree review snapshots so `git gc` can't prune them.
+/// Deliberately NOT under refs/heads|remotes|tags, so these keepalive refs stay out of
+/// the branch/commit graph.
+pub const SNAPSHOT_REF_PREFIX: &str = "refs/trunk/review-snapshots/";
+
+/// Pin a snapshot commit with a keepalive ref (260531-l02 C3). Without it the snapshot
+/// is a dangling commit that gc prunes, silently orphaning every comment anchored to
+/// it. Named by the oid so re-pinning a reused snapshot is idempotent; `force = true`
+/// tolerates an already-present ref.
+pub fn keep_snapshot_ref(repo: &git2::Repository, oid: git2::Oid) -> Result<(), TrunkError> {
+    let name = format!("{SNAPSHOT_REF_PREFIX}{oid}");
+    repo.reference(&name, oid, true, "trunk working-tree review snapshot")?;
+    Ok(())
+}
+
+/// Drop all snapshot keepalive refs — called on End Review. Afterward gc may prune the
+/// snapshots, which is correct: the session and its comments are gone.
+pub fn clear_snapshot_refs(repo: &git2::Repository) -> Result<(), TrunkError> {
+    let glob = format!("{SNAPSHOT_REF_PREFIX}*");
+    // Collect names first: the glob iterator borrows `repo`, and deleting inside the
+    // loop also needs `repo`, so the borrow must be released before the deletes.
+    let names: Vec<String> = repo
+        .references_glob(&glob)?
+        .filter_map(|r| r.ok())
+        .filter_map(|r| r.name().map(str::to_owned))
+        .collect();
+    for name in names {
+        if let Ok(mut reference) = repo.find_reference(&name) {
+            let _ = reference.delete();
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -150,6 +185,32 @@ mod tests {
         assert!(
             tree_contains(&repo, oid, "new.txt"),
             "untracked-not-ignored file must appear in the snapshot tree"
+        );
+    }
+
+    // C3: keep_snapshot_ref pins the snapshot under refs/trunk/review-snapshots/ so gc
+    // can't prune it; it is idempotent; clear_snapshot_refs removes the namespace.
+    #[test]
+    fn keepalive_ref_pins_snapshot_then_clears() {
+        let (dir, repo) = repo_with_initial_commit();
+        fs::write(dir.path().join("new.txt"), b"uncommitted\n").unwrap();
+        let oid = snapshot_working_tree(&repo).unwrap();
+
+        keep_snapshot_ref(&repo, oid).unwrap();
+        let name = format!("{SNAPSHOT_REF_PREFIX}{oid}");
+        assert_eq!(
+            repo.find_reference(&name).unwrap().target().unwrap(),
+            oid,
+            "keepalive ref must point at the snapshot commit"
+        );
+
+        // Idempotent: re-pinning a reused snapshot must not error.
+        keep_snapshot_ref(&repo, oid).unwrap();
+
+        clear_snapshot_refs(&repo).unwrap();
+        assert!(
+            repo.find_reference(&name).is_err(),
+            "clear_snapshot_refs must remove the keepalive ref"
         );
     }
 
