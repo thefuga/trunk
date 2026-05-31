@@ -65,8 +65,18 @@ const COMMIT_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const COMMIT_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 const commits: SessionCommit[] = [
-	{ oid: COMMIT_A, short_oid: "aaaaaaa", summary: "first commit" },
-	{ oid: COMMIT_B, short_oid: "bbbbbbb", summary: "second commit" },
+	{
+		oid: COMMIT_A,
+		short_oid: "aaaaaaa",
+		summary: "first commit",
+		is_snapshot: false,
+	},
+	{
+		oid: COMMIT_B,
+		short_oid: "bbbbbbb",
+		summary: "second commit",
+		is_snapshot: false,
+	},
 ];
 
 function lineAnchoredComment(
@@ -219,6 +229,42 @@ describe("ReviewPanel", () => {
 		// Comments nested under their commit.
 		expect(screen.getByText("note on A")).toBeInTheDocument();
 		expect(screen.getByText("note on B")).toBeInTheDocument();
+	});
+
+	// 260531-l02d: an auto-added snapshot with no comments is noise — hide it. An empty
+	// hand-picked commit stays so its per-commit "Add note" affordance remains.
+	it("hides empty snapshot sections but keeps empty hand-picked sections", async () => {
+		installReads({
+			commits: [
+				{
+					oid: COMMIT_A,
+					short_oid: "aaaaaaa",
+					summary: "Uncommitted changes — 1",
+					is_snapshot: true,
+				},
+				{
+					oid: COMMIT_B,
+					short_oid: "bbbbbbb",
+					summary: "hand-picked",
+					is_snapshot: false,
+				},
+			],
+			comments: [],
+			resolutions: [],
+		});
+		render(ReviewPanel, {
+			props: {
+				repoPath: "/repo",
+				session: createReviewSession(),
+				onJump: vi.fn(),
+				onJumpToCommit: vi.fn(),
+			},
+		});
+		await flush();
+
+		// Empty snapshot section hidden; empty hand-picked section shown.
+		expect(screen.queryByText("aaaaaaa")).not.toBeInTheDocument();
+		expect(screen.getByText("bbbbbbb")).toBeInTheDocument();
 	});
 
 	it("reads the three session sources on mount", async () => {

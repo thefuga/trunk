@@ -54,6 +54,12 @@ pub struct SessionCommit {
     pub oid: String,
     pub short_oid: String,
     pub summary: String,
+    /// True when this commit is an auto-created review snapshot (working-tree or
+    /// index), not a commit the user hand-picked. The panel hides EMPTY snapshot
+    /// sections (260531-l02d) while keeping empty hand-picked sections (their
+    /// per-commit "Add note" affordance). Set by `list_session_commits`.
+    #[serde(default)]
+    pub is_snapshot: bool,
 }
 
 /// Look the repo up in `RepoState`'s map and canonicalize its `PathBuf`.
@@ -279,6 +285,7 @@ pub fn intersect_graph_order(
                 oid: c.oid.clone(),
                 short_oid: c.short_oid.clone(),
                 summary: c.summary.clone(),
+                is_snapshot: false,
             });
         }
     }
@@ -297,6 +304,7 @@ pub fn intersect_graph_order(
             oid: oid_str.clone(),
             short_oid: oid_str.chars().take(7).collect(),
             summary,
+            is_snapshot: false,
         });
     }
 
@@ -1057,18 +1065,25 @@ pub async fn list_session_commits(
         canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
 
     // Read the session set by CANONICAL key; a missing entry is `no_session`.
-    let commits = {
+    // Also read the snapshot oids (working-tree + index) to mark SessionCommits as
+    // snapshots so the panel can hide EMPTY snapshot sections (260531-l02d).
+    let (commits, snapshot_oids) = {
         let map = sessions.0.lock().unwrap();
-        map.get(&canonical)
-            .ok_or_else(|| {
-                serde_json::to_string(&TrunkError::new(
-                    "no_session",
-                    "No active review session for this repository",
-                ))
-                .unwrap()
-            })?
-            .commits
-            .clone()
+        let session = map.get(&canonical).ok_or_else(|| {
+            serde_json::to_string(&TrunkError::new(
+                "no_session",
+                "No active review session for this repository",
+            ))
+            .unwrap()
+        })?;
+        let mut snaps: Vec<String> = Vec::new();
+        if let Some(s) = &session.working_tree_snapshot {
+            snaps.push(s.clone());
+        }
+        if let Some(s) = &session.index_snapshot {
+            snaps.push(s.clone());
+        }
+        (session.commits.clone(), snaps)
     };
 
     // Read the full graph order from CommitCache by RAW path (Pitfall 3).
@@ -1083,7 +1098,7 @@ pub async fn list_session_commits(
 
     // Open the repo fresh in spawn_blocking (orphan fallback needs find_commit);
     // never hold the RepoState lock across git2 work.
-    let result =
+    let mut result =
         tauri::async_runtime::spawn_blocking(move || -> Result<Vec<SessionCommit>, TrunkError> {
             let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
             Ok(intersect_graph_order(&commits, &graph, &repo))
@@ -1093,6 +1108,10 @@ pub async fn list_session_commits(
             serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
         })?
         .map_err(|e| serde_json::to_string(&e).unwrap())?;
+
+    for commit in result.iter_mut() {
+        commit.is_snapshot = snapshot_oids.contains(&commit.oid);
+    }
 
     Ok(result)
 }

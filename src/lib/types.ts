@@ -347,6 +347,9 @@ export interface SessionCommit {
 	oid: string;
 	short_oid: string;
 	summary: string;
+	// True for an auto-created review snapshot (working-tree/index), not a
+	// hand-picked commit. The panel hides EMPTY snapshot sections (260531-l02d).
+	is_snapshot: boolean;
 }
 
 // Request DTOs for the comment-capture commands (Plan 67-02 Rust structs use

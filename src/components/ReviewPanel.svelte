@@ -71,6 +71,7 @@ interface CommitGroup {
 	shortOid: string;
 	summary: string;
 	comments: Comment[];
+	isSnapshot: boolean;
 }
 
 // Within a group, commit-level comments (anchor === null) sort before
@@ -87,7 +88,9 @@ function sortGroupComments(list: Comment[]): Comment[] {
 
 // Group comments by commit in the session's commit order; comments on commits
 // no longer in the session (e.g. CommitGone) get a fallback group keyed by oid
-// so nothing is dropped (D-08).
+// so nothing is dropped (D-08). EMPTY snapshot groups (auto-added working-tree /
+// staged snapshots with no comments) are filtered out as noise; empty hand-picked
+// commit groups stay so their per-commit "Add note" affordance remains (260531-l02d).
 const groups = $derived.by<CommitGroup[]>(() => {
 	const byOid = new Map<string, Comment[]>();
 	for (const c of comments) {
@@ -105,6 +108,7 @@ const groups = $derived.by<CommitGroup[]>(() => {
 			shortOid: commit.short_oid,
 			summary: commit.summary,
 			comments: sortGroupComments(byOid.get(commit.oid) ?? []),
+			isSnapshot: commit.is_snapshot,
 		});
 		seen.add(commit.oid);
 	}
@@ -121,9 +125,14 @@ const groups = $derived.by<CommitGroup[]>(() => {
 			shortOid: oid.slice(0, 7),
 			summary: "",
 			comments: sortGroupComments(list),
+			isSnapshot: false,
 		});
 	}
-	return result;
+	// Drop empty snapshot sections — a snapshot with no comments is noise, not a
+	// section to render. Empty hand-picked commits are kept (Add-note affordance).
+	return result.filter(
+		(group) => !(group.isSnapshot && group.comments.length === 0),
+	);
 });
 
 const hasAnyComment = $derived(comments.length > 0);
@@ -529,7 +538,7 @@ $effect(() => {
         Toggle review mode in the toolbar to start.
       </span>
     </div>
-  {:else if groups.length === 0}
+  {:else if commits.length === 0 && !hasAnyComment}
     <div class="flex flex-col" style="gap: 4px; padding: 12px;">
       <span>No commits in this review yet.</span>
       <span style="color: var(--color-text-muted); font-size: 11px;">
