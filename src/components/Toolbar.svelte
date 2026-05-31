@@ -23,11 +23,31 @@ interface Props {
 	remoteState: RemoteState;
 	undoRedo: UndoRedoManager;
 	reviewActive: boolean;
+	// Whether the active review tab's center pane shows the review panel (vs. a diff).
+	// Defaults true so a consumer that only sets reviewActive still styles correctly
+	// (260531-l02e).
+	reviewPanelShowing?: boolean;
 }
 
-let { repoPath, remoteState, undoRedo, reviewActive }: Props = $props();
+let {
+	repoPath,
+	remoteState,
+	undoRedo,
+	reviewActive,
+	reviewPanelShowing = true,
+}: Props = $props();
+
+// The Review button reflects whether the review PANEL is showing, not merely that a
+// session is alive: active only when reviewActive AND the center pane shows the panel.
+const reviewButtonActive = $derived(reviewActive && reviewPanelShowing);
 
 function handleReviewToggle() {
+	// While a diff is showing inside an active review, the button returns to the
+	// panel rather than ending the session (which is the panel-state / menu action).
+	if (reviewActive && !reviewPanelShowing) {
+		void emit("review-show-panel");
+		return;
+	}
 	void emit("review-toggle");
 }
 
@@ -290,8 +310,8 @@ async function handleBranchCreate(values: Record<string, string>) {
   <div class="toolbar-group">
     <button
       class="toolbar-btn"
-      class:toolbar-btn-active={reviewActive}
-      aria-pressed={reviewActive}
+      class:toolbar-btn-active={reviewButtonActive}
+      aria-pressed={reviewButtonActive}
       onclick={handleReviewToggle}
     >
       <MessagesSquare size={14} /> Review

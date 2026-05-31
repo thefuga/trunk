@@ -57,6 +57,11 @@ export function createReviewSession(): ReviewSessionManager {
 		state,
 		setReviewActive(active: boolean) {
 			state.reviewActive = active;
+			// Entering review always lands on the panel, never a stale 'diff' from a
+			// prior session in the same window lifetime (260531-l02e). The Toolbar
+			// Review button reflects panel-vs-diff, so a stale 'diff' would make the
+			// freshly-opened panel look inactive.
+			if (active) state.rightPaneMode = "panel";
 		},
 		async generate(repoPath: string): Promise<string> {
 			return await safeInvoke<string>("generate_review_doc", {

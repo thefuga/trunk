@@ -178,4 +178,51 @@ describe("Toolbar", () => {
 		expect(btn).toHaveClass("toolbar-btn-active");
 		expect(btn).toHaveAttribute("aria-pressed", "true");
 	});
+
+	it("shows inactive state when a diff is showing inside an active review", () => {
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: true,
+				reviewPanelShowing: false,
+			},
+		});
+		const btn = screen.getByRole("button", { name: /Review/ });
+		expect(btn).not.toHaveClass("toolbar-btn-active");
+		expect(btn).toHaveAttribute("aria-pressed", "false");
+	});
+
+	it("emits review-show-panel when clicked while a diff is showing in review", async () => {
+		const { emit } = await import("@tauri-apps/api/event");
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: true,
+				reviewPanelShowing: false,
+			},
+		});
+		const reviewBtn = screen.getByRole("button", { name: /Review/ });
+		await fireEvent.click(reviewBtn);
+		expect(vi.mocked(emit)).toHaveBeenCalledWith("review-show-panel");
+	});
+
+	it("emits review-toggle when clicked while the review panel is showing", async () => {
+		const { emit } = await import("@tauri-apps/api/event");
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: true,
+				reviewPanelShowing: true,
+			},
+		});
+		const reviewBtn = screen.getByRole("button", { name: /Review/ });
+		await fireEvent.click(reviewBtn);
+		expect(vi.mocked(emit)).toHaveBeenCalledWith("review-toggle");
+	});
 });

@@ -57,6 +57,11 @@ interface Props {
 	// Review mode is toggled by the OS menu (review-toggle) at the App level so the
 	// global event only affects the active tab; App passes the flag down per tab.
 	reviewActive: boolean;
+	// Reports whether the active review tab's center pane is showing the review PANEL
+	// (vs. a diff) up to App, so the Toolbar Review button shares one source of truth
+	// with what's rendered: it's lit only when the panel shows, and a click while a
+	// diff is up returns to the panel rather than ending the session (260531-l02e).
+	onreviewpanelshowingchange: (showing: boolean) => void;
 	onleftpanecollapsedchange: (collapsed: boolean) => void;
 	onrightpanecollapsedchange: (collapsed: boolean) => void;
 	onleftpanewidthchange: (width: number) => void;
@@ -74,6 +79,7 @@ let {
 	rightPaneCollapsed,
 	windowVisible,
 	reviewActive,
+	onreviewpanelshowingchange,
 	onleftpanecollapsedchange,
 	onrightpanecollapsedchange,
 	onleftpanewidthchange,
@@ -88,6 +94,33 @@ const reviewSession = createReviewSession();
 
 $effect(() => {
 	reviewSession.setReviewActive(reviewActive);
+});
+
+// Report whether this tab's center pane shows the review panel, but only while it's
+// the active review tab (reviewActive folds in tab.id === activeTabId at the App
+// level). Inactive tabs never clobber App's value; on tab switch the newly-active
+// review tab re-reports. The reported value mirrors the render condition below
+// EXACTLY (it reads showDiff), so the Toolbar button and the rendered pane share one
+// source of truth — deselecting a file re-shows the panel and re-lights the button.
+$effect(() => {
+	if (reviewSession.state.reviewActive) {
+		onreviewpanelshowingchange(
+			!(reviewSession.state.rightPaneMode === "diff" && showDiff),
+		);
+	}
+});
+
+// The Toolbar Review button, clicked while the center pane shows a diff, asks to
+// return to the review panel (rather than ending the session). The event is
+// window-global like review-toggle; only the active review tab responds.
+$effect(() => {
+	let unlisten: (() => void) | undefined;
+	listen<void>("review-show-panel", () => {
+		if (reviewSession.state.reviewActive) reviewSession.showPanel();
+	}).then((fn) => {
+		unlisten = fn;
+	});
+	return () => unlisten?.();
 });
 
 // DiffPanel ref for jump-to-range scroll+highlight (Phase 69 / D-07).
@@ -829,29 +862,18 @@ function startRightResize(e: MouseEvent) {
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="pane-divider" style="display: {leftPaneCollapsed ? 'none' : 'block'};" onmousedown={startLeftResize}></div>
   <div class="flex-1 overflow-hidden">
-    {#if reviewSession.state.reviewActive}
-      <!-- Review mode claims the center pane (UI-SPEC:133). Entry/exit is via
-           Toolbar Review button or the View → Start/End Code Review menu item;
-           DiffPanel close returns to ReviewPanel via the onclose wiring below.
-           Wrapper uses height:100% (not flex:1) so the ReviewPanel scroll body
-           has a constrained height — its parent .flex-1 is a flex *child*, so
-           flex:1 here resolves to intrinsic height and the comments list has
-           nothing to scroll against (Phase 72 gap closure). -->
+    {#if reviewSession.state.reviewActive && !(reviewSession.state.rightPaneMode === 'diff' && showDiff)}
+      <!-- Review panel claims the center pane (UI-SPEC:133). When the user selects a
+           commit/file/ref (or jumps from a comment), rightPaneMode flips to 'diff' and
+           the SAME full DiffPanel below renders — with the correct per-source diffKind
+           and the complete handler set — rather than a separate stripped mount. The old
+           diffKind="commit" clone here rendered every review diff (including dirty files
+           reached via the panel→diff swap) as a commit diff, which dropped the staging
+           buttons and mis-resolved comment anchors (260531-l02e). Wrapper uses
+           height:100% (not flex:1) so the ReviewPanel scroll body has a constrained
+           height — its parent .flex-1 is a flex *child* (Phase 72 gap closure). -->
       <div class="flex flex-col" style="height: 100%; min-height: 0; overflow: hidden;">
-        {#if reviewSession.state.rightPaneMode === 'diff' && showDiff}
-          <DiffPanel
-            bind:this={diffPanelRef}
-            fileDiffs={currentDiffFiles}
-            commitDetail={commitDetail}
-            selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
-            diffKind="commit"
-            {repoPath}
-            loading={stagingDiffLoading}
-            onclose={() => { handleDiffClose(); reviewSession.showPanel(); }}
-          />
-        {:else}
-          <ReviewPanel {repoPath} session={reviewSession} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
-        {/if}
+        <ReviewPanel {repoPath} session={reviewSession} onJump={handleReviewJump} onJumpToCommit={handleReviewJumpToCommit} />
       </div>
     {:else if showMergeEditor && selectedFile}
       <MergeEditor
@@ -861,7 +883,11 @@ function startRightResize(e: MouseEvent) {
         onresolved={handleFileResolved}
       />
     {:else if showDiff}
+      <!-- Single DiffPanel mount, shared by normal and review mode. In review mode
+           rightPaneMode==='diff' routes here (260531-l02e); bind:this exposes the
+           jump-to-comment scroll seam, and onclose returns to the review panel. -->
       <DiffPanel
+        bind:this={diffPanelRef}
         fileDiffs={currentDiffFiles}
         commitDetail={commitDetail}
         selectedPath={selectedCommitFile ?? selectedFile?.path ?? null}
@@ -904,7 +930,9 @@ function startRightResize(e: MouseEvent) {
             }
           }
         }}
-        onclose={handleDiffClose}
+        onclose={reviewSession.state.reviewActive
+          ? () => { handleDiffClose(); reviewSession.showPanel(); }
+          : handleDiffClose}
       />
     {:else}
       <CommitGraph bind:this={commitGraphRef} {repoPath} oncommitselect={handleCommitSelect} {wipCount} wipMessage={wipSubject.trim() || 'WIP'} onWipClick={handleWipClick} {refreshSignal} {selectedCommitOid} onopenrebaseeditor={handleOpenRebaseEditor} onopenmessageeditor={handleOpenMessageEditor} clearRedoStack={undoRedo.clear} />

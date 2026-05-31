@@ -55,6 +55,11 @@ let pickerOpen = $state(false);
 // Review panel toggle (Phase 65, D-12 throwaway stub) — flipped by the View-menu
 // "Start/End Code Review" item via the review-toggle event.
 let reviewPanelOpen = $state(false);
+// Whether the active review tab's center pane is showing the review panel (vs. a
+// diff), reported up by RepoView. Drives the Toolbar Review button: lit only while
+// the panel is up, and a click while on a diff returns to the panel instead of
+// ending review (260531-l02e). Defaults true (panel shows on review entry).
+let activeReviewPanelShowing = $state(true);
 
 // Tab state
 let tabs = $state<TabInfo[]>([]);
@@ -581,7 +586,7 @@ $effect(() => {
     <div data-tauri-drag-region class="flex-1 h-full"></div>
     {#if activeTab?.repoPath}
       {@const activeState = getOrCreateTabState(activeTabId)}
-      <Toolbar repoPath={activeTab.repoPath} remoteState={activeState.remoteState} undoRedo={activeState.undoRedo} reviewActive={reviewPanelOpen} />
+      <Toolbar repoPath={activeTab.repoPath} remoteState={activeState.remoteState} undoRedo={activeState.undoRedo} reviewActive={reviewPanelOpen} reviewPanelShowing={activeReviewPanelShowing} />
     {/if}
   </div>
 
@@ -601,6 +606,7 @@ $effect(() => {
             {rightPaneCollapsed}
             {windowVisible}
             reviewActive={reviewPanelOpen && tab.id === activeTabId}
+            onreviewpanelshowingchange={(s) => { activeReviewPanelShowing = s; }}
             onleftpanecollapsedchange={(c) => { leftPaneCollapsed = c; setLeftPaneCollapsed(c); }}
             onrightpanecollapsedchange={(c) => { rightPaneCollapsed = c; setRightPaneCollapsed(c); }}
             onleftpanewidthchange={(w) => { leftPaneWidth = w; setLeftPaneWidth(w); }}
