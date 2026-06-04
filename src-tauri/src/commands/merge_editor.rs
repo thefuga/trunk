@@ -6,22 +6,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
-fn open_repo_from_state(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 pub fn get_merge_sides_inner(
     path: &str,
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<MergeSides, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let index = repo.index()?;
 
     // Find the conflict entry for this file by iterating all conflicts
@@ -74,7 +64,7 @@ pub fn save_merge_result_inner(
     content: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let repo_path = repo
         .workdir()
         .ok_or_else(|| TrunkError::new("no_workdir", "Bare repository"))?;
@@ -105,8 +95,8 @@ pub async fn get_merge_sides(
         get_merge_sides_inner(&path, &file_path, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -125,8 +115,8 @@ pub async fn save_merge_result(
         save_merge_result_inner(&path_clone, &file_path, &content, &state_map_clone)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // Repopulate cache and emit repo-changed (same pattern as merge_continue)
     let path_for_cache = path.clone();
@@ -138,8 +128,8 @@ pub async fn save_merge_result(
         graph::walk_commits(&mut repo, 0, usize::MAX)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);

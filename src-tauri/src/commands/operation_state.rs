@@ -23,16 +23,6 @@ pub enum MergeBeginResult {
     Ready { graph: GraphResult, message: String },
 }
 
-fn open_repo(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
     let msg = merge_msg?;
     // Patterns: "Merge branch 'feature'" or "Merge remote-tracking branch 'origin/feature'"
@@ -64,7 +54,7 @@ pub fn get_operation_state_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<OperationInfo, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let state = repo.state();
 
     match state {
@@ -302,7 +292,7 @@ pub fn get_merge_message_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<Option<String>, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     // Verbatim read — `# Conflicts:` lines are stripped at commit time via
     // --cleanup=strip, never here.
     Ok(std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok())
@@ -416,8 +406,8 @@ pub async fn get_operation_state(
         Ok(info)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())
 }
 
 /// Find a branch's color_index by searching ref labels in the cached graph.
@@ -449,8 +439,8 @@ pub async fn merge_continue(
         merge_continue_inner(&path_clone, message.as_deref(), &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
@@ -468,10 +458,8 @@ pub async fn merge_abort(
     let graph_result =
         tauri::async_runtime::spawn_blocking(move || merge_abort_inner(&path_clone, &state_map))
             .await
-            .map_err(|e| {
-                serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-            })?
-            .map_err(|e| serde_json::to_string(&e).unwrap())?;
+            .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+            .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
@@ -491,8 +479,8 @@ pub async fn rebase_continue(
         rebase_continue_inner(&path_clone, message.as_deref(), &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
@@ -510,10 +498,8 @@ pub async fn rebase_skip(
     let graph_result =
         tauri::async_runtime::spawn_blocking(move || rebase_skip_inner(&path_clone, &state_map))
             .await
-            .map_err(|e| {
-                serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-            })?
-            .map_err(|e| serde_json::to_string(&e).unwrap())?;
+            .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+            .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
@@ -531,10 +517,8 @@ pub async fn rebase_abort(
     let graph_result =
         tauri::async_runtime::spawn_blocking(move || rebase_abort_inner(&path_clone, &state_map))
             .await
-            .map_err(|e| {
-                serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-            })?
-            .map_err(|e| serde_json::to_string(&e).unwrap())?;
+            .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+            .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
@@ -548,10 +532,8 @@ pub async fn get_merge_message(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_merge_message_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]
@@ -568,8 +550,8 @@ pub async fn merge_branch_begin(
         merge_branch_begin_inner(&path_clone, &branch, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
     // The begin mutated the repo before the editor opens (ff commit, staged
     // merge, or conflict markers), so cache the rebuilt graph and emit
     // repo-changed on EVERY outcome — a later cancel must still surface the
@@ -598,8 +580,8 @@ pub async fn rebase_branch(
         rebase_branch_inner(&path_clone, &onto_branch, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())

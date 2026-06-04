@@ -2,6 +2,27 @@ use crate::error::TrunkError;
 use crate::git::types::{RefLabel, RefType};
 use std::collections::HashMap;
 
+/// Returns true if the repo has any tracked modifications that would block checkout.
+/// Untracked files (WT_NEW) are deliberately excluded — git allows checkout with untracked files.
+pub fn is_repo_dirty(repo: &git2::Repository) -> Result<bool, git2::Error> {
+    use git2::{Status, StatusOptions};
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(false).include_ignored(false);
+
+    let dirty_flags = Status::INDEX_NEW
+        | Status::INDEX_MODIFIED
+        | Status::INDEX_DELETED
+        | Status::INDEX_RENAMED
+        | Status::INDEX_TYPECHANGE
+        | Status::WT_MODIFIED
+        | Status::WT_DELETED
+        | Status::WT_RENAMED
+        | Status::WT_TYPECHANGE;
+
+    let statuses = repo.statuses(Some(&mut opts))?;
+    Ok(statuses.iter().any(|s| s.status().intersects(dirty_flags)))
+}
+
 pub fn validate_and_open(path: &std::path::Path) -> Result<(), TrunkError> {
     git2::Repository::open(path).map_err(|e| TrunkError {
         code: "not_a_git_repo".into(),

@@ -6,48 +6,17 @@ use crate::git::{
 };
 use crate::shell_env;
 use crate::state::{CommitCache, RepoState};
-use git2::{BranchType, Status, StatusOptions};
+use git2::BranchType;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
-
-/// Opens a repository by looking up its path in the state map.
-fn open_repo_from_state(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
-/// Returns true if the repo has any tracked modifications that would block checkout.
-/// Untracked files (WT_NEW) are deliberately excluded — git allows checkout with untracked files.
-fn is_dirty(repo: &git2::Repository) -> Result<bool, git2::Error> {
-    let mut opts = StatusOptions::new();
-    opts.include_untracked(false).include_ignored(false);
-
-    let dirty_flags = Status::INDEX_NEW
-        | Status::INDEX_MODIFIED
-        | Status::INDEX_DELETED
-        | Status::INDEX_RENAMED
-        | Status::INDEX_TYPECHANGE
-        | Status::WT_MODIFIED
-        | Status::WT_DELETED
-        | Status::WT_RENAMED
-        | Status::WT_TYPECHANGE;
-
-    let statuses = repo.statuses(Some(&mut opts))?;
-    Ok(statuses.iter().any(|s| s.status().intersects(dirty_flags)))
-}
 
 /// Inner implementation of list_refs — separated for testability without Tauri state.
 pub fn list_refs_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<RefsResponse, TrunkError> {
-    let mut repo = open_repo_from_state(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Resolve HEAD name before any mutable borrows
     let head_name: Option<String> = repo
@@ -168,7 +137,7 @@ pub fn delete_branch_inner(
     state_map: &HashMap<String, PathBuf>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Check if this is the HEAD branch
     let head_name = repo
@@ -206,7 +175,7 @@ pub fn rename_branch_inner(
     state_map: &HashMap<String, PathBuf>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut branch = repo.find_branch(old_name, BranchType::Local)?;
     branch.rename(new_name, false)?; // false = no force (fail if new_name exists)
     drop(branch);
@@ -228,10 +197,8 @@ pub async fn list_refs(path: String, state: State<'_, RepoState>) -> Result<Refs
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || list_refs_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 /// Inner implementation of resolve_ref — separated for testability.
@@ -240,7 +207,7 @@ pub fn resolve_ref_inner(
     ref_name: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<String, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let obj = repo.revparse_single(ref_name).map_err(TrunkError::from)?;
     let commit = obj.peel_to_commit().map_err(TrunkError::from)?;
     Ok(commit.id().to_string())
@@ -255,10 +222,8 @@ pub async fn resolve_ref(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || resolve_ref_inner(&path, &ref_name, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 /// Inner implementation of checkout_branch — separated for testability.
@@ -268,7 +233,7 @@ pub fn checkout_branch_inner(
     state_map: &HashMap<String, PathBuf>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let branch_ref = format!("refs/heads/{}", branch_name);
     {
@@ -309,8 +274,8 @@ pub async fn checkout_branch(
             .map(|_| cache_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // Update cache in main thread with rebuilt data
     *cache.0.lock().unwrap() = result;
@@ -367,8 +332,8 @@ pub async fn fast_forward_to(
             .map(|_| cache_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     *cache.0.lock().unwrap() = result;
     let _ = app.emit("repo-changed", path);
@@ -387,7 +352,7 @@ pub fn create_branch_inner(
     state_map: &HashMap<String, PathBuf>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let target_oid = match from_oid {
         Some(oid_str) => repo.revparse_single(oid_str)?.id(),
@@ -403,7 +368,7 @@ pub fn create_branch_inner(
     drop(target_commit);
 
     // Check dirty workdir before checkout (branch already created above)
-    if is_dirty(&repo)? {
+    if crate::git::repository::is_repo_dirty(&repo)? {
         drop(repo);
         // Rebuild cache even though checkout didn't happen — branch was created
         let path_buf = state_map
@@ -465,8 +430,8 @@ pub async fn create_branch(
         .map(|_| cache_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // Update cache in main thread with rebuilt data
     *cache.0.lock().unwrap() = result;
@@ -492,8 +457,8 @@ pub async fn delete_branch(
             .map(|_| cache_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     *cache.0.lock().unwrap() = result;
     let _ = app.emit("repo-changed", path);
@@ -523,8 +488,8 @@ pub async fn rename_branch(
         .map(|_| cache_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     *cache.0.lock().unwrap() = result;
     let _ = app.emit("repo-changed", path);

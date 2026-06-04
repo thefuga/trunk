@@ -16,16 +16,6 @@ fn refresh_commit_cache(
     graph::walk_commits(&mut repo, 0, usize::MAX)
 }
 
-fn open_repo_from_state(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 fn build_message(subject: &str, body: Option<&str>) -> String {
     match body {
         Some(b) if !b.trim().is_empty() => format!("{}\n\n{}", subject, b),
@@ -39,7 +29,7 @@ pub fn create_commit_inner(
     body: Option<&str>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let sig = repo.signature()?;
     let mut index = repo.index()?;
     let tree_oid = index.write_tree()?;
@@ -63,7 +53,7 @@ pub fn amend_commit_inner(
     body: Option<&str>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let head_commit = repo.head()?.peel_to_commit()?;
     let sig = repo.signature()?;
     let mut index = repo.index()?;
@@ -86,7 +76,7 @@ pub fn get_head_commit_message_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<HeadCommitMessage, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let commit = repo.head()?.peel_to_commit()?;
     Ok(HeadCommitMessage {
         subject: commit.summary().unwrap_or("").to_owned(),
@@ -110,8 +100,8 @@ pub async fn create_commit(
         refresh_commit_cache(&path_clone, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -134,8 +124,8 @@ pub async fn amend_commit(
         refresh_commit_cache(&path_clone, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -150,8 +140,6 @@ pub async fn get_head_commit_message(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_head_commit_message_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }

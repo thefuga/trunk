@@ -33,8 +33,8 @@ pub async fn open_repo(
         },
     )
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     let path_buf = std::path::PathBuf::from(&path);
     state

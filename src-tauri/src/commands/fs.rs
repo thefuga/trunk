@@ -13,5 +13,5 @@ pub async fn validate_recent_path(path: String) -> Result<bool, String> {
         repository::validate_and_open(&path_buf).is_ok()
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())
 }

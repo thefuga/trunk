@@ -128,11 +128,7 @@ async fn refresh_graph(
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "not_open",
-                format!("Repository not open: {}", path),
-            ))
-            .unwrap()
+            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
         })?
         .clone();
 
@@ -143,8 +139,8 @@ async fn refresh_graph(
         graph::walk_commits(&mut repo, 0, usize::MAX)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache
         .0
@@ -167,11 +163,7 @@ pub async fn git_fetch(
     let path_buf = state_map
         .get(&path)
         .ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "not_open",
-                format!("Repository not open: {}", path),
-            ))
-            .unwrap()
+            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
         })?
         .clone();
 
@@ -183,7 +175,7 @@ pub async fn git_fetch(
         &running.0,
     )
     .await
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| e.to_json())?;
 
     refresh_graph(&path, &state_map, &cache, &app).await
 }
@@ -246,11 +238,7 @@ pub async fn git_pull(
     let path_buf = state_map
         .get(&path)
         .ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "not_open",
-                format!("Repository not open: {}", path),
-            ))
-            .unwrap()
+            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
         })?
         .clone();
 
@@ -263,7 +251,7 @@ pub async fn git_pull(
 
     run_git_remote(&args, &path_buf, &app, &path, &running.0)
         .await
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| e.to_json())?;
 
     refresh_graph(&path, &state_map, &cache, &app).await
 }
@@ -280,17 +268,13 @@ pub async fn git_push(
     let path_buf = state_map
         .get(&path)
         .ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "not_open",
-                format!("Repository not open: {}", path),
-            ))
-            .unwrap()
+            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
         })?
         .clone();
 
     run_git_remote(&["push", "--progress"], &path_buf, &app, &path, &running.0)
         .await
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| e.to_json())?;
 
     refresh_graph(&path, &state_map, &cache, &app).await
 }
@@ -308,21 +292,17 @@ pub async fn delete_remote_branch(
     let path_buf = state_map
         .get(&path)
         .ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "not_open",
-                format!("Repository not open: {}", path),
-            ))
-            .unwrap()
+            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
         })?
         .clone();
 
     // Parse "origin/feature" into remote="origin", branch="feature"
     let slash = branch_name.find('/').ok_or_else(|| {
-        serde_json::to_string(&TrunkError::new(
+        TrunkError::new(
             "invalid_ref",
             format!("Invalid remote branch name: {}", branch_name),
-        ))
-        .unwrap()
+        )
+        .to_json()
     })?;
     let remote = &branch_name[..slash];
     let branch = &branch_name[slash + 1..];
@@ -335,7 +315,7 @@ pub async fn delete_remote_branch(
         &running.0,
     )
     .await
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| e.to_json())?;
 
     refresh_graph(&path, &state_map, &cache, &app).await
 }

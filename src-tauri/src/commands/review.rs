@@ -160,9 +160,9 @@ fn merge_status(file_exists: bool, in_memory_present: bool) -> SessionState {
 
 /// Resolve `app_data_dir`, JSON-stringifying the error like the other commands.
 fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path().app_data_dir().map_err(|e| {
-        serde_json::to_string(&TrunkError::new("app_data_dir", e.to_string())).unwrap()
-    })
+    app.path()
+        .app_data_dir()
+        .map_err(|e| TrunkError::new("app_data_dir", e.to_string()).to_json())
 }
 
 /// Emit the `session-changed` Tauri event for `canonical`, logging on failure
@@ -742,8 +742,7 @@ pub async fn seed_review_range(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     // Fast-fail precheck (66/WR-03): bail before spawning the git2 walk when no
     // session exists for this canonical. Mirrors the precheck inside
@@ -753,11 +752,11 @@ pub async fn seed_review_range(
     {
         let map = sessions.0.lock().unwrap();
         if !map.contains_key(&canonical) {
-            return Err(serde_json::to_string(&TrunkError::new(
+            return Err(TrunkError::new(
                 "no_session",
                 "No active review session for this repository",
-            ))
-            .unwrap());
+            )
+            .to_json());
         }
     }
 
@@ -771,13 +770,11 @@ pub async fn seed_review_range(
             compute_range_oids(&repo, base, tip)
         })
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())?;
 
     seed_review_range_rmw(&data_dir, &canonical, &sessions.0, range_oids)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -793,11 +790,9 @@ pub async fn add_review_commit(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
-    add_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    add_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -821,18 +816,15 @@ pub async fn ensure_review_snapshot(
         "workdir" => SnapshotKind::Workdir,
         "index" => SnapshotKind::Index,
         other => {
-            return Err(serde_json::to_string(&TrunkError::new(
-                "bad_request",
-                format!("unknown snapshot kind: {other}"),
-            ))
-            .unwrap());
+            return Err(
+                TrunkError::new("bad_request", format!("unknown snapshot kind: {other}")).to_json(),
+            );
         }
     };
 
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     // Fast-fail precheck (mirrors seed_review_range): bail before the git2 work
     // when no session exists. Also read the prior snapshot oid FOR THIS KIND under
@@ -842,11 +834,11 @@ pub async fn ensure_review_snapshot(
         let map = sessions.0.lock().unwrap();
         match map.get(&canonical) {
             None => {
-                return Err(serde_json::to_string(&TrunkError::new(
+                return Err(TrunkError::new(
                     "no_session",
                     "No active review session for this repository",
-                ))
-                .unwrap());
+                )
+                .to_json());
             }
             Some(session) => match snapshot_kind {
                 SnapshotKind::Workdir => session.working_tree_snapshot.clone(),
@@ -872,10 +864,8 @@ pub async fn ensure_review_snapshot(
             Ok(oid.to_string())
         })
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())?;
 
     set_review_snapshot_rmw(
         &data_dir,
@@ -884,7 +874,7 @@ pub async fn ensure_review_snapshot(
         snapshot_kind,
         &snapshot_oid,
     )
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(snapshot_oid)
 }
@@ -900,11 +890,9 @@ pub async fn remove_review_commit(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
-    remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -928,8 +916,7 @@ pub async fn add_comment(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let req = AddCommentRequest {
         path,
@@ -937,8 +924,7 @@ pub async fn add_comment(
         anchor,
         cached_excerpt,
     };
-    add_comment_inner(&data_dir, &canonical, &sessions.0, req)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    add_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -960,12 +946,10 @@ pub async fn save_draft_comment(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let req = SaveDraftCommentRequest { path, text, anchor };
-    save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
     Ok(())
 }
 
@@ -987,12 +971,10 @@ pub async fn add_commit_comment(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let req = AddCommitCommentRequest { commit_oid, text };
-    add_commit_comment_inner(&data_dir, &canonical, &sessions.0, req)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    add_commit_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -1014,11 +996,9 @@ pub async fn edit_comment(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
-    edit_comment_inner(&data_dir, &canonical, &sessions.0, &id, text)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    edit_comment_inner(&data_dir, &canonical, &sessions.0, &id, text).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -1038,11 +1018,9 @@ pub async fn delete_comment(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
-    delete_comment_inner(&data_dir, &canonical, &sessions.0, &id)
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    delete_comment_inner(&data_dir, &canonical, &sessions.0, &id).map_err(|e| e.to_json())?;
     emit_session_changed(&app, &canonical);
     Ok(())
 }
@@ -1061,8 +1039,7 @@ pub async fn list_session_commits(
     cache: State<'_, CommitCache>,
 ) -> Result<Vec<SessionCommit>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     // Read the session set by CANONICAL key; a missing entry is `no_session`.
     // Also read the snapshot oids (working-tree + index) to mark SessionCommits as
@@ -1070,11 +1047,7 @@ pub async fn list_session_commits(
     let (commits, snapshot_oids) = {
         let map = sessions.0.lock().unwrap();
         let session = map.get(&canonical).ok_or_else(|| {
-            serde_json::to_string(&TrunkError::new(
-                "no_session",
-                "No active review session for this repository",
-            ))
-            .unwrap()
+            TrunkError::new("no_session", "No active review session for this repository").to_json()
         })?;
         let mut snaps: Vec<String> = Vec::new();
         if let Some(s) = &session.working_tree_snapshot {
@@ -1090,9 +1063,7 @@ pub async fn list_session_commits(
     let graph = {
         let map = cache.0.lock().unwrap();
         map.get(&path)
-            .ok_or_else(|| {
-                serde_json::to_string(&TrunkError::new("not_open", "Repository not open")).unwrap()
-            })?
+            .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?
             .clone()
     };
 
@@ -1104,10 +1075,8 @@ pub async fn list_session_commits(
             Ok(intersect_graph_order(&commits, &graph, &repo))
         })
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())?;
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())?;
 
     for commit in result.iter_mut() {
         commit.is_snapshot = snapshot_oids.contains(&commit.oid);
@@ -1129,18 +1098,14 @@ pub async fn list_session_comments(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<Vec<Comment>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let comments = {
         let map = sessions.0.lock().unwrap();
         map.get(&canonical)
             .ok_or_else(|| {
-                serde_json::to_string(&TrunkError::new(
-                    "no_session",
-                    "No active review session for this repository",
-                ))
-                .unwrap()
+                TrunkError::new("no_session", "No active review session for this repository")
+                    .to_json()
             })?
             .comments
             .clone()
@@ -1164,18 +1129,14 @@ pub async fn resolve_session_comments(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<Vec<CommentResolution>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let comments = {
         let map = sessions.0.lock().unwrap();
         map.get(&canonical)
             .ok_or_else(|| {
-                serde_json::to_string(&TrunkError::new(
-                    "no_session",
-                    "No active review session for this repository",
-                ))
-                .unwrap()
+                TrunkError::new("no_session", "No active review session for this repository")
+                    .to_json()
             })?
             .comments
             .clone()
@@ -1188,8 +1149,8 @@ pub async fn resolve_session_comments(
         },
     )
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     Ok(result)
 }
@@ -1221,18 +1182,14 @@ pub async fn generate_review_doc(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical =
-        canonical_repo_path(&path, &state_map).map_err(|e| serde_json::to_string(&e).unwrap())?;
+    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
 
     let session = {
         let map = sessions.0.lock().unwrap();
         map.get(&canonical)
             .ok_or_else(|| {
-                serde_json::to_string(&TrunkError::new(
-                    "no_session",
-                    "No active review session for this repository",
-                ))
-                .unwrap()
+                TrunkError::new("no_session", "No active review session for this repository")
+                    .to_json()
             })?
             .clone()
     };
@@ -1240,11 +1197,11 @@ pub async fn generate_review_doc(
     // D-11 gate: zero comments is the command's contract violation, not the
     // renderer's. The pure renderer assumes >=1 and has no defensive branch.
     if session.comments.is_empty() {
-        return Err(serde_json::to_string(&TrunkError::new(
+        return Err(TrunkError::new(
             "no_comments",
             "Generate requires at least one comment in the session",
-        ))
-        .unwrap());
+        )
+        .to_json());
     }
 
     let doc = tauri::async_runtime::spawn_blocking(move || -> Result<String, TrunkError> {
@@ -1252,8 +1209,8 @@ pub async fn generate_review_doc(
         Ok(crate::git::review::render(&session, &repo))
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     Ok(doc)
 }
@@ -1271,8 +1228,8 @@ pub async fn start_review_session(
         start_review_session_inner(&data_dir, &path, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // Disk-first ordering (D-10): _inner already wrote the file → in-memory → emit.
     sessions
@@ -1298,8 +1255,8 @@ pub async fn resume_review_session(
         resume_review_session_inner(&data_dir, &path, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     match outcome {
         LoadOutcome::Loaded(session) => {
@@ -1324,17 +1281,17 @@ pub async fn resume_review_session(
                 index_snapshot: None,
             };
             review_store::save_session(&data_dir_for_save, &canonical, &fresh)
-                .map_err(|e| serde_json::to_string(&e).unwrap())?;
+                .map_err(|e| e.to_json())?;
             sessions.0.lock().unwrap().insert(canonical.clone(), fresh);
         }
         LoadOutcome::RefusedNewer => {
             // D-16: a newer-schema file is left untouched; do NOT create a fresh
             // session, so a downgrade cannot wipe newer data.
-            return Err(serde_json::to_string(&TrunkError::new(
+            return Err(TrunkError::new(
                 "newer_version",
                 "This review session was written by a newer version of Trunk and cannot be opened",
-            ))
-            .unwrap());
+            )
+            .to_json());
         }
     }
     emit_session_changed(&app, &canonical);
@@ -1355,8 +1312,8 @@ pub async fn end_review_session(
         end_review_session_inner(&data_dir, &path, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // Best-effort: drop the working-tree snapshot keepalive refs (C3). The session is
     // already ended; a failure here only delays gc reachability, so it never aborts End.
@@ -1386,8 +1343,8 @@ pub async fn get_review_session_status(
         get_review_session_status_inner(&data_dir, &path, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // THREE-STATE MERGE: _inner returned the disk half; promote to Active here by
     // checking the canonical key in the in-memory map (the only place Active is born).

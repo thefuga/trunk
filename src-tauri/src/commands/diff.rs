@@ -12,16 +12,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::State;
 
-fn open_repo_from_state(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 fn is_head_unborn(repo: &git2::Repository) -> bool {
     match repo.head() {
         Err(e) => e.code() == git2::ErrorCode::UnbornBranch,
@@ -350,7 +340,7 @@ pub fn diff_unstaged_raw_for_bench(
     state_map: &HashMap<String, PathBuf>,
     options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
     apply_request_options(&mut opts, options);
@@ -364,7 +354,7 @@ pub fn diff_unstaged_inner(
     state_map: &HashMap<String, PathBuf>,
     options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
     opts.include_untracked(true);
@@ -381,7 +371,7 @@ pub fn diff_staged_inner(
     state_map: &HashMap<String, PathBuf>,
     options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut opts = git2::DiffOptions::new();
     opts.pathspec(file_path);
     apply_request_options(&mut opts, options);
@@ -400,7 +390,7 @@ pub fn diff_commit_inner(
     state_map: &HashMap<String, PathBuf>,
     options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let oid =
         git2::Oid::from_str(oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
     let commit = repo.find_commit(oid)?;
@@ -423,7 +413,7 @@ pub fn list_commit_files_inner(
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let oid =
         git2::Oid::from_str(oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
     let commit = repo.find_commit(oid)?;
@@ -473,7 +463,7 @@ pub fn diff_commit_file_inner(
     state_map: &HashMap<String, PathBuf>,
     options: &DiffRequestOptions,
 ) -> Result<Vec<FileDiff>, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let oid =
         git2::Oid::from_str(oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
     let commit = repo.find_commit(oid)?;
@@ -495,7 +485,7 @@ pub fn get_commit_detail_inner(
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<CommitDetail, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let oid =
         git2::Oid::from_str(oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
     let commit = repo.find_commit(oid)?;
@@ -528,8 +518,8 @@ pub async fn diff_unstaged(
         diff_unstaged_inner(&path, &file_path, &state_map, &options)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -544,8 +534,8 @@ pub async fn diff_staged(
         diff_staged_inner(&path, &file_path, &state_map, &options)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -560,8 +550,8 @@ pub async fn diff_commit(
         diff_commit_inner(&path, &oid, &state_map, &options)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -573,10 +563,8 @@ pub async fn list_commit_files(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || list_commit_files_inner(&path, &oid, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -592,8 +580,8 @@ pub async fn diff_commit_file(
         diff_commit_file_inner(&path, &oid, &file_path, &state_map, &options)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -605,8 +593,6 @@ pub async fn get_commit_detail(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_commit_detail_inner(&path, &oid, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }

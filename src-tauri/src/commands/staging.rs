@@ -6,16 +6,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tauri::State;
 
-fn open_repo_from_state(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 fn classify_index(s: Status) -> Option<FileStatusType> {
     if s.contains(Status::INDEX_NEW) {
         return Some(FileStatusType::New);
@@ -61,7 +51,7 @@ pub fn get_status_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<WorkingTreeStatus, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let mut opts = StatusOptions::new();
     opts.include_untracked(true)
@@ -119,7 +109,7 @@ pub fn stage_file_inner(
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut index = repo.index()?;
     let abs_path = repo
         .workdir()
@@ -142,7 +132,7 @@ pub fn stage_files_inner(
     if file_paths.is_empty() {
         return Ok(());
     }
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let workdir = repo
         .workdir()
         .ok_or_else(|| TrunkError::new("bare_repo", "Cannot stage in a bare repository"))?;
@@ -211,7 +201,7 @@ pub fn unstage_file_inner(
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     if is_head_unborn(&repo) {
         // No commits yet — just remove from index
@@ -235,7 +225,7 @@ pub fn unstage_files_inner(
     if file_paths.is_empty() {
         return Ok(());
     }
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     if is_head_unborn(&repo) {
         let mut index = repo.index()?;
@@ -259,7 +249,7 @@ pub fn discard_file_inner(
     file_path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let mut opts = StatusOptions::new();
     opts.pathspec(file_path)
@@ -305,7 +295,7 @@ pub fn discard_all_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let mut opts = StatusOptions::new();
     opts.include_untracked(true)
@@ -339,7 +329,7 @@ pub fn discard_all_inner(
 }
 
 pub fn stage_all_inner(path: &str, state_map: &HashMap<String, PathBuf>) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut index = repo.index()?;
     index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
     index.write()?;
@@ -352,7 +342,7 @@ pub fn stage_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate diff for this file (index -> workdir), including untracked files
     let mut diff_opts = workdir_diff_opts(file_path);
@@ -405,7 +395,7 @@ pub fn unstage_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate reversed diff (index -> HEAD) so applying it to index undoes the staged change
     let mut diff_opts = git2::DiffOptions::new();
@@ -463,7 +453,7 @@ pub fn discard_hunk_inner(
     hunk_index: u32,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate reversed diff (workdir -> index) so applying to workdir undoes the change
     let mut diff_opts = workdir_diff_opts(file_path);
@@ -512,7 +502,7 @@ pub fn unstage_all_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     if is_head_unborn(&repo) {
         let mut index = repo.index()?;
@@ -548,7 +538,7 @@ pub fn get_dirty_counts_inner(
     path: &str,
     state_map: &std::collections::HashMap<String, std::path::PathBuf>,
 ) -> Result<DirtyCounts, TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut opts = StatusOptions::new();
     opts.include_untracked(true)
         .include_ignored(false)
@@ -597,10 +587,8 @@ pub async fn discard_file(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || discard_file_inner(&path, &file_path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -608,10 +596,8 @@ pub async fn discard_all(path: String, state: State<'_, RepoState>) -> Result<()
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || discard_all_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -622,10 +608,8 @@ pub async fn get_dirty_counts(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_dirty_counts_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]
@@ -636,10 +620,8 @@ pub async fn get_status(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_status_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -651,10 +633,8 @@ pub async fn stage_file(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || stage_file_inner(&path, &file_path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -666,10 +646,8 @@ pub async fn unstage_file(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || unstage_file_inner(&path, &file_path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -681,10 +659,8 @@ pub async fn stage_files(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || stage_files_inner(&path, &file_paths, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -698,8 +674,8 @@ pub async fn unstage_files(
         unstage_files_inner(&path, &file_paths, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -707,10 +683,8 @@ pub async fn stage_all(path: String, state: State<'_, RepoState>) -> Result<(), 
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || stage_all_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -718,10 +692,8 @@ pub async fn unstage_all(path: String, state: State<'_, RepoState>) -> Result<()
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || unstage_all_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -736,8 +708,8 @@ pub async fn stage_hunk(
         stage_hunk_inner(&path, &file_path, hunk_index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -752,8 +724,8 @@ pub async fn unstage_hunk(
         unstage_hunk_inner(&path, &file_path, hunk_index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -768,8 +740,8 @@ pub async fn discard_hunk(
         discard_hunk_inner(&path, &file_path, hunk_index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -785,8 +757,8 @@ pub async fn stage_lines(
         stage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -802,8 +774,8 @@ pub async fn unstage_lines(
         unstage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -819,8 +791,8 @@ pub async fn discard_lines(
         discard_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 /// Build a partial unified diff patch from selected line indices.
@@ -971,7 +943,7 @@ pub fn stage_lines_inner(
     line_indices: Vec<u32>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate diff for this file (index -> workdir), including untracked files
     let mut diff_opts = workdir_diff_opts(file_path);
@@ -1021,7 +993,7 @@ pub fn unstage_lines_inner(
     line_indices: Vec<u32>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate the staged diff (HEAD -> index), same as what the user sees.
     // We use the forward diff so line indices match the user's view,
@@ -1079,7 +1051,7 @@ pub fn discard_lines_inner(
     line_indices: Vec<u32>,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
-    let repo = open_repo_from_state(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     // Generate the unstaged diff (index -> workdir), same as what the user sees.
     // We use the forward diff so line indices match the user's view,

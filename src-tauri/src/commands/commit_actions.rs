@@ -20,43 +20,14 @@ pub struct RevertBeginResult {
     pub message: Option<String>,
 }
 
-fn open_repo(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
-fn is_dirty(repo: &git2::Repository) -> Result<bool, git2::Error> {
-    use git2::{Status, StatusOptions};
-    let mut opts = StatusOptions::new();
-    opts.include_untracked(false).include_ignored(false);
-
-    let dirty_flags = Status::INDEX_NEW
-        | Status::INDEX_MODIFIED
-        | Status::INDEX_DELETED
-        | Status::INDEX_RENAMED
-        | Status::INDEX_TYPECHANGE
-        | Status::WT_MODIFIED
-        | Status::WT_DELETED
-        | Status::WT_RENAMED
-        | Status::WT_TYPECHANGE;
-
-    let statuses = repo.statuses(Some(&mut opts))?;
-    Ok(statuses.iter().any(|s| s.status().intersects(dirty_flags)))
-}
-
 pub fn checkout_commit_inner(
     path: &str,
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
-    if is_dirty(&repo)? {
+    if crate::git::repository::is_repo_dirty(&repo)? {
         return Err(TrunkError::new(
             "dirty_workdir",
             "Working tree has uncommitted changes",
@@ -83,7 +54,7 @@ pub fn create_tag_inner(
     message: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let obj = repo.revparse_single(oid)?;
     let sig = repo.signature().map_err(TrunkError::from)?;
     let msg = if message.trim().is_empty() {
@@ -107,7 +78,7 @@ pub fn delete_tag_inner(
     tag_name: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let tag_ref_name = format!("refs/tags/{}", tag_name);
     let mut reference = repo.find_reference(&tag_ref_name)?;
     reference.delete()?;
@@ -284,8 +255,8 @@ pub async fn reset_to_commit(
         reset_to_commit_inner(&path_clone, &oid, &mode, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -306,8 +277,8 @@ pub async fn checkout_commit(
         checkout_commit_inner(&path_clone, &oid, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -330,8 +301,8 @@ pub async fn create_tag(
         create_tag_inner(&path_clone, &oid, &tag_name, &message, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -352,8 +323,8 @@ pub async fn delete_tag(
         delete_tag_inner(&path_clone, &tag_name, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -374,8 +345,8 @@ pub async fn cherry_pick(
         cherry_pick_inner(&path_clone, &oid, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -396,8 +367,8 @@ pub async fn revert_commit_begin(
         revert_commit_begin_inner(&path_clone, &oid, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     // begin mutated the repo (REVERT_HEAD set + staged) before the editor opens,
     // so cache the rebuilt graph and emit repo-changed — a later cancel must
@@ -425,8 +396,8 @@ pub async fn revert_continue(
         revert_continue_inner(&path_clone, &message, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -445,10 +416,8 @@ pub async fn revert_abort(
     let graph_result =
         tauri::async_runtime::spawn_blocking(move || revert_abort_inner(&path_clone, &state_map))
             .await
-            .map_err(|e| {
-                serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-            })?
-            .map_err(|e| serde_json::to_string(&e).unwrap())?;
+            .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+            .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -459,7 +428,7 @@ pub fn undo_commit_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<UndoResult, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let head = repo.head()?.peel_to_commit()?;
 
     if head.parent_count() == 0 {
@@ -512,7 +481,7 @@ pub fn check_undo_available_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<bool, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let head = match repo.head() {
         Ok(h) => match h.peel_to_commit() {
             Ok(c) => c,
@@ -545,8 +514,8 @@ pub async fn undo_commit(
         Ok::<(UndoResult, GraphResult), TrunkError>((undo, graph))
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -573,8 +542,8 @@ pub async fn redo_commit(
         graph::walk_commits(&mut repo, 0, usize::MAX)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -589,10 +558,8 @@ pub async fn check_undo_available(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || check_undo_available_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[cfg(test)]
@@ -778,7 +745,7 @@ mod tests {
             "revert --abort clears REVERT_HEAD"
         );
         assert!(
-            !is_dirty(&repo).unwrap(),
+            !crate::git::repository::is_repo_dirty(&repo).unwrap(),
             "revert --abort must leave a clean tree"
         );
     }

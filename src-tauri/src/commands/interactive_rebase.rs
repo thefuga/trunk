@@ -16,23 +16,13 @@ pub struct RebaseTodoAction {
     pub new_message: Option<String>,
 }
 
-fn open_repo(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 pub fn get_rebase_todo_inner(
     path: &str,
     base_oid: &str,
     inclusive: bool,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<Vec<RebaseTodoItem>, TrunkError> {
-    let repo = open_repo(path, state_map)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
 
     let base =
         git2::Oid::from_str(base_oid).map_err(|e| TrunkError::new("invalid_oid", e.to_string()))?;
@@ -224,8 +214,8 @@ pub async fn get_rebase_todo(
         get_rebase_todo_inner(&path, &base_oid, incl, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]
@@ -237,10 +227,8 @@ pub async fn get_fork_point(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || get_fork_point_inner(&path, &branch, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]
@@ -269,8 +257,8 @@ pub async fn start_interactive_rebase(
         )
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e: TrunkError| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())?;
 
     let _ = std::fs::remove_dir_all(&session_dir_cleanup);
 

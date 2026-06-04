@@ -8,21 +8,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
-fn open_repo(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-) -> Result<git2::Repository, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    git2::Repository::open(path_buf).map_err(TrunkError::from)
-}
-
 pub fn list_stashes_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<Vec<StashEntry>, TrunkError> {
-    let mut repo = open_repo(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
     let mut raw: Vec<(usize, String, git2::Oid)> = Vec::new();
     repo.stash_foreach(|idx, name, oid| {
         raw.push((idx, name.to_owned(), *oid));
@@ -52,7 +42,7 @@ pub fn stash_save_inner(
     message: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let mut repo = open_repo(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
     let sig = repo.signature().map_err(TrunkError::from)?;
     let msg = if message.trim().is_empty() {
         let branch = repo
@@ -82,7 +72,7 @@ pub fn stash_pop_inner(
     index: usize,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let mut repo = open_repo(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
     repo.stash_pop(index, None).map_err(|e| {
         if e.message().contains("conflict") || e.message().contains("merge") {
             TrunkError::new("conflict_state", "Stash applied with conflicts — resolve conflicts before continuing. Note: stash was NOT removed.")
@@ -108,7 +98,7 @@ pub fn stash_apply_inner(
     index: usize,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let mut repo = open_repo(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
     repo.stash_apply(index, None).map_err(|e| {
         if e.message().contains("conflict") || e.message().contains("merge") {
             TrunkError::new(
@@ -139,7 +129,7 @@ pub fn stash_drop_inner(
     index: usize,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<GraphResult, TrunkError> {
-    let mut repo = open_repo(path, state_map)?;
+    let mut repo = crate::commands::open_repo_from_state(path, state_map)?;
     repo.stash_drop(index).map_err(TrunkError::from)?;
     graph::walk_commits(&mut repo, 0, usize::MAX)
 }
@@ -152,10 +142,8 @@ pub async fn list_stashes(
     let state_map = state.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || list_stashes_inner(&path, &state_map))
         .await
-        .map_err(|e| {
-            serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap()
-        })?
-        .map_err(|e| serde_json::to_string(&e).unwrap())
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -172,8 +160,8 @@ pub async fn stash_save(
         stash_save_inner(&path_clone, &message, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -194,8 +182,8 @@ pub async fn stash_pop(
         stash_pop_inner(&path_clone, index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -216,8 +204,8 @@ pub async fn stash_apply(
         stash_apply_inner(&path_clone, index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -238,8 +226,8 @@ pub async fn stash_drop(
         stash_drop_inner(&path_clone, index, &state_map)
     })
     .await
-    .map_err(|e| serde_json::to_string(&TrunkError::new("spawn_error", e.to_string())).unwrap())?
-    .map_err(|e| serde_json::to_string(&e).unwrap())?;
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
