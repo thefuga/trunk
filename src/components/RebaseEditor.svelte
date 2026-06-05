@@ -911,7 +911,7 @@ let lastVisibleColumn = $derived.by(() => {
 
   :global(.rebase-row-fallback) {
     background: var(--color-surface);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-sm);
     opacity: 0.9;
   }
 
@@ -984,7 +984,7 @@ let lastVisibleColumn = $derived.by(() => {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-lg);
   }
 
   .rebase-msg-editor-title {

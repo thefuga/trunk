@@ -96,6 +96,15 @@
 	--lane-6: #79c0ff;
 	--lane-7: #ff7b72;
 
+	/* Elevation / drop shadows */
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+	--shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+	/* Search match highlights */
+	--color-search-current: rgba(245, 158, 11, 0.2);
+	--color-search-match: rgba(234, 179, 8, 0.1);
+
 	/* Typography */
 	--font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
 	--font-sans: Inter, system-ui, -apple-system, sans-serif;

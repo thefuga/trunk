@@ -136,7 +136,7 @@ $effect(() => {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-md);
     min-width: 180px;
     padding: 4px 0;
   }
