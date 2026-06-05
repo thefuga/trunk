@@ -46,10 +46,15 @@ by rewriting behavior.
     `git/review.rs`'s import path holds.
   - review.rs: **2687 → 1873 lines** (−30%). Pure moves, no behavior change.
 - **Deferred deliberately:** splitting the stateful Tauri command wrappers
-  (session lifecycle, comments, RMW). Per the advisor, don't reorganize the
-  least-tested stateful code for aesthetics — **gate that split on E2** (add the
-  command-wrapper tests first, then split, or not at all). The two pure cores
-  were the high-value, low-risk slice; the wrappers are neither.
+  (session lifecycle, comments, RMW). The two pure cores were the high-value,
+  low-risk slice.
+- **Dependency-on-E2 corrected (2026-06-05):** the original note said "gate the
+  split on E2 — command-wrapper tests first." That was written when E2 looked
+  ~0%. The logic under the wrappers is now well-tested (106 tests; see E2), so
+  the split is **low-risk today**, and the only untested branches live *inside*
+  the wrappers and can't be tested until they're extracted to `_inner`.
+  Extraction IS the testability fix — the split and the E2-residual tests are
+  one move, not sequential.
 - Note: the integration binary in `src-tauri/tests/` compiles independently — a
   filtered `cargo test --lib` will lie; verify with full `just check` (MEMORY).
 
@@ -199,14 +204,30 @@ by rewriting behavior.
   registration line; kept `diff_commit_inner` and every test/driver (they exercise
   the inner). Net: one less registered IPC command (less surface), zero test loss.
 
-### E2 — Review system is the most complex backend feature and the least tested
-- **Severity:** high · **Effort:** large · **Verified:** `commands/review.rs`
-  (2730) + `git/review.rs` (1746) ≈ 4.4k LOC vs `tests/test_review.rs` (263 LOC)
-- **Problem:** Tests cover session persistence/lifecycle only. No coverage for
-  add/remove review commit, add/edit/delete/resolve comment, snapshot, or doc
-  generation.
-- **Fix:** Add integration tests for the mutation + snapshot + doc-gen paths.
-  The B1/B2 splits make this far easier — pair them.
+### E2 — 🟢 LOGIC-LAYER PAID (re-audited 2026-06-05) — review system test coverage
+- **Stale framing corrected:** the 2026-06-04 entry ("session lifecycle only, no
+  coverage for commit/comment/snapshot/doc-gen") predated the B1 third-pass test
+  batch and overstated the gap ~10×. The behaviors it lists are **all covered at
+  the logic layer**. Verified `#[test]` counts (2026-06-05): `commands/review.rs`
+  24, `git/review.rs` 31, `review/range.rs` 12, `review/resolution.rs` 10,
+  `git/workdir_snapshot.rs` 11, `git/review_store.rs` 6, `tests/test_review.rs`
+  12 — **106 total**.
+- **Behavior → where tested:** add/remove review commit (`*_rmw`, review.rs incl.
+  `:1205`) · add/edit/delete/draft/commit comment (14 inline tests) · resolve
+  (`resolve_all`, resolution.rs ×10) · snapshot (workdir_snapshot.rs ×11) ·
+  doc-gen (`render`, git/review.rs ×31 incl. 14 goldens) · selection algebra
+  (range.rs ×12) · session store/lifecycle (review_store + test_review.rs).
+- **Genuine residual (small):** the untested branches live *inside* the
+  `#[tauri::command]` bodies, above the `_inner` seam line — `ensure_review_snapshot`
+  Index-kind dispatch + `bad_request` parse; `generate_review_doc` `no_comments`/
+  `no_session` gates; `resolve_session_comments` `no_session` gate; and the
+  `no_session` precheck **duplicated** between `seed_review_range`/`ensure_review_snapshot`
+  and their inner.
+- **Dependency w/ B1 is INVERTED (see B1):** these branches aren't testable under
+  the project's `_inner` convention as-is (they need `State`/`AppHandle`;
+  `mock_app()` is reserved for the watcher tests because `MockRuntime` drops
+  `emit()`→`listen()`). Extracting them into `_inner` seams *is* the B1 wrapper
+  split — not a precursor to it. Pay E2-residual and B1-wrappers as one move.
 
 ### E3 — `operation_state` / `commit_actions` thinly tested
 - **Severity:** med · **Effort:** medium · **Verified:** `operation_state.rs`
@@ -307,6 +328,7 @@ _Append `- [ID] paid in <sha> — note` as items are closed._
   assertion (E4 proper) remains open. See E4 entry.
 
 ### Still open
-- B1 wrappers (gate on E2), B2 (`git/review.rs` render split), B3 (CommitGraph),
-  D3 (VirtualList casts), D5 (RepoView prop-drilling), E2/E3 (test coverage),
-  E4 (CI gate), E5/E6, D2b (FileRow button colors).
+- B1 wrappers (+ E2-residual, one move — see corrected B1/E2 notes), B2
+  (`git/review.rs` render split), B3 (CommitGraph), D3 (VirtualList casts), D5
+  (RepoView prop-drilling), E3 (test coverage), E4 (CI gate), E5/E6, D2b (FileRow
+  button colors). E2 logic-layer paid 2026-06-05.
