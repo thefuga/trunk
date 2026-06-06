@@ -1,4 +1,5 @@
 <script lang="ts">
+import { copySha } from "../lib/clipboard.js";
 import {
 	COLUMN_PADDING_X,
 	LANE_WIDTH,
@@ -124,10 +125,19 @@ const reviewMarker = $derived(
     </div>
   {/if}
 
-  <!-- Column 6: SHA -->
+  <!-- Column 6: SHA — click to copy the full oid (stops row select on click + keydown) -->
   {#if columnVisibility.sha}
-    <div class="flex-shrink-0 font-mono text-[11px]" style="width: {columnWidths.sha}px; color: var(--color-text-muted); padding: 0 {COLUMN_PADDING_X}px;">
-      {#if !isWip && !isStash}{commit.short_oid}{/if}
+    <div class="flex-shrink-0" style="width: {columnWidths.sha}px; padding: 0 {COLUMN_PADDING_X}px;">
+      {#if !isWip && !isStash}
+        <button
+          type="button"
+          title="Copy SHA"
+          class="font-mono text-[11px] w-full text-left bg-transparent border-0 p-0 cursor-pointer hover:underline"
+          style="color: var(--color-text-muted);"
+          onclick={(e) => { e.stopPropagation(); copySha(commit.oid); }}
+          onkeydown={(e) => e.stopPropagation()}
+        >{commit.short_oid}</button>
+      {/if}
     </div>
   {/if}
 </div>

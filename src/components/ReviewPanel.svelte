@@ -8,6 +8,7 @@
 import { Clipboard, MessageSquarePlus, Trash2 } from "@lucide/svelte";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { copySha } from "../lib/clipboard.js";
 import { isTrunkError, safeInvoke, type TrunkError } from "../lib/invoke.js";
 import type { ReviewSessionManager } from "../lib/review-session.svelte.js";
 import { showToast } from "../lib/toast.svelte.js";
@@ -565,8 +566,9 @@ $effect(() => {
           >
             <button
               type="button"
-              aria-label="Jump to commit {group.shortOid}"
-              onclick={() => onJumpToCommit(group.oid)}
+              title="Copy SHA"
+              aria-label="Copy SHA {group.shortOid}"
+              onclick={() => copySha(group.oid)}
               class="jump-ref font-mono"
               style="
                 background: transparent;
@@ -580,10 +582,24 @@ $effect(() => {
                 flex-shrink: 0;
               "
             >{group.shortOid}</button>
-            <span
-              class="overflow-hidden text-ellipsis whitespace-nowrap"
-              style="font-size: 13px; font-weight: 600; flex: 1;"
-            >{group.summary}</span>
+            <button
+              type="button"
+              aria-label="Jump to commit {group.shortOid}"
+              onclick={() => onJumpToCommit(group.oid)}
+              class="jump-ref overflow-hidden text-ellipsis whitespace-nowrap"
+              style="
+                background: transparent;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                text-align: left;
+                font-size: 13px;
+                font-weight: 600;
+                color: inherit;
+                font-family: inherit;
+                flex: 1;
+              "
+            >{group.summary}</button>
             <button
               type="button"
               class="flex items-center"

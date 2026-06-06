@@ -1,5 +1,6 @@
 <script lang="ts">
 import Sortable from "sortablejs";
+import { copySha } from "../lib/clipboard.js";
 import { COLUMN_PADDING_X, ROW_HEIGHT } from "../lib/graph-constants.js";
 import { safeInvoke } from "../lib/invoke.js";
 import { validateRebasePlan } from "../lib/rebase-validation.js";
@@ -598,9 +599,16 @@ let lastVisibleColumn = $derived.by(() => {
         {#if columnVisibility.sha}
           <div
             class="rebase-cell flex-shrink-0"
-            style="width: {columnWidths.sha}px; padding: 0 {COLUMN_PADDING_X}px; font-family: var(--font-mono);"
+            style="width: {columnWidths.sha}px; padding: 0 {COLUMN_PADDING_X}px;"
           >
-            {item.shortOid}
+            <button
+              type="button"
+              title="Copy SHA"
+              class="rebase-sha-copy"
+              onclick={(e) => { e.stopPropagation(); copySha(item.oid); }}
+              onkeydown={(e) => e.stopPropagation()}
+              ondblclick={(e) => e.stopPropagation()}
+            >{item.shortOid}</button>
           </div>
         {/if}
 
@@ -953,6 +961,22 @@ let lastVisibleColumn = $derived.by(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Click-to-copy SHA: reset the button to read as the plain mono cell text. */
+  .rebase-sha-copy {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: inherit;
+    color: inherit;
+  }
+  .rebase-sha-copy:hover {
+    text-decoration: underline;
   }
 
   .rebase-cell-message {

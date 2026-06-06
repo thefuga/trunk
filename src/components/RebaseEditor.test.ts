@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RebaseTodoItem } from "../lib/types.js";
@@ -51,6 +52,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 	writeText: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock("../lib/toast.svelte.js", () => ({ showToast: vi.fn() }));
 
 vi.mock("@tauri-apps/api/path", () => ({
 	homeDir: vi.fn().mockResolvedValue("/Users/test"),
@@ -199,6 +202,52 @@ describe("RebaseEditor", () => {
 		expect(screen.getByText("aaa111a")).toBeInTheDocument();
 		expect(screen.getByText("bbb222b")).toBeInTheDocument();
 		expect(screen.getByText("ccc333c")).toBeInTheDocument();
+	});
+
+	describe("clicking a row's SHA", () => {
+		beforeEach(() => {
+			vi.mocked(writeText).mockClear();
+			vi.mocked(writeText).mockResolvedValue(undefined);
+		});
+
+		it("copies the full oid, not the short oid", async () => {
+			render(RebaseEditor, {
+				props: {
+					repoPath: "/test/repo",
+					commits: TEST_ITEMS,
+					branchName: "feature/login",
+					baseName: "main",
+					onclose: vi.fn(),
+					onstart: vi.fn(),
+				},
+			});
+
+			await fireEvent.click(screen.getByText("aaa111a"));
+
+			expect(vi.mocked(writeText)).toHaveBeenCalledWith(
+				"aaa111aaa111aaa1aaa111aaa111aaa1aaa111aa",
+			);
+		});
+
+		it("does not focus the row", async () => {
+			// Row 0 is focused by default, so click a non-default row's SHA: it
+			// stays unfocused only if the click never reaches the row handler.
+			const { container } = render(RebaseEditor, {
+				props: {
+					repoPath: "/test/repo",
+					commits: TEST_ITEMS,
+					branchName: "feature/login",
+					baseName: "main",
+					onclose: vi.fn(),
+					onstart: vi.fn(),
+				},
+			});
+
+			await fireEvent.click(screen.getByText("bbb222b"));
+
+			const row = container.querySelector('[data-rebase-row="1"]');
+			expect(row?.classList.contains("rebase-row-focused")).toBe(false);
+		});
 	});
 
 	it("renders Cancel Rebase and Start Rebase buttons", () => {

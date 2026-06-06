@@ -1,10 +1,16 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommitDetail, FileDiff } from "../lib/types.js";
 import CommitDetailComponent from "./CommitDetail.svelte";
 
 // Shared Tauri mock
 import "../__tests__/helpers/tauri-mock";
+
+vi.mock("../lib/toast.svelte.js", () => ({ showToast: vi.fn() }));
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
+	writeText: vi.fn().mockResolvedValue(undefined),
+}));
 
 const detail: CommitDetail = {
 	oid: "abc123def456",
@@ -119,6 +125,45 @@ describe("CommitDetail", () => {
 		const closeBtn = screen.getByLabelText("Close commit detail");
 		await fireEvent.click(closeBtn);
 		expect(onclose).toHaveBeenCalledOnce();
+	});
+
+	describe("clicking a SHA", () => {
+		beforeEach(() => {
+			vi.mocked(writeText).mockClear();
+			vi.mocked(writeText).mockResolvedValue(undefined);
+		});
+
+		it("copies the full commit oid from the toolbar SHA", async () => {
+			render(CommitDetailComponent, {
+				props: {
+					commitDetail: detail,
+					fileDiffs,
+					selectedFile: null,
+					onfileselect: vi.fn(),
+					onclose: vi.fn(),
+				},
+			});
+
+			await fireEvent.click(screen.getByText("abc123d"));
+
+			expect(vi.mocked(writeText)).toHaveBeenCalledWith("abc123def456");
+		});
+
+		it("copies the full parent oid from the parent SHA", async () => {
+			render(CommitDetailComponent, {
+				props: {
+					commitDetail: detail,
+					fileDiffs,
+					selectedFile: null,
+					onfileselect: vi.fn(),
+					onclose: vi.fn(),
+				},
+			});
+
+			await fireEvent.click(screen.getByText("parent1"));
+
+			expect(vi.mocked(writeText)).toHaveBeenCalledWith("parent1abc");
+		});
 	});
 
 	it("renders commit body when present", () => {

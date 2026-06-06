@@ -12,6 +12,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { tick, untrack } from "svelte";
 import { buildGraphData } from "../lib/active-lanes.js";
+import { copySha } from "../lib/clipboard.js";
 import {
 	BADGE_FONT_SIZE,
 	BADGE_HEIGHT,
@@ -803,7 +804,7 @@ async function showCommitContextMenu(e: MouseEvent, commit: GraphCommit) {
 			await MenuItem.new({
 				text: "Copy SHA",
 				action: () => {
-					writeText(commit.oid).catch(() => {});
+					copySha(commit.oid);
 				},
 			}),
 			await MenuItem.new({

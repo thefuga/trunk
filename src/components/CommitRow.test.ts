@@ -1,9 +1,15 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { fireEvent, render, screen } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import CommitRow from "./CommitRow.svelte";
 import "../__tests__/helpers/tauri-mock";
 import { makeCommit } from "../__tests__/helpers/factories";
 import type { ColumnVisibility, ColumnWidths } from "../lib/store";
+
+vi.mock("../lib/toast.svelte.js", () => ({ showToast: vi.fn() }));
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
+	writeText: vi.fn().mockResolvedValue(undefined),
+}));
 
 const defaultWidths: ColumnWidths = {
 	ref: 120,
@@ -115,6 +121,47 @@ describe("CommitRow", () => {
 		expect(row).toBeTruthy();
 		await fireEvent.click(row as Element);
 		expect(onselect).toHaveBeenCalledWith("abc1234567");
+	});
+
+	describe("clicking the SHA", () => {
+		beforeEach(() => {
+			vi.mocked(writeText).mockClear();
+			vi.mocked(writeText).mockResolvedValue(undefined);
+		});
+
+		it("copies the full oid, not the short oid", async () => {
+			const commit = makeCommit({ oid: "abc1234567" });
+			render(CommitRow, {
+				props: {
+					commit,
+					rowIndex: 0,
+					columnWidths: defaultWidths,
+					columnVisibility: allVisible,
+				},
+			});
+
+			await fireEvent.click(screen.getByTitle("Copy SHA"));
+
+			expect(vi.mocked(writeText)).toHaveBeenCalledWith("abc1234567");
+		});
+
+		it("does not select the commit", async () => {
+			const onselect = vi.fn();
+			const commit = makeCommit({ oid: "abc1234567" });
+			render(CommitRow, {
+				props: {
+					commit,
+					rowIndex: 0,
+					columnWidths: defaultWidths,
+					columnVisibility: allVisible,
+					onselect,
+				},
+			});
+
+			await fireEvent.click(screen.getByTitle("Copy SHA"));
+
+			expect(onselect).not.toHaveBeenCalled();
+		});
 	});
 
 	it("hides SHA column when not visible", () => {

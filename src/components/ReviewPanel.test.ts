@@ -593,7 +593,7 @@ describe("ReviewPanel", () => {
 			expect(screen.getByText("stale note")).toBeInTheDocument();
 		});
 
-		it("clicking the commit header short oid calls onJumpToCommit with the full oid", async () => {
+		it("clicking the commit summary calls onJumpToCommit with the full oid", async () => {
 			const onJumpToCommit = vi.fn();
 			installReads({
 				commits,
@@ -617,6 +617,31 @@ describe("ReviewPanel", () => {
 
 			expect(onJumpToCommit).toHaveBeenCalledTimes(1);
 			expect(onJumpToCommit).toHaveBeenCalledWith(COMMIT_A);
+		});
+
+		it("clicking the commit short oid copies the full oid", async () => {
+			vi.mocked(writeText).mockClear();
+			installReads({
+				commits,
+				comments: [lineAnchoredComment("c1", COMMIT_A, "note")],
+				resolutions: [resolvable("c1")],
+			});
+			render(ReviewPanel, {
+				props: {
+					repoPath: "/repo",
+					session: createReviewSession(),
+					onJump: vi.fn(),
+					onJumpToCommit: vi.fn(),
+				},
+			});
+			await flush();
+
+			await fireEvent.click(
+				screen.getByLabelText(`Copy SHA ${commits[0].short_oid}`),
+			);
+			await flush();
+
+			expect(vi.mocked(writeText)).toHaveBeenCalledWith(COMMIT_A);
 		});
 
 		it("orders commit-level comments before line-anchored within the same commit group", async () => {
@@ -761,7 +786,7 @@ describe("ReviewPanel", () => {
 		// substring match on `/Copy/` would NOT match the success-state button.
 		// Use `/Cop(y|ied)/` to cover both states via a single accessor.
 		function getCopyButton() {
-			return screen.getByRole("button", { name: /Cop(y|ied)/ });
+			return screen.getByRole("button", { name: /^Cop(y|ied)$/ });
 		}
 
 		function renderWithComment(opts: { generateDoc?: string } = {}) {
@@ -818,7 +843,7 @@ describe("ReviewPanel", () => {
 			await flushFake();
 			// Before the click the button reads "Copy".
 			expect(
-				screen.getByRole("button", { name: /Cop(y|ied)/ }),
+				screen.getByRole("button", { name: /^Cop(y|ied)$/ }),
 			).toHaveTextContent(/^Copy$/);
 			await fireEvent.click(getCopyButton());
 			await flushFake();
@@ -838,7 +863,7 @@ describe("ReviewPanel", () => {
 			vi.advanceTimersByTime(1500);
 			await tick();
 			expect(
-				screen.getByRole("button", { name: /Cop(y|ied)/ }),
+				screen.getByRole("button", { name: /^Cop(y|ied)$/ }),
 			).toHaveTextContent(/^Copy$/);
 		});
 
@@ -869,7 +894,7 @@ describe("ReviewPanel", () => {
 			vi.advanceTimersByTime(1);
 			await tick();
 			expect(
-				screen.getByRole("button", { name: /Cop(y|ied)/ }),
+				screen.getByRole("button", { name: /^Cop(y|ied)$/ }),
 			).toHaveTextContent(/^Copy$/);
 		});
 
@@ -893,7 +918,7 @@ describe("ReviewPanel", () => {
 			await flushFake();
 			// Button text must still be Copy — never Copied — on the failure path.
 			expect(
-				screen.getByRole("button", { name: /Cop(y|ied)/ }),
+				screen.getByRole("button", { name: /^Cop(y|ied)$/ }),
 			).toHaveTextContent(/^Copy$/);
 			expect(
 				screen.queryByRole("button", { name: /Copied/ }),

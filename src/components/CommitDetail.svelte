@@ -1,6 +1,7 @@
 <script lang="ts">
 import { FolderTree, List } from "@lucide/svelte";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { copySha } from "../lib/clipboard.js";
 import type {
 	CommitDetail,
 	FileDiff,
@@ -111,7 +112,7 @@ let parentShort = $derived(
       text-overflow: ellipsis;
       white-space: nowrap;
     ">
-      commit: {commitDetail.short_oid}
+      commit: <button type="button" title="Copy SHA" class="sha-copy" onclick={() => copySha(commitDetail.oid)}>{commitDetail.short_oid}</button>
     </span>
     <button
       onclick={onclose}
@@ -173,7 +174,7 @@ let parentShort = $derived(
       </div>
       <div style="margin-bottom: {parentShort ? '2px' : '0'};">{authorDate}</div>
       {#if parentShort}
-        <div>parent: <span style="font-family: monospace;">{parentShort}</span></div>
+        <div>parent: <button type="button" title="Copy SHA" class="sha-copy" onclick={() => copySha(commitDetail.parent_oids[0])}>{parentShort}</button></div>
       {/if}
     </div>
 
@@ -232,3 +233,19 @@ let parentShort = $derived(
 
   </div>
 </div>
+
+<style>
+  /* Click-to-copy SHA: reset the button to read as inline mono text. */
+  .sha-copy {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: inherit;
+    color: inherit;
+  }
+  .sha-copy:hover {
+    text-decoration: underline;
+  }
+</style>
