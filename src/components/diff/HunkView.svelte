@@ -510,6 +510,18 @@ function gutterWidth(maxNum: number): string {
   .syn-regex { color: var(--color-syn-regex); }
   .syn-escape { color: var(--color-syn-escape); }
 
+  /* Change-indicator accent bar: saturated for add/delete, neutral rail for context.
+     Every line carries the 3px border so columns stay aligned regardless of origin. */
+  .diff-line {
+    border-left: 3px solid var(--color-border);
+  }
+  .diff-line-add {
+    border-left-color: var(--color-diff-add);
+  }
+  .diff-line-delete {
+    border-left-color: var(--color-diff-delete);
+  }
+
   /* Desaturate syntax colors on add/delete backgrounds (per D-04, SYNT-03) */
   .diff-line-add [class*="syn-"],
   .diff-line-delete [class*="syn-"] {
