@@ -52,8 +52,8 @@ pub(crate) fn fence_length(body: &str) -> usize {
 }
 
 /// L-07: extension → markdown fence language tag for `Source::FullFile`
-/// excerpts. Hand-rolled per L-10 (no syntect call). Distinct from
-/// `syntax::fallback_extension` which targets syntect syntax IDs.
+/// excerpts. Hand-rolled per L-10 (no syntect call): these are markdown fence
+/// tags, not syntect syntax lookups.
 pub(crate) fn fence_language(file_path: &str) -> &'static str {
     let ext = std::path::Path::new(file_path)
         .extension()

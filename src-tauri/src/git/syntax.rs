@@ -5,7 +5,7 @@ use syntect::parsing::SyntaxSet;
 
 use super::types::{MergedSpan, SyntaxToken, WordSpan};
 
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
 
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
@@ -29,19 +29,14 @@ fn color_to_css_class(color: Color) -> &'static str {
         (235, 203, 139) => "syn-type",
         // Variables/parameters (Python scope: variable.parameter)
         (191, 97, 106) => "syn-variable",
+        // Interpolation / JSX-expression braces: {#if}, {label}, JSX {…} (two-face)
+        (171, 121, 103) => "syn-punctuation",
+        // Event-directive prefix: the `on` in Svelte's on:click (two-face)
+        (150, 181, 180) => "syn-attribute",
         // Default foreground text -- skip (punctuation, operators, identifiers)
         (192, 197, 206) | (239, 241, 245) => "",
         // Catch-all fallback for any unrecognized color
         _ => "",
-    }
-}
-
-/// Map extensions that syntect doesn't bundle to a supported fallback.
-/// TypeScript → JavaScript, Svelte/Vue/JSX/TSX → JavaScript.
-fn fallback_extension(ext: &str) -> &str {
-    match ext {
-        "ts" | "mts" | "cts" | "tsx" | "jsx" | "svelte" | "vue" => "js",
-        _ => ext,
     }
 }
 
@@ -50,9 +45,8 @@ pub fn has_syntax_for_extension(ext: &str) -> bool {
     if ext.is_empty() {
         return false;
     }
-    let resolved = fallback_extension(ext);
     SYNTAX_SET
-        .find_syntax_by_extension(resolved)
+        .find_syntax_by_extension(ext)
         .is_some_and(|s| s.name != "Plain Text")
 }
 
@@ -67,8 +61,7 @@ pub fn extension_from_path(path: &str) -> &str {
 /// Create a reusable highlighter for a file extension.
 /// Returns None if the extension has no syntax definition (plain text).
 pub fn create_highlighter(extension: &str) -> Option<HighlightLines<'static>> {
-    let resolved = fallback_extension(extension);
-    let syntax = SYNTAX_SET.find_syntax_by_extension(resolved)?;
+    let syntax = SYNTAX_SET.find_syntax_by_extension(extension)?;
     if syntax.name == "Plain Text" {
         return None;
     }
@@ -82,7 +75,7 @@ pub fn highlight_line_with(
     highlighter: &mut HighlightLines<'_>,
     content: &str,
 ) -> Vec<SyntaxToken> {
-    // syntect requires newline-terminated lines with load_defaults_newlines
+    // the *_newlines syntax sets expect newline-terminated lines
     let normalized = if content.ends_with('\n') {
         content.to_string()
     } else {
@@ -332,33 +325,31 @@ mod tests {
     }
 
     #[test]
-    fn highlight_typescript_uses_js_fallback() {
+    fn highlight_typescript_produces_tokens() {
         let tokens = highlight_line_tokens("const x: number = 42;", "ts");
-        assert!(
-            !tokens.is_empty(),
-            "TypeScript should produce tokens via JS fallback"
-        );
+        assert!(!tokens.is_empty(), "TypeScript should produce tokens");
         let has_keyword = tokens.iter().any(|t| t.scope == "syn-keyword");
         assert!(has_keyword, "'const' should be highlighted as syn-keyword");
     }
 
     #[test]
-    fn highlight_tsx_uses_js_fallback() {
+    fn highlight_tsx_produces_tokens() {
         assert!(has_syntax_for_extension("tsx"));
         let tokens = highlight_line_tokens("export default function App() {}", "tsx");
-        assert!(
-            !tokens.is_empty(),
-            "TSX should produce tokens via JS fallback"
-        );
+        assert!(!tokens.is_empty(), "TSX should produce tokens");
     }
 
     #[test]
-    fn highlight_svelte_uses_js_fallback() {
+    fn highlight_svelte_produces_tokens() {
         assert!(has_syntax_for_extension("svelte"));
-        let tokens = highlight_line_tokens("const count = 0;", "svelte");
+        // `#if` is a Svelte block keyword — the real grammar tokenizes it, where
+        // the old JS fallback swallowed the whole `{#if …}` into one flat token.
+        let tokens = highlight_line_tokens("{#if count > 0}", "svelte");
+        assert!(!tokens.is_empty(), "Svelte should produce tokens");
+        let has_keyword = tokens.iter().any(|t| t.scope == "syn-keyword");
         assert!(
-            !tokens.is_empty(),
-            "Svelte should produce tokens via JS fallback"
+            has_keyword,
+            "Svelte '#if' should be highlighted as syn-keyword"
         );
     }
 
@@ -373,5 +364,80 @@ mod tests {
             }),
             ""
         );
+    }
+
+    // two-face emits foreground RGBs the original 7-entry map never saw.
+    // The interpolation/JSX-expression brace color is the highest-frequency new
+    // one (every `{…}` in Svelte and JSX); the directive color tags `on:click`.
+    #[test]
+    fn color_mapping_interpolation_brace() {
+        assert_eq!(
+            color_to_css_class(Color {
+                r: 171,
+                g: 121,
+                b: 103,
+                a: 255
+            }),
+            "syn-punctuation"
+        );
+    }
+
+    #[test]
+    fn color_mapping_directive_attribute() {
+        assert_eq!(
+            color_to_css_class(Color {
+                r: 150,
+                g: 181,
+                b: 180,
+                a: 255
+            }),
+            "syn-attribute"
+        );
+    }
+
+    // two-face tokenizes multi-char tokens (`</`, `:`, `{`) differently than the
+    // JS grammar; this guards that highlight_line_with's byte-offset accounting
+    // still yields gapless, non-overlapping coverage of 0..content_len after the
+    // merge. Real grammar output, not synthetic tokens.
+    fn assert_full_coverage(snippet: &str, extension: &str) {
+        let mut hl = create_highlighter(extension)
+            .unwrap_or_else(|| panic!("two-face should resolve .{extension}"));
+        for line in snippet.split('\n') {
+            if line.is_empty() {
+                continue;
+            }
+            let tokens = highlight_line_with(&mut hl, line);
+            let content_len = line.len() as u32;
+            let merged = merge_spans(&tokens, &[], content_len);
+
+            assert_eq!(
+                merged.first().unwrap().start,
+                0,
+                "line {line:?} not covered from 0"
+            );
+            assert_eq!(
+                merged.last().unwrap().end,
+                content_len,
+                "line {line:?} not covered to end"
+            );
+            for w in merged.windows(2) {
+                assert_eq!(
+                    w[0].end, w[1].start,
+                    "gap or overlap in merged spans for line {line:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn merged_spans_cover_real_svelte_output() {
+        let svelte = "<script lang=\"ts\">\n  let doubled = $derived(count * 2);\n</script>\n\n{#if count > 0}\n  <button on:click={increment} class=\"btn\">{label}: {doubled}</button>\n{/if}";
+        assert_full_coverage(svelte, "svelte");
+    }
+
+    #[test]
+    fn merged_spans_cover_real_tsx_output() {
+        let tsx = "export function Counter({ initial }: Props): JSX.Element {\n  const [n, setN] = useState<number>(initial);\n  return <div className=\"c\" onClick={() => setN(n + 1)}>{n}</div>;\n}";
+        assert_full_coverage(tsx, "tsx");
     }
 }
