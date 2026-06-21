@@ -1808,7 +1808,7 @@ $effect(() => {
               {#each visible.pills as pill}
                 {@const overflowBadgeWidth = pill.overflowCount > 0 ? `+${pill.overflowCount}`.length * BADGE_FONT_SIZE * 0.7 + PILL_PADDING_X * 2 : 0}
                 {@const pillGroupRightX = pill.x + pill.width + (pill.overflowCount > 0 ? PILL_GAP + overflowBadgeWidth : 0)}
-                <!-- Connector line from the pill group (incl. the +N overflow badge) to the commit dot, so the line never passes behind the translucent badge (uses sticky X position, scroll-adjusted) -->
+                <!-- Connector from the pill group's right edge (past the +N badge) to the commit dot, plus a short stub linking the named pill to the badge. The badge sits between the two segments with no line behind it, so it reads as solid yet stays connected to the pill (uses sticky X position, scroll-adjusted) -->
                 {#if columnVisibility.graph}
                   {@const stickyDotCx = Math.max(displaySettings.laneWidth / 2, Math.min(graphColWidth - 2 * COLUMN_PADDING_X - displaySettings.dotRadius, pill.dotCx - scrollX))}
                   {@const connectorEndX = refOffset + COLUMN_PADDING_X + stickyDotCx - (pill.isHollow ? displaySettings.dotRadius : 0)}
@@ -1822,6 +1822,19 @@ $effect(() => {
                     opacity={pill.isRemoteOnly ? 0.67 : 1}
                     style={pill.isNonHead && !pill.isRemoteOnly ? 'filter: brightness(0.75)' : ''}
                   />
+                  {#if pill.overflowCount > 0}
+                    <!-- Stub linking the named pill to the +N badge, filling the gap so they read as one connected group. -->
+                    <line
+                      x1={pill.x + pill.width}
+                      y1={pill.y}
+                      x2={pill.x + pill.width + PILL_GAP}
+                      y2={pill.y}
+                      stroke={laneColor(pill.commitColorIndex)}
+                      stroke-width={pill.isHead ? displaySettings.pillStroke * 2 : displaySettings.pillStroke}
+                      opacity={pill.isRemoteOnly ? 0.67 : 1}
+                      style={pill.isNonHead && !pill.isRemoteOnly ? 'filter: brightness(0.75)' : ''}
+                    />
+                  {/if}
                 {/if}
 
                 <!-- Capsule rect -->
