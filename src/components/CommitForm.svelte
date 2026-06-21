@@ -202,6 +202,10 @@ async function handleSubmit() {
     style="
       width: 100%;
       height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       background: var(--accent);
       color: var(--accent-fg);
       border: 0;
@@ -211,9 +215,22 @@ async function handleSubmit() {
       cursor: pointer;
       opacity: {committing ? 0.6 : 1};
     "
-  >
-    {buttonLabel}
-  </button>
+  >{buttonLabel}{#if !committing}<span style="font-family: var(--font-mono); font-weight: 600; font-size: 11px; opacity: 0.85;">⌘↵</span>{/if}</button>
+
+  <!-- Commit context hints -->
+  <div style="
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 10.5px;
+  ">
+    <span>{stagedCount} staged</span>
+    <span>·</span>
+    <span>{subject.length}/72</span>
+  </div>
 </div>
 
 <style>

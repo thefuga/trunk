@@ -124,9 +124,10 @@ describe("StagingPanel", () => {
 				clearRedoStack: vi.fn(),
 			},
 		});
-		// Section header: "Unstaged Files (1)"
+		// Section header: "Unstaged Files" label + count badge
 		await waitFor(() => {
-			expect(screen.getByText("Unstaged Files (1)")).toBeInTheDocument();
+			const label = screen.getByText("Unstaged Files");
+			expect(label.parentElement).toHaveTextContent("1");
 		});
 	});
 
@@ -137,9 +138,10 @@ describe("StagingPanel", () => {
 				clearRedoStack: vi.fn(),
 			},
 		});
-		// Section header: "Staged Files (1)"
+		// Section header: "Staged Files" label + count badge
 		await waitFor(() => {
-			expect(screen.getByText("Staged Files (1)")).toBeInTheDocument();
+			const label = screen.getByText("Staged Files");
+			expect(label.parentElement).toHaveTextContent("1");
 		});
 	});
 

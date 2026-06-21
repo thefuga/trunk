@@ -731,6 +731,10 @@ $effect(() => {
 });
 </script>
 
+{#snippet sectionCount(n: number)}
+  <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px; border-radius: var(--radius-s); background: var(--bg-3); color: var(--fg-1); font-family: var(--font-mono); font-weight: 600; font-size: 10px; letter-spacing: 0; flex-shrink: 0;">{n}</span>
+{/snippet}
+
 <div style="
   width: 100%;
   min-width: 0;
@@ -945,8 +949,8 @@ $effect(() => {
           <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
             <AlertTriangle size={12} />
           </span>
-          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
-            Conflicted Files ({status?.conflicted.length ?? 0})
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; display: inline-flex; align-items: center; gap: 8px;">
+            <span>Conflicted Files</span>{@render sectionCount(status?.conflicted.length ?? 0)}
           </span>
           <button
             onclick={(e) => { e.stopPropagation(); markAllResolved(); }}
@@ -1011,8 +1015,8 @@ $effect(() => {
           <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
             <AlertTriangle size={12} />
           </span>
-          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; white-space: nowrap;">
-            Conflicted Files ({status?.conflicted.length ?? 0})
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px;">
+            <span>Conflicted Files</span>{@render sectionCount(status?.conflicted.length ?? 0)}
           </span>
           {#if (status?.conflicted.length ?? 0) > 0}
             <button
@@ -1033,8 +1037,8 @@ $effect(() => {
             </button>
           {/if}
         {:else}
-          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
-            Unstaged Files ({status?.unstaged.length ?? 0})
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; display: inline-flex; align-items: center; gap: 8px;">
+            <span>Unstaged Files</span>{@render sectionCount(status?.unstaged.length ?? 0)}
           </span>
           {#if (status?.unstaged.length ?? 0) > 0}
             <button
@@ -1136,8 +1140,8 @@ $effect(() => {
         <span style="color: var(--color-text-muted); display: inline-flex; align-items: center; margin-right: 4px;">
           {#if staged_expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
         </span>
-        <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
-          {isOperation ? 'Resolved Files' : 'Staged Files'} ({status?.staged.length ?? 0})
+        <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; display: inline-flex; align-items: center; gap: 8px;">
+          <span>{isOperation ? 'Resolved Files' : 'Staged Files'}</span>{@render sectionCount(status?.staged.length ?? 0)}
         </span>
         {#if (status?.staged.length ?? 0) > 0}
           <button

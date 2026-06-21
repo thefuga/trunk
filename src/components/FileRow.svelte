@@ -1,15 +1,5 @@
 <script lang="ts">
-import {
-	FileMinus,
-	FilePen,
-	FilePlus,
-	FileSymlink,
-	FileType2,
-	FileWarning,
-	Minus,
-	Plus,
-} from "@lucide/svelte";
-import type { Component } from "svelte";
+import { Minus, Plus } from "@lucide/svelte";
 import type { FileStatus, FileStatusType } from "../lib/types.js";
 
 interface Props {
@@ -38,31 +28,29 @@ let {
 
 let hovered = $state(false);
 
-type StatusIconConfig = {
-	component: Component<Record<string, unknown>>;
-	color: string;
+type StatusBadge = { letter: string; color: string };
+
+const STATUS_BADGES: Record<FileStatusType, StatusBadge> = {
+	New: { letter: "A", color: "var(--color-status-new)" },
+	Modified: { letter: "M", color: "var(--color-status-modified)" },
+	Deleted: { letter: "D", color: "var(--color-status-deleted)" },
+	Renamed: { letter: "R", color: "var(--color-status-renamed)" },
+	Typechange: { letter: "T", color: "var(--color-status-typechange)" },
+	Conflicted: { letter: "C", color: "var(--color-status-conflicted)" },
 };
 
-const STATUS_ICON_COMPONENTS: Record<FileStatusType, StatusIconConfig> = {
-	New: { component: FilePlus, color: "var(--color-status-new)" },
-	Modified: { component: FilePen, color: "var(--color-status-modified)" },
-	Deleted: { component: FileMinus, color: "var(--color-status-deleted)" },
-	Renamed: { component: FileSymlink, color: "var(--color-status-renamed)" },
-	Typechange: { component: FileType2, color: "var(--color-status-typechange)" },
-	Conflicted: {
-		component: FileWarning,
-		color: "var(--color-status-conflicted)",
-	},
-};
-
-let iconConfig = $derived(
-	STATUS_ICON_COMPONENTS[file.status] ?? {
-		component: FilePen,
+let badge = $derived(
+	STATUS_BADGES[file.status] ?? {
+		letter: "?",
 		color: "var(--color-text-muted)",
 	},
 );
 
-let Icon = $derived(iconConfig.component);
+let badgeBg = $derived(
+	isLoading
+		? "transparent"
+		: `color-mix(in oklch, ${badge.color} 18%, transparent)`,
+);
 </script>
 
 <div
@@ -85,17 +73,22 @@ let Icon = $derived(iconConfig.component);
     color: {isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
   "
 >
-  <!-- Status icon -->
+  <!-- Status badge -->
   <span style="
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    min-width: 14px;
-    color: {isLoading ? 'var(--color-text-muted)' : iconConfig.color};
-  ">
-    <Icon size={12} color={isLoading ? 'var(--color-text-muted)' : iconConfig.color} />
-  </span>
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-s);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 10px;
+    line-height: 1;
+    color: {isLoading ? 'var(--color-text-muted)' : badge.color};
+    background: {badgeBg};
+  ">{badge.letter}</span>
 
   <!-- Filename -->
   <span style="
