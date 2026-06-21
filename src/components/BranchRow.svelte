@@ -53,9 +53,9 @@ let hovered = $state(false);
       cursor: pointer;
       background: {isHead ? 'color-mix(in oklch, var(--accent) 10%, transparent)' : hovered ? 'var(--bg-hover)' : 'transparent'};
       box-shadow: {isHead ? 'inset 0 0 0 1px color-mix(in oklch, var(--accent) 28%, transparent)' : 'none'};
-      color: {isHead ? 'var(--color-accent)' : isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
+      color: {isHead ? 'var(--fg-0)' : isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
       font-weight: {isHead ? '600' : 'normal'};
-      font-size: 13px;
+      font-size: 12px;
     "
   >
     {#if kind === 'tag'}
@@ -73,11 +73,14 @@ let hovered = $state(false);
       min-width: 0;
       flex: 1;
     ">{name}{isLoading ? ' …' : ''}</span>
-    {#if behind > 0 || ahead > 0}
+    {#if ahead > 0 || behind > 0}
       <span style="flex-shrink: 0; font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); margin-left: 4px; display: inline-flex; align-items: center; gap: 2px;">
-        {#if behind > 0}<span style="display: inline-flex; align-items: center;"><ArrowDown size={11} />{behind}</span>{/if}
-        {#if ahead > 0}<span style="display: inline-flex; align-items: center; margin-left: 2px;"><ArrowUp size={11} />{ahead}</span>{/if}
+        {#if ahead > 0}<span style="display: inline-flex; align-items: center; color: var(--ok);"><ArrowUp size={11} />{ahead}</span>{/if}
+        {#if behind > 0}<span style="display: inline-flex; align-items: center; margin-left: 2px; color: var(--warn);"><ArrowDown size={11} />{behind}</span>{/if}
       </span>
+    {/if}
+    {#if isHead}
+      <span style="flex-shrink: 0; margin-left: 4px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--accent);">HEAD</span>
     {/if}
   </div>
 

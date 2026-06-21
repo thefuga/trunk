@@ -29,10 +29,9 @@ let {
   <div style="
     padding: 2px 8px 2px 16px;
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--fg-3);
     font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-family: var(--font-mono);
   ">
     {remoteName}
   </div>
