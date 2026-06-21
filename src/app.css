@@ -41,11 +41,14 @@
 	--err: oklch(0.68 0.16 25);
 	--info: oklch(0.72 0.1 235);
 
-	/* ── Diff backgrounds — calm color-mix ── */
-	--diff-add-bg: color-mix(in oklch, var(--ok) 14%, transparent);
-	--diff-add-hi: color-mix(in oklch, var(--ok) 28%, transparent);
-	--diff-del-bg: color-mix(in oklch, var(--err) 14%, transparent);
-	--diff-del-hi: color-mix(in oklch, var(--err) 28%, transparent);
+	/* ── Diff backgrounds — calm color-mix ──
+	   Kept low so syntax-colored text stays above WCAG AAA (7:1) on tinted
+	   lines; the add/delete signal is carried by the colored left-border rail,
+	   not by a heavy wash. */
+	--diff-add-bg: color-mix(in oklch, var(--ok) 11%, transparent);
+	--diff-add-hi: color-mix(in oklch, var(--ok) 18%, transparent);
+	--diff-del-bg: color-mix(in oklch, var(--err) 11%, transparent);
+	--diff-del-hi: color-mix(in oklch, var(--err) 18%, transparent);
 
 	/* ── Graph lanes — equal-chroma across hues ── */
 	--lane-0: oklch(0.76 0.12 225);
@@ -107,6 +110,8 @@
 	--color-review-pending-base: var(--color-warning);
 
 	/* Diff lines */
+	--color-diff-text: var(--fg-0); /* code content = primary brightness, so
+	   unhighlighted files read as clearly as syntax-colored ones (AAA on every tint) */
 	--color-diff-add: var(--ok);
 	--color-diff-add-bg: var(--diff-add-bg);
 	--color-diff-delete: var(--err);
@@ -114,26 +119,31 @@
 	--color-diff-add-bg-selected: var(--diff-add-hi);
 	--color-diff-delete-bg-selected: var(--diff-del-hi);
 
-	/* Word-level diff highlights (Phase 60) */
-	--color-diff-word-add-bg: color-mix(in oklch, var(--ok) 35%, transparent);
-	--color-diff-word-delete-bg: color-mix(in oklch, var(--err) 35%, transparent);
+	/* Word-level diff highlights (Phase 60) — capped so the emphasis patch,
+	   which stacks on top of the line tint, doesn't lift the background past
+	   the readability ceiling for colored text. */
+	--color-diff-word-add-bg: color-mix(in oklch, var(--ok) 22%, transparent);
+	--color-diff-word-delete-bg: color-mix(in oklch, var(--err) 22%, transparent);
 	--color-diff-phantom-bg: color-mix(in oklch, var(--fg-3) 5%, transparent);
 
-	/* Syntax highlighting (Phase 61) — kept; design defines no syntax palette */
-	--color-syn-keyword: #569cd6;
-	--color-syn-string: #ce9178;
-	--color-syn-comment: #6a9955;
+	/* Syntax highlighting (Phase 61) — VSCode-dark base, lifted for contrast.
+	   The six dim hues (keyword, string, comment, punctuation, tag, regex) were
+	   brightened so every token clears WCAG AAA (7:1) on context, add, delete,
+	   and selected lines; the nine already-passing hues are unchanged. */
+	--color-syn-keyword: #6db2ee;
+	--color-syn-string: #dc9e84;
+	--color-syn-comment: #88b974;
 	--color-syn-number: #b5cea8;
 	--color-syn-type: #4ec9b0;
 	--color-syn-function: #dcdcaa;
 	--color-syn-variable: #9cdcfe;
 	--color-syn-constant: #4fc1ff;
 	--color-syn-operator: #d4d4d4;
-	--color-syn-punctuation: #808080;
+	--color-syn-punctuation: #acacac;
 	--color-syn-attribute: #9cdcfe;
-	--color-syn-tag: #569cd6;
+	--color-syn-tag: #6db2ee;
 	--color-syn-property: #9cdcfe;
-	--color-syn-regex: #d16969;
+	--color-syn-regex: #fa8d8d;
 	--color-syn-escape: #d7ba7d;
 
 	/* Semantic status */

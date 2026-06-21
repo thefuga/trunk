@@ -135,7 +135,7 @@ function lineBackground(origin: string, isSelected: boolean = false): string {
 }
 
 function lineColor(): string {
-	return "var(--color-text)";
+	return "var(--color-diff-text)";
 }
 
 function maxLineNumber(fd: FileDiff): number {
@@ -559,12 +559,6 @@ const pairedData = $derived(
   }
   .diff-line-delete {
     border-left-color: var(--color-diff-delete);
-  }
-
-  /* Desaturate syntax colors on add/delete backgrounds */
-  .diff-line-add [class*="syn-"],
-  .diff-line-delete [class*="syn-"] {
-    opacity: 0.7;
   }
 
   /* Invisible character styling */
