@@ -103,7 +103,7 @@ pub fn walk_commits(
                 .map(|c| (*s_oid, c.time().seconds()))
         })
         .collect();
-    stash_with_time.sort_by(|a, b| b.1.cmp(&a.1)); // newest first
+    stash_with_time.sort_by_key(|s| std::cmp::Reverse(s.1)); // newest first
 
     let mut oids: Vec<git2::Oid> = Vec::with_capacity(base_oids.len() + stash_with_time.len());
     let mut stash_idx = 0;
