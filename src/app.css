@@ -1,37 +1,125 @@
 @import "tailwindcss";
 
 :root {
-	/* Color tokens — dark theme, forced (no OS media query) */
-	--color-bg: #0d1117;
-	--color-surface: #161b22;
-	--color-border: #30363d;
-	--color-text: #c9d1d9;
-	--color-text-muted: #8b949e;
-	--color-accent: #388bfd;
-	--color-selected-row: rgba(56, 139, 253, 0.1);
-	/* Code-review commit markers (Phase 66) — distinct accents for in-session vs transient range-base */
-	--color-review-row: var(--color-accent);
-	--color-review-pending-base: var(--color-warning);
-	--color-tab-hover: rgba(255, 255, 255, 0.04);
+	/* ── Base scale & density (comfortable) ── */
+	--u: 4px;
+	--row-h: 28px;
+	--topbar-h: 44px;
+	--subbar-h: 32px;
+	--graph-w: 130px;
+	--sidebar-w: 232px;
+	--right-w: 320px;
+	--refs-w: 0px;
+
+	/* ── Surfaces — cool-neutral ramp (oklch, hue 260) ── */
+	--bg-0: oklch(0.08 0.003 260); /* deepest — body, editor & input wells */
+	--bg-1: oklch(0.1 0.003 260); /* panels — sidebar, graph, toolbar */
+	--bg-2: oklch(0.13 0.004 260); /* chips, dialogs */
+	--bg-3: oklch(0.16 0.005 260); /* raised badges, avatars */
+	--bg-hover: oklch(0.18 0.005 260);
+	--bg-selected: oklch(0.22 0.01 260);
+	--line: oklch(0.22 0.004 260);
+	--line-strong: oklch(0.3 0.006 260);
+
+	/* ── Text ramp ── */
+	--fg-0: oklch(0.98 0.002 260); /* primary */
+	--fg-1: oklch(0.86 0.003 260); /* body */
+	--fg-2: oklch(0.68 0.005 260); /* secondary */
+	--fg-3: oklch(0.54 0.006 260); /* tertiary / captions */
+	--fg-4: oklch(0.38 0.006 260); /* disabled */
+
+	/* ── Accent — electric blue ── */
+	--accent: oklch(0.76 0.15 245);
+	--accent-hi: oklch(0.84 0.15 245);
+	--accent-lo: oklch(0.5 0.11 245);
+	--accent-fg: oklch(0.14 0.03 245);
+	--accent-soft: oklch(0.3 0.08 245);
+
+	/* ── Semantic status ── */
+	--ok: oklch(0.74 0.12 150);
+	--warn: oklch(0.82 0.14 90);
+	--err: oklch(0.68 0.16 25);
+	--info: oklch(0.72 0.1 235);
+
+	/* ── Diff backgrounds — calm color-mix ── */
+	--diff-add-bg: color-mix(in oklch, var(--ok) 14%, transparent);
+	--diff-add-hi: color-mix(in oklch, var(--ok) 28%, transparent);
+	--diff-del-bg: color-mix(in oklch, var(--err) 14%, transparent);
+	--diff-del-hi: color-mix(in oklch, var(--err) 28%, transparent);
+
+	/* ── Graph lanes — equal-chroma across hues ── */
+	--lane-0: oklch(0.76 0.12 225);
+	--lane-1: oklch(0.76 0.14 55);
+	--lane-2: oklch(0.76 0.14 350);
+	--lane-3: oklch(0.76 0.12 275);
+	--lane-4: oklch(0.78 0.14 135);
+	--lane-5: oklch(0.7 0.12 200);
+	--lane-6: oklch(0.76 0.14 160);
+	--lane-7: oklch(0.7 0.02 75);
+
+	/* ── Radius & elevation ── */
+	--radius-s: 4px;
+	--radius-m: 6px;
+	--radius-l: 10px;
+	--shadow-1: 0 1px 0 rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+	--shadow-2: 0 8px 32px -8px rgba(0, 0, 0, 0.6);
+
+	/* ── Typography ── */
+	--font-mono:
+		"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	--font-sans:
+		"Inter", -apple-system, BlinkMacSystemFont, "SF Pro", "Helvetica Neue",
+		sans-serif;
+
+	/* ───────────────────────────────────────────────
+	   Legacy aliases — existing --color-* names re-pointed
+	   at the ramp above so components adopt the theme with
+	   no edits. Phase 2 migrates call sites to the ramp
+	   directly where the richer scale matters.
+	   ─────────────────────────────────────────────── */
+
+	/* Surfaces */
+	--color-bg: var(--bg-0);
+	--color-surface: var(--bg-1);
+	--color-border: var(--line);
+	--color-input-bg: var(--bg-0);
+
+	/* Text */
+	--color-text: var(--fg-1);
+	--color-text-muted: var(--fg-2);
+
+	/* Accent */
+	--color-accent: var(--accent);
+	--color-accent-alt: var(--lane-3);
+	--color-accent-bg: color-mix(in oklch, var(--accent) 15%, transparent);
+	--color-accent-border: var(--accent);
+	--color-on-accent: var(--accent-fg);
+
+	/* Rows & overlays */
+	--color-selected-row: var(--bg-selected);
+	--color-hover: var(--bg-hover);
+	--color-tab-hover: var(--bg-hover);
 	--color-tree-focus: var(--color-selected-row);
-	--color-hover: rgba(255, 255, 255, 0.06);
-	--color-on-accent: #fff;
 	--color-backdrop: rgba(0, 0, 0, 0.5);
 
-	/* Diff line colors */
-	--color-diff-add: #4ade80;
-	--color-diff-add-bg: rgba(74, 222, 128, 0.1);
-	--color-diff-delete: #f87171;
-	--color-diff-delete-bg: rgba(248, 113, 113, 0.1);
-	--color-diff-add-bg-selected: rgba(74, 222, 128, 0.25);
-	--color-diff-delete-bg-selected: rgba(248, 113, 113, 0.25);
+	/* Code-review commit markers (Phase 66) */
+	--color-review-row: var(--color-accent);
+	--color-review-pending-base: var(--color-warning);
+
+	/* Diff lines */
+	--color-diff-add: var(--ok);
+	--color-diff-add-bg: var(--diff-add-bg);
+	--color-diff-delete: var(--err);
+	--color-diff-delete-bg: var(--diff-del-bg);
+	--color-diff-add-bg-selected: var(--diff-add-hi);
+	--color-diff-delete-bg-selected: var(--diff-del-hi);
 
 	/* Word-level diff highlights (Phase 60) */
-	--color-diff-word-add-bg: rgba(74, 222, 128, 0.35);
-	--color-diff-word-delete-bg: rgba(248, 113, 113, 0.35);
-	--color-diff-phantom-bg: rgba(139, 148, 158, 0.04);
+	--color-diff-word-add-bg: color-mix(in oklch, var(--ok) 35%, transparent);
+	--color-diff-word-delete-bg: color-mix(in oklch, var(--err) 35%, transparent);
+	--color-diff-phantom-bg: color-mix(in oklch, var(--fg-3) 5%, transparent);
 
-	/* Syntax highlighting colors (Phase 61) -- per D-02, D-03 */
+	/* Syntax highlighting (Phase 61) — kept; design defines no syntax palette */
 	--color-syn-keyword: #569cd6;
 	--color-syn-string: #ce9178;
 	--color-syn-comment: #6a9955;
@@ -48,74 +136,58 @@
 	--color-syn-regex: #d16969;
 	--color-syn-escape: #d7ba7d;
 
-	/* Semantic status colors */
-	--color-success: #4ade80;
-	--color-success-bg: rgba(74, 222, 128, 0.15);
-	--color-success-border: rgba(74, 222, 128, 0.3);
-	--color-danger: #f87171;
-	--color-danger-bg: rgba(248, 113, 113, 0.15);
-	--color-danger-border: rgba(248, 113, 113, 0.3);
-	--color-danger-bg-subtle: rgba(248, 113, 113, 0.08);
-	--color-warning: #fbbf24;
-	--color-warning-bg: rgba(251, 191, 36, 0.15);
-	--color-warning-border: rgba(251, 191, 36, 0.3);
-	--color-accent-alt: #d2a8ff;
-	--color-accent-bg: rgba(56, 139, 253, 0.15);
-	--color-accent-border: #58a6ff;
-	--color-muted-bg: rgba(139, 148, 158, 0.1);
+	/* Semantic status */
+	--color-success: var(--ok);
+	--color-success-bg: color-mix(in oklch, var(--ok) 15%, transparent);
+	--color-success-border: color-mix(in oklch, var(--ok) 30%, transparent);
+	--color-danger: var(--err);
+	--color-danger-bg: color-mix(in oklch, var(--err) 15%, transparent);
+	--color-danger-border: color-mix(in oklch, var(--err) 30%, transparent);
+	--color-danger-bg-subtle: color-mix(in oklch, var(--err) 8%, transparent);
+	--color-error: var(--err);
+	--color-warning: var(--warn);
+	--color-warning-bg: color-mix(in oklch, var(--warn) 15%, transparent);
+	--color-warning-border: color-mix(in oklch, var(--warn) 30%, transparent);
+	--color-muted-bg: color-mix(in oklch, var(--fg-3) 10%, transparent);
 
 	/* File-status icon colors (FileRow status map) */
-	--color-status-new: #22c55e;
-	--color-status-modified: #fb923c;
-	--color-status-deleted: #f87171;
-	--color-status-renamed: #60a5fa;
-	--color-status-typechange: #a78bfa;
-	--color-status-conflicted: #facc15;
+	--color-status-new: var(--ok);
+	--color-status-modified: var(--warn);
+	--color-status-deleted: var(--err);
+	--color-status-renamed: var(--info);
+	--color-status-typechange: var(--lane-3);
+	--color-status-conflicted: var(--warn);
 
 	/* Banner colors */
-	--color-banner-warning-bg: rgba(250, 204, 21, 0.08);
-	--color-banner-warning-border: #facc15;
-	--color-banner-info-bg: rgba(96, 165, 250, 0.08);
-	--color-banner-info-border: #60a5fa;
+	--color-banner-warning-bg: color-mix(in oklch, var(--warn) 8%, transparent);
+	--color-banner-warning-border: var(--warn);
+	--color-banner-info-bg: color-mix(in oklch, var(--info) 8%, transparent);
+	--color-banner-info-border: var(--info);
 
 	/* Badge colors */
-	--color-badge-warning: #facc15;
-	--color-badge-warning-bg: rgba(250, 204, 21, 0.15);
+	--color-badge-warning: var(--warn);
+	--color-badge-warning-bg: color-mix(in oklch, var(--warn) 15%, transparent);
 
 	/* Hunk highlight flash */
-	--color-hunk-flash: rgba(96, 165, 250, 0.3);
+	--color-hunk-flash: color-mix(in oklch, var(--info) 30%, transparent);
 
-	/* Invisible character markers (Phase 63 -- WHSP-03) */
-	--color-invisible: rgba(139, 148, 158, 0.5);
+	/* Invisible character markers (Phase 63 — WHSP-03) */
+	--color-invisible: color-mix(in oklch, var(--fg-3) 60%, transparent);
 
-	/* Trailing whitespace warning (Phase 63 -- D-12) */
-	--color-trailing-ws-bg: rgba(248, 113, 113, 0.12);
+	/* Trailing whitespace warning (Phase 63 — D-12) */
+	--color-trailing-ws-bg: color-mix(in oklch, var(--err) 12%, transparent);
+
+	/* Search match highlights */
+	--color-search-current: color-mix(in oklch, var(--accent) 20%, transparent);
+	--color-search-match: color-mix(in oklch, var(--accent) 12%, transparent);
+
+	/* Elevation aliases */
+	--shadow-sm: var(--shadow-1);
+	--shadow-md: var(--shadow-1);
+	--shadow-lg: var(--shadow-2);
 
 	/* Utility */
 	--opacity-dimmed: 0.4;
-
-	/* Graph lane colors — vivid 8-color dark-theme palette, high contrast on #0d1117 */
-	--lane-0: #58a6ff;
-	--lane-1: #f78166;
-	--lane-2: #f778ba;
-	--lane-3: #d2a8ff;
-	--lane-4: #7ee787;
-	--lane-5: #ffa657;
-	--lane-6: #79c0ff;
-	--lane-7: #ff7b72;
-
-	/* Elevation / drop shadows */
-	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-	--shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
-
-	/* Search match highlights */
-	--color-search-current: rgba(245, 158, 11, 0.2);
-	--color-search-match: rgba(234, 179, 8, 0.1);
-
-	/* Typography */
-	--font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-	--font-sans: Inter, system-ui, -apple-system, sans-serif;
 }
 
 html,
@@ -127,6 +199,9 @@ body {
 	background-color: var(--color-bg);
 	color: var(--color-text);
 	font-family: var(--font-sans);
+	font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 	margin: 0;
 	-webkit-user-select: none;
 	user-select: none;
