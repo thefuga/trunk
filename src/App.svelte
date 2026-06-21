@@ -572,7 +572,7 @@ $effect(() => {
 
 <div class="flex flex-col h-screen" style="background: var(--color-bg);">
   <!-- LAYOUT-02: unified title bar + toolbar -->
-  <div data-tauri-drag-region class="flex items-center flex-shrink-0" style="height: 32px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding-left: {isFullscreen ? 0 : 78 / zoomLevel}px;">
+  <div data-tauri-drag-region class="flex items-center flex-shrink-0" style="height: var(--topbar-h); background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding-left: {isFullscreen ? 0 : 78 / zoomLevel}px;">
     <TabBar
       {tabs}
       {activeTabId}
