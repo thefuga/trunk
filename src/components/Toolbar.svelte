@@ -235,7 +235,7 @@ async function handleBranchCreate(values: Record<string, string>) {
   .toolbar-divider {
     width: 1px;
     height: 18px;
-    background: var(--line-strong);
+    background: var(--line);
     flex-shrink: 0;
   }
 
@@ -253,6 +253,10 @@ async function handleBranchCreate(values: Record<string, string>) {
     font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
+  }
+  .toolbar-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .toolbar-btn:hover:not(:disabled) {
     background: var(--bg-hover);

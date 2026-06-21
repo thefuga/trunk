@@ -114,10 +114,14 @@ $effect(() => {
     color: var(--fg-2);
     cursor: pointer;
     font-size: 10px;
-    padding: 0 5px;
+    padding: 0 6px;
     height: 100%;
     display: flex;
     align-items: center;
+  }
+  .chevron-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .chevron-btn:hover:not(:disabled) {
     background: var(--bg-hover);
