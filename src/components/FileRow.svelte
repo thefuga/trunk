@@ -81,7 +81,7 @@ let Icon = $derived(iconConfig.component);
     align-items: center;
     gap: 6px;
     cursor: {onclick ? 'pointer' : 'default'};
-    background: {focused ? 'var(--color-tree-focus)' : hovered ? 'var(--color-surface)' : 'transparent'};
+    background: {focused ? 'var(--color-tree-focus)' : hovered ? 'var(--bg-hover)' : 'transparent'};
     color: {isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
   "
 >
@@ -117,7 +117,7 @@ let Icon = $derived(iconConfig.component);
         background: none;
         border: none;
         cursor: pointer;
-        color: {actionLabel === '+' ? '#22c55e' : '#f87171'};
+        color: {actionLabel === '+' ? 'var(--ok)' : 'var(--err)'};
         display: flex;
         align-items: center;
         padding: 0 4px;

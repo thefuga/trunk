@@ -738,6 +738,7 @@ $effect(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--bg-1);
 ">
   <!-- Panel header -->
   <div style="
@@ -762,7 +763,7 @@ $effect(() => {
           padding: 0 6px;
           font-size: 11px;
           line-height: 16px;
-          color: white;
+          color: var(--bg-0);
           font-weight: 700;
           white-space: nowrap;
           overflow: hidden;
@@ -886,7 +887,7 @@ $effect(() => {
           padding: 0 6px;
           font-size: 10px;
           line-height: 16px;
-          color: white;
+          color: var(--bg-0);
           font-weight: 700;
         ">{operationInfo.source_branch}</span>
       {/if}
@@ -898,7 +899,7 @@ $effect(() => {
           padding: 0 6px;
           font-size: 10px;
           line-height: 16px;
-          color: white;
+          color: var(--bg-0);
           font-weight: 700;
         ">{operationInfo.target_branch}</span>
       {/if}

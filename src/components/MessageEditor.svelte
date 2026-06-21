@@ -71,7 +71,7 @@ $effect(() => {
 		class="rounded-lg shadow-xl"
 		data-testid="message-editor-backdrop"
 		aria-labelledby={titleId}
-		style="background: var(--color-surface); border: 1px solid var(--color-border); min-width: 420px; max-width: 640px; padding: 16px;"
+		style="background: var(--bg-2); border: 1px solid var(--line); min-width: 420px; max-width: 640px; padding: 16px;"
 		onkeydown={handleKeydown}
 		onclick={handleBackdropClick}
 	>
@@ -85,7 +85,7 @@ $effect(() => {
 
 		<textarea
 			class="w-full rounded text-sm"
-			style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 8px; resize: vertical; min-height: 200px;"
+			style="background: var(--bg-0); border: 1px solid var(--line); color: var(--fg-1); padding: 6px 8px; resize: vertical; min-height: 200px;"
 			bind:value={text}
 			use:autofocus
 		></textarea>
@@ -93,7 +93,7 @@ $effect(() => {
 		<div class="flex justify-end gap-2 mt-4">
 			<button
 				class="rounded px-3 py-1.5 text-xs font-medium"
-				style="background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text);"
+				style="background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-1);"
 				onclick={handleCancel}
 			>
 				Cancel

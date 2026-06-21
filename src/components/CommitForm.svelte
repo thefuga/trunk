@@ -159,10 +159,10 @@ async function handleSubmit() {
     style="
       width: 100%;
       box-sizing: border-box;
-      border: 1px solid var(--color-border);
-      background: var(--color-surface);
-      color: var(--color-text);
-      border-radius: 4px;
+      border: 1px solid var(--line);
+      background: var(--bg-0);
+      color: var(--fg-1);
+      border-radius: var(--radius-m);
       padding: 4px 6px;
       font-size: 12px;
     "
@@ -179,10 +179,10 @@ async function handleSubmit() {
     style="
       width: 100%;
       box-sizing: border-box;
-      border: 1px solid var(--color-border);
-      background: var(--color-surface);
-      color: var(--color-text);
-      border-radius: 4px;
+      border: 1px solid var(--line);
+      background: var(--bg-0);
+      color: var(--fg-1);
+      border-radius: var(--radius-m);
       padding: 4px 6px;
       font-size: 12px;
       resize: vertical;
@@ -202,10 +202,10 @@ async function handleSubmit() {
     style="
       width: 100%;
       height: 28px;
-      background: var(--color-success-bg);
-      color: var(--color-success);
-      border: 1px solid var(--color-success-border);
-      border-radius: 4px;
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius-m);
       font-size: 12px;
       cursor: pointer;
       opacity: {committing ? 0.6 : 1};
