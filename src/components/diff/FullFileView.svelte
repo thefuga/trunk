@@ -88,9 +88,7 @@ function lineBackground(origin: string, isSelected: boolean): string {
 	return "transparent";
 }
 
-function lineColor(origin: string): string {
-	if (origin === "Add") return "var(--color-diff-add)";
-	if (origin === "Delete") return "var(--color-diff-delete)";
+function lineColor(): string {
 	return "var(--color-text)";
 }
 
@@ -165,7 +163,7 @@ function gutterWidth(maxNum: number): string {
             padding: 0 8px;
             white-space: {wordWrap ? 'pre-wrap' : 'pre'};
             background: {lineBackground(line.origin, isSelected)};
-            color: {lineColor(line.origin)};
+            color: {lineColor()};
             cursor: {isSelectable ? 'pointer' : 'default'};
             -webkit-user-select: {isSelectable ? 'none' : 'text'};
             user-select: {isSelectable ? 'none' : 'text'};

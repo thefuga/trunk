@@ -66,7 +66,7 @@ describe("CommitDetail", () => {
 			},
 		});
 		expect(screen.getByText("Test User")).toBeInTheDocument();
-		expect(screen.getByText("<test@test.com>")).toBeInTheDocument();
+		expect(screen.getByText("test@test.com")).toBeInTheDocument();
 	});
 
 	it("renders parent OIDs", () => {

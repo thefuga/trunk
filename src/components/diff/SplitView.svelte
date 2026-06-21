@@ -134,9 +134,7 @@ function lineBackground(origin: string, isSelected: boolean = false): string {
 	return "transparent";
 }
 
-function lineColor(origin: string): string {
-	if (origin === "Add") return "var(--color-diff-add)";
-	if (origin === "Delete") return "var(--color-diff-delete)";
+function lineColor(): string {
 	return "var(--color-text)";
 }
 
@@ -253,7 +251,7 @@ const pairedData = $derived(
             bind:this={hunkElements[`${fd.path}-${section.hunkIdx}`]}
             class="split-hunk-header"
           >
-            <span style="flex: 1; color: var(--color-text-muted); font-size: 11px; font-family: var(--font-mono, monospace);">
+            <span style="flex: 1; font-size: 11px; font-family: var(--font-mono, monospace);">
               {section.header}
             </span>
             {#if diffKind === 'unstaged'}
@@ -378,7 +376,7 @@ const pairedData = $derived(
                     class="diff-line {line.origin === 'Add' ? 'diff-line-add' : line.origin === 'Delete' ? 'diff-line-delete' : 'diff-line-context'}"
                     style="
                       background: {lineBackground(line.origin, isSelected)};
-                      color: {lineColor(line.origin)};
+                      color: {lineColor()};
                       white-space: {wordWrap ? 'pre-wrap' : 'pre'};
                     "
                   ><span class="gutter" style="min-width: {gutterW};">{line.old_lineno ?? ''}</span><span class="diff-line-content">{#if line.spans.length > 0}{#each line.spans as span}{@const sliced = line.content.slice(span.start, span.end)}{@const spanInTrailing = span.start >= trailStart}{#if showInvisibles}{@const segments = splitInvisibles(sliced, spanInTrailing || span.end > trailStart)}{#each segments as seg}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}{seg.isInvisible ? ' invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}<span class="{span.syntax_class}{span.emphasized ? (line.origin === 'Add' ? ' word-add' : ' word-delete') : ''}">{sliced}</span>{/if}{/each}{:else}{#if showInvisibles}{@const segments = splitInvisibles(line.content, false)}{#each segments as seg}<span class="{seg.isInvisible ? 'invisible-char' : ''}{seg.isTrailing ? ' trailing-ws' : ''}">{seg.text}</span>{/each}{:else}{line.content}{/if}{/if}</span></div>
@@ -402,7 +400,7 @@ const pairedData = $derived(
                     role={isSelectable ? 'button' : undefined}
                     style="
                       background: {lineBackground(line.origin, isSelected)};
-                      color: {lineColor(line.origin)};
+                      color: {lineColor()};
                       cursor: {isSelectable ? 'pointer' : 'default'};
                       -webkit-user-select: {isSelectable ? 'none' : 'text'};
                       user-select: {isSelectable ? 'none' : 'text'};

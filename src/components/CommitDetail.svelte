@@ -8,6 +8,7 @@ import type {
 	FileStatus,
 	FileStatusType,
 } from "../lib/types.js";
+import Avatar from "./Avatar.svelte";
 import TreeFileList from "./TreeFileList.svelte";
 
 interface Props {
@@ -82,6 +83,21 @@ let parentShort = $derived(
 		? commitDetail.parent_oids[0].slice(0, 7)
 		: null,
 );
+
+function countOrigin(origin: "Add" | "Delete"): number {
+	return fileDiffs.reduce(
+		(sum, fd) =>
+			sum +
+			fd.hunks.reduce(
+				(h, hunk) => h + hunk.lines.filter((l) => l.origin === origin).length,
+				0,
+			),
+		0,
+	);
+}
+
+let totalAdds = $derived(countOrigin("Add"));
+let totalDels = $derived(countOrigin("Delete"));
 </script>
 
 <div style="
@@ -113,7 +129,7 @@ let parentShort = $derived(
       text-overflow: ellipsis;
       white-space: nowrap;
     ">
-      commit: <button type="button" title="Copy SHA" class="sha-copy" onclick={() => copySha(commitDetail.oid)}>{commitDetail.short_oid}</button>
+      commit: <button type="button" title="Copy SHA" class="sha-copy" style="display: inline-flex; align-items: center; padding: 2px 6px; border-radius: var(--radius-s); background: var(--bg-3); color: var(--fg-0);" onclick={() => copySha(commitDetail.oid)}>{commitDetail.short_oid}</button>
     </span>
     <button
       onclick={onclose}
@@ -169,13 +185,16 @@ let parentShort = $derived(
       font-size: 11px;
       color: var(--color-text-muted);
     ">
-      <div style="margin-bottom: 2px; color: var(--color-text);">
-        {commitDetail.author_name}
-        <span style="color: var(--color-text-muted);">&lt;{commitDetail.author_email}&gt;</span>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <Avatar name={commitDetail.author_name} size={22} />
+        <div style="display: flex; flex-direction: column; min-width: 0;">
+          <span style="color: var(--fg-0); font-weight: 600;">{commitDetail.author_name}</span>
+          <span style="color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{commitDetail.author_email}</span>
+        </div>
+        <span style="margin-left: auto; flex-shrink: 0; color: var(--fg-3); font-family: var(--font-mono); font-size: 11px;">{authorDate}</span>
       </div>
-      <div style="margin-bottom: {parentShort ? '2px' : '0'};">{authorDate}</div>
       {#if parentShort}
-        <div>parent: <button type="button" title="Copy SHA" class="sha-copy" onclick={() => copySha(commitDetail.parent_oids[0])}>{parentShort}</button></div>
+        <div style="margin-top: 6px;">parent: <button type="button" title="Copy SHA" class="sha-copy" onclick={() => copySha(commitDetail.parent_oids[0])}>{parentShort}</button></div>
       {/if}
     </div>
 
@@ -192,6 +211,12 @@ let parentShort = $derived(
         <span style="font-size: 12px; font-weight: 500; color: var(--color-text); flex: 1;">
           {fileDiffs.length} file{fileDiffs.length === 1 ? '' : 's'} changed
         </span>
+        {#if totalAdds > 0 || totalDels > 0}
+          <span style="display: inline-flex; gap: 6px; flex-shrink: 0; margin-right: 8px; font-family: var(--font-mono); font-size: 10.5px;">
+            {#if totalAdds > 0}<span style="color: var(--ok);">+{totalAdds}</span>{/if}
+            {#if totalDels > 0}<span style="color: var(--err);">−{totalDels}</span>{/if}
+          </span>
+        {/if}
         {#if ontreeviewtoggle}
           <button
             role="switch"
