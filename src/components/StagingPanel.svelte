@@ -945,7 +945,7 @@ $effect(() => {
           <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
             <AlertTriangle size={12} />
           </span>
-          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
             Conflicted Files ({status?.conflicted.length ?? 0})
           </span>
           <button
@@ -1011,7 +1011,7 @@ $effect(() => {
           <span style="color: var(--color-badge-warning); display: inline-flex; align-items: center; margin-right: 4px;">
             <AlertTriangle size={12} />
           </span>
-          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1; white-space: nowrap;">
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; white-space: nowrap;">
             Conflicted Files ({status?.conflicted.length ?? 0})
           </span>
           {#if (status?.conflicted.length ?? 0) > 0}
@@ -1033,7 +1033,7 @@ $effect(() => {
             </button>
           {/if}
         {:else}
-          <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+          <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
             Unstaged Files ({status?.unstaged.length ?? 0})
           </span>
           {#if (status?.unstaged.length ?? 0) > 0}
@@ -1136,7 +1136,7 @@ $effect(() => {
         <span style="color: var(--color-text-muted); display: inline-flex; align-items: center; margin-right: 4px;">
           {#if staged_expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
         </span>
-        <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+        <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex: 1;">
           {isOperation ? 'Resolved Files' : 'Staged Files'} ({status?.staged.length ?? 0})
         </span>
         {#if (status?.staged.length ?? 0) > 0}

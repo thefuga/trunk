@@ -135,11 +135,11 @@ async function handleSubmit() {
         style="
           flex: 1;
           padding: 6px 0 4px;
-          font-size: 11px;
+          font-size: 12px;
           background: none;
           border: none;
           border-bottom: 2px solid {mode === tab ? 'var(--color-accent)' : 'transparent'};
-          color: {mode === tab ? 'var(--color-text)' : 'var(--color-text-muted)'};
+          color: {mode === tab ? 'var(--fg-0)' : 'var(--fg-3)'};
           cursor: {committing ? 'default' : 'pointer'};
           text-transform: none;
         "
@@ -163,7 +163,7 @@ async function handleSubmit() {
       background: var(--bg-0);
       color: var(--fg-1);
       border-radius: var(--radius-m);
-      padding: 4px 6px;
+      padding: 8px 10px;
       font-size: 12px;
     "
   />
@@ -183,7 +183,7 @@ async function handleSubmit() {
       background: var(--bg-0);
       color: var(--fg-1);
       border-radius: var(--radius-m);
-      padding: 4px 6px;
+      padding: 8px 10px;
       font-size: 12px;
       resize: vertical;
     "
@@ -201,12 +201,13 @@ async function handleSubmit() {
     disabled={committing}
     style="
       width: 100%;
-      height: 28px;
+      height: 32px;
       background: var(--accent);
       color: var(--accent-fg);
-      border: 1px solid var(--accent);
+      border: 0;
       border-radius: var(--radius-m);
-      font-size: 12px;
+      font-size: 12.5px;
+      font-weight: 600;
       cursor: pointer;
       opacity: {committing ? 0.6 : 1};
     "
