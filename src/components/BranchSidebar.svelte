@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Archive, Search } from "@lucide/svelte";
 import { safeInvoke, type TrunkError } from "../lib/invoke.js";
 import { showToast } from "../lib/toast.svelte.js";
 import type { RefsResponse, StashEntry } from "../lib/types.js";
@@ -593,23 +594,33 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
   overflow: hidden;
 ">
   <!-- Search input (sticky at top) -->
-  <div style="padding: 8px; border-bottom: 1px solid var(--line);">
-    <input
-      type="text"
-      placeholder="Filter branches…"
-      bind:value={search}
-      style="
-        width: 100%;
-        box-sizing: border-box;
-        background: var(--bg-0);
-        border: 1px solid var(--line);
-        color: var(--fg-1);
-        font-size: 12px;
-        padding: 5px 8px;
-        border-radius: var(--radius-m);
-        outline: none;
-      "
-    />
+  <div style="padding: 10px 10px 8px; border-bottom: 1px solid var(--line);">
+    <div style="
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 10px;
+      background: var(--bg-0);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-m);
+    ">
+      <Search size={12} color="var(--fg-3)" style="flex-shrink: 0;" />
+      <input
+        type="text"
+        placeholder="Filter branches…"
+        bind:value={search}
+        style="
+          flex: 1;
+          min-width: 0;
+          background: transparent;
+          border: none;
+          color: var(--fg-2);
+          font-size: 12px;
+          outline: none;
+        "
+      />
+    </div>
   </div>
 
   <!-- Sections (scrollable) -->
@@ -756,6 +767,7 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onrefnavigate?.(stash.oid); } }}
           oncontextmenu={(e) => showStashEntryMenu(e, stash.index)}
         >
+          <Archive size={12} color="var(--fg-3)" style="flex-shrink: 0;" />
           <span class="stash-index">{stash.short_name}</span>
           <span class="stash-message">{stash.name}</span>
         </div>
@@ -805,18 +817,20 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
 
   .stash-row {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 6px;
     padding: 4px 12px;
     font-size: 12px;
     cursor: default;
   }
 
   .stash-row:hover {
-    background: var(--color-hover);
+    background: var(--bg-hover);
   }
 
   .stash-index {
-    color: var(--fg-3);
+    color: var(--fg-4);
+    font-family: var(--font-mono);
     flex-shrink: 0;
   }
 
@@ -824,7 +838,7 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--color-text);
+    color: var(--fg-2);
   }
 
   .stash-error {

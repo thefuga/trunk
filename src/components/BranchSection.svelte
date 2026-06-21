@@ -38,17 +38,17 @@ let {
       cursor: pointer;
     "
   >
-    <span style="color: var(--fg-3); display: inline-flex; align-items: center; margin-right: 4px;">
+    <span style="color: var(--fg-2); display: inline-flex; align-items: center; margin-right: 4px;">
       {#if expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
     </span>
-    <span style="color: var(--fg-3); font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; flex: 1;">
+    <span style="color: var(--fg-2); font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; flex: 1;">
       {label} ({count})
     </span>
     {#if showCreateButton}
       <button
         data-testid="branch-section-create-btn"
         onclick={(e) => { e.stopPropagation(); oncreate?.(); }}
-        style="color: var(--color-text-muted); background: none; border: none; cursor: pointer; padding: 0 4px; display: inline-flex; align-items: center;"
+        style="color: var(--fg-1); background: none; border: none; cursor: pointer; padding: 0 4px; display: inline-flex; align-items: center;"
         aria-label="Create new branch"
       >
         <Plus size={12} />

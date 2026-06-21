@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ArrowDown, ArrowUp, Globe, Laptop, Tag } from "@lucide/svelte";
+import { ArrowDown, ArrowUp, Tag } from "@lucide/svelte";
 
 interface Props {
 	name: string;
@@ -29,9 +29,6 @@ let {
 	oncontextmenu,
 }: Props = $props();
 
-const kindIcon = { local: Laptop, remote: Globe, tag: Tag } as const;
-const KindIcon = $derived(kindIcon[kind]);
-
 let hovered = $state(false);
 </script>
 
@@ -54,16 +51,20 @@ let hovered = $state(false);
       align-items: center;
       overflow: hidden;
       cursor: pointer;
-      background: {isHead ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : hovered ? 'var(--bg-hover)' : 'transparent'};
-      box-shadow: {isHead ? 'inset 0 0 0 1px color-mix(in oklch, var(--accent) 30%, transparent)' : 'none'};
+      background: {isHead ? 'color-mix(in oklch, var(--accent) 10%, transparent)' : hovered ? 'var(--bg-hover)' : 'transparent'};
+      box-shadow: {isHead ? 'inset 0 0 0 1px color-mix(in oklch, var(--accent) 28%, transparent)' : 'none'};
       color: {isHead ? 'var(--color-accent)' : isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
       font-weight: {isHead ? '600' : 'normal'};
       font-size: 13px;
     "
   >
-    <span style="flex-shrink: 0; display: inline-flex; align-items: center; margin-right: 6px; color: var(--color-text-muted);">
-      <KindIcon size={12} />
-    </span>
+    {#if kind === 'tag'}
+      <span style="flex-shrink: 0; display: inline-flex; align-items: center; margin-right: 6px; color: var(--fg-3);">
+        <Tag size={12} />
+      </span>
+    {:else}
+      <span style="flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; background: {isHead ? 'var(--accent)' : 'var(--fg-4)'};"></span>
+    {/if}
     <span style="
       display: block;
       overflow: hidden;
@@ -73,7 +74,7 @@ let hovered = $state(false);
       flex: 1;
     ">{name}{isLoading ? ' …' : ''}</span>
     {#if behind > 0 || ahead > 0}
-      <span style="flex-shrink: 0; font-size: 11px; color: var(--color-text-muted); margin-left: 4px; display: inline-flex; align-items: center; gap: 2px;">
+      <span style="flex-shrink: 0; font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); margin-left: 4px; display: inline-flex; align-items: center; gap: 2px;">
         {#if behind > 0}<span style="display: inline-flex; align-items: center;"><ArrowDown size={11} />{behind}</span>{/if}
         {#if ahead > 0}<span style="display: inline-flex; align-items: center; margin-left: 2px;"><ArrowUp size={11} />{ahead}</span>{/if}
       </span>
