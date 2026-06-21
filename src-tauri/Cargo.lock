@@ -4615,6 +4615,7 @@ dependencies = [
 name = "trunk"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "criterion",
  "git2",
  "libc",
@@ -4622,6 +4623,7 @@ dependencies = [
  "notify-debouncer-mini",
  "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "similar",

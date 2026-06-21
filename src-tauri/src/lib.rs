@@ -14,23 +14,19 @@ use tauri::Emitter;
 use tauri::Manager;
 use watcher::WatcherState;
 
-/// Current webview zoom factor, so the window-event handler can re-center the
-/// macOS traffic lights (whose on-screen size is fixed) in the zoom-scaled bar.
-pub struct TrafficLightZoom(pub std::sync::Mutex<f64>);
-
+/// Report the current webview zoom so the macOS traffic lights (fixed on-screen
+/// size) stay centered in the zoom-scaled top bar.
 #[tauri::command]
-fn set_traffic_light_zoom(
-    window: tauri::WebviewWindow,
-    zoom: f64,
-    zoom_state: tauri::State<'_, TrafficLightZoom>,
-) {
-    *zoom_state.0.lock().unwrap() = zoom;
+fn set_traffic_light_zoom(window: tauri::WebviewWindow, zoom: f64) {
     #[cfg(target_os = "macos")]
-    if let Ok(ns_window) = window.ns_window() {
-        macos_traffic_lights::reposition(ns_window, zoom);
+    {
+        macos_traffic_lights::set_zoom(zoom);
+        if let Ok(ns_window) = window.ns_window() {
+            macos_traffic_lights::reposition(ns_window);
+        }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    let _ = (window, zoom);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,23 +37,18 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .on_window_event(|_window, _event| {
-            // AppKit resets the traffic-light inset on every title-bar relayout —
-            // resize (also fullscreen + window-state restore) and appearance change.
+            // Live resize is handled flicker-free by the NSWindowDidResize observer
+            // (see macos_traffic_lights); here we cover the other title-bar relayouts:
+            // appearance change and monitor-to-monitor scale changes.
             #[cfg(target_os = "macos")]
             {
                 use tauri::WindowEvent;
                 if matches!(
                     _event,
-                    WindowEvent::Resized(_)
-                        | WindowEvent::ThemeChanged(_)
-                        | WindowEvent::ScaleFactorChanged { .. }
+                    WindowEvent::ThemeChanged(_) | WindowEvent::ScaleFactorChanged { .. }
                 ) {
                     if let Ok(ns_window) = _window.ns_window() {
-                        let zoom = _window
-                            .try_state::<TrafficLightZoom>()
-                            .map(|s| *s.0.lock().unwrap())
-                            .unwrap_or(1.0);
-                        macos_traffic_lights::reposition(ns_window, zoom);
+                        macos_traffic_lights::reposition(ns_window);
                     }
                 }
             }
@@ -115,14 +106,16 @@ pub fn run() {
                 }
             });
 
-            // Position the lights once before the first paint; the frontend reports
-            // the restored zoom on mount (set_traffic_light_zoom), and later relayouts
-            // are handled by the on_window_event handler above.
+            // Re-inset on every live resize (flicker-free), and position once before
+            // the first paint. The frontend reports the restored zoom on mount via
+            // set_traffic_light_zoom; other relayouts go through on_window_event.
             #[cfg(target_os = "macos")]
-            if let Some(window) = app.get_webview_window("main") {
-                if let Ok(ns_window) = window.ns_window() {
-                    let zoom = *app.state::<TrafficLightZoom>().0.lock().unwrap();
-                    macos_traffic_lights::reposition(ns_window, zoom);
+            {
+                macos_traffic_lights::observe_resize();
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(ns_window) = window.ns_window() {
+                        macos_traffic_lights::reposition(ns_window);
+                    }
                 }
             }
 
@@ -133,7 +126,6 @@ pub fn run() {
         .manage(RunningOp(Default::default()))
         .manage(WatcherState(Default::default()))
         .manage(ReviewSessionsState(Default::default()))
-        .manage(TrafficLightZoom(std::sync::Mutex::new(1.0)))
         .invoke_handler(tauri::generate_handler![
             set_traffic_light_zoom,
             commands::repo::open_repo,

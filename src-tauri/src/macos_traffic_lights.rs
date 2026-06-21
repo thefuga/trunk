@@ -4,24 +4,46 @@
 //! relayouts the buttons back to the default top position on window-state
 //! restore, resize, or appearance change, and Tauri 2.10 exposes no runtime
 //! setter. So we grow the title-bar container ourselves so the buttons drop to
-//! the bar's vertical center, re-applying on the relayout events (see `lib.rs`).
+//! the bar's vertical center.
+//!
+//! Resize is special: AppKit resets the buttons on every step of a live resize,
+//! and Tauri's `Resized` event arrives a frame too late to correct it without a
+//! visible flash. So we observe `NSWindowDidResizeNotification` directly and
+//! re-inset inside AppKit's own resize pass (see `observe_resize`).
 //!
 //! The bar is `--topbar-h` (44px) of webview CSS, so its on-screen height scales
-//! with the webview zoom; `reposition` takes the zoom factor to stay centered.
+//! with the webview zoom; the frontend reports the zoom via `set_zoom`.
 
 use std::ffi::c_void;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use block2::RcBlock;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSWindow, NSWindowButton};
+use objc2::runtime::AnyObject;
+use objc2_app_kit::{NSWindow, NSWindowButton, NSWindowDidResizeNotification};
+use objc2_foundation::{NSNotification, NSNotificationCenter};
 
 /// `--topbar-h` in CSS px; the on-screen bar is this tall times the webview zoom.
 const BAR_HEIGHT: f64 = 44.0;
 /// Logical x inset of the close button from the window's left edge.
 const INSET_X: f64 = 19.0;
 
-/// `ns_window` is the pointer from Tauri's `WebviewWindow`/`Window::ns_window()`;
-/// `zoom` is the current webview zoom factor.
-pub fn reposition(ns_window: *mut c_void, zoom: f64) {
+/// Current webview zoom, as f64 bits. A plain atomic (not Tauri-managed state)
+/// so the resize observer's Objective-C block can read it without capturing.
+static ZOOM_BITS: AtomicU64 = AtomicU64::new(1.0f64.to_bits());
+
+/// Report the current webview zoom factor (called from the frontend on change).
+pub fn set_zoom(zoom: f64) {
+    ZOOM_BITS.store(zoom.to_bits(), Ordering::Relaxed);
+}
+
+fn bar_height() -> f64 {
+    BAR_HEIGHT * f64::from_bits(ZOOM_BITS.load(Ordering::Relaxed))
+}
+
+/// `ns_window` is the pointer from Tauri's `WebviewWindow`/`Window::ns_window()`.
+pub fn reposition(ns_window: *mut c_void) {
     let ptr = ns_window.cast::<NSWindow>();
     if ptr.is_null() {
         return;
@@ -34,7 +56,34 @@ pub fn reposition(ns_window: *mut c_void, zoom: f64) {
         return;
     };
 
-    inset(&window, BAR_HEIGHT * zoom);
+    inset(&window, bar_height());
+}
+
+/// Re-apply the inset inside AppKit's resize pass so the buttons never flash to
+/// their default position during a live resize. Registered once; the observer
+/// lives for the process lifetime.
+pub fn observe_resize() {
+    let block = RcBlock::new(|notification: NonNull<NSNotification>| {
+        // SAFETY: AppKit hands us a valid notification on the main thread; its
+        // `object` is the NSWindow that resized.
+        let notification = unsafe { notification.as_ref() };
+        if let Some(window) = notification.object() {
+            reposition(&*window as *const AnyObject as *mut c_void);
+        }
+    });
+
+    // SAFETY: main-thread registration on the default center; the block captures
+    // nothing. The observer token is leaked deliberately — it must outlive every
+    // resize and is never removed.
+    let token = unsafe {
+        NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
+            Some(NSWindowDidResizeNotification),
+            None,
+            None,
+            &block,
+        )
+    };
+    std::mem::forget(token);
 }
 
 fn inset(window: &NSWindow, bar_height: f64) {
