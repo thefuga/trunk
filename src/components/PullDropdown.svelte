@@ -109,8 +109,9 @@ $effect(() => {
   .chevron-btn {
     background: none;
     border: none;
-    border-radius: 0 4px 4px 0;
-    color: var(--color-text-muted);
+    border-left: 1px solid var(--line);
+    border-radius: 0 var(--radius-m) var(--radius-m) 0;
+    color: var(--fg-2);
     cursor: pointer;
     font-size: 10px;
     padding: 0 5px;
@@ -119,11 +120,11 @@ $effect(() => {
     align-items: center;
   }
   .chevron-btn:hover:not(:disabled) {
-    background: var(--color-border);
-    color: var(--color-text);
+    background: var(--bg-hover);
+    color: var(--fg-1);
   }
   .chevron-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: default;
   }
 
@@ -132,10 +133,10 @@ $effect(() => {
     top: 100%;
     left: 0;
     z-index: 100;
-    margin-top: 2px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
+    margin-top: 4px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
     box-shadow: var(--shadow-md);
     min-width: 180px;
     padding: 4px 0;
@@ -147,14 +148,14 @@ $effect(() => {
     text-align: left;
     background: none;
     border: none;
-    color: var(--color-text);
+    color: var(--fg-1);
     font-size: 12px;
     padding: 6px 12px;
     cursor: pointer;
   }
   .dropdown-option:hover {
-    background: var(--color-accent);
-    color: white;
+    background: var(--accent);
+    color: var(--accent-fg);
   }
 </style>
 

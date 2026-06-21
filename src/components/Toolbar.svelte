@@ -222,53 +222,67 @@ async function handleBranchCreate(values: Record<string, string>) {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 12px;
+    gap: 6px;
+    padding: 0 10px 0 6px;
   }
 
   .toolbar-group {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 6px;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--line);
+    flex-shrink: 0;
   }
 
   .toolbar-btn {
-    background: none;
-    border: none;
-    border-radius: 4px;
-    color: var(--color-text);
-    font-size: 12px;
-    padding: 4px 10px;
-    cursor: pointer;
-    white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: transparent;
+    color: var(--fg-1);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
   }
   .toolbar-btn:hover:not(:disabled) {
-    background: var(--color-border);
+    background: var(--bg-hover);
   }
   .toolbar-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
+    color: var(--fg-3);
     cursor: default;
     pointer-events: none;
   }
 
   .toolbar-btn.toolbar-btn-active {
-    background: var(--color-accent);
-    color: var(--color-on-accent);
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
   }
   .toolbar-btn.toolbar-btn-active:hover:not(:disabled) {
-    background: var(--color-accent);
+    background: var(--accent-hi);
+    border-color: var(--accent-hi);
   }
 
   .btn-group {
     display: inline-flex;
     align-items: stretch;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
   }
   .btn-group .toolbar-btn {
-    border-radius: 4px 0 0 4px;
+    border: none;
+    border-radius: var(--radius-m) 0 0 var(--radius-m);
   }
 
 </style>
@@ -283,6 +297,8 @@ async function handleBranchCreate(values: Record<string, string>) {
     </button>
   </div>
 
+  <div class="toolbar-divider"></div>
+
   <div class="toolbar-group">
     <div class="btn-group">
       <button class="toolbar-btn" disabled={remoteState.isRunning} onclick={handlePull}>
@@ -295,6 +311,8 @@ async function handleBranchCreate(values: Record<string, string>) {
     </button>
   </div>
 
+  <div class="toolbar-divider"></div>
+
   <div class="toolbar-group">
     <button class="toolbar-btn" onclick={handleBranch}>
       <GitBranch size={14} /> Branch
@@ -306,6 +324,8 @@ async function handleBranchCreate(values: Record<string, string>) {
       <PackageOpen size={14} /> Pop
     </button>
   </div>
+
+  <div class="toolbar-divider"></div>
 
   <div class="toolbar-group">
     <button

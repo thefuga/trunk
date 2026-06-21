@@ -109,7 +109,9 @@ $effect(() => {
   .tab-bar {
     display: flex;
     align-items: center;
+    gap: 4px;
     height: 100%;
+    padding: 0 4px;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -122,39 +124,40 @@ $effect(() => {
   .tab-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 12px;
-    min-width: 80px;
-    height: 100%;
+    gap: 8px;
+    padding: 0 8px 0 12px;
+    height: 26px;
+    border-radius: var(--radius-m);
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-muted);
+    color: var(--fg-2);
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
     background: none;
-    border: none;
-    border-right: 1px solid var(--color-border);
+    border: 1px solid transparent;
   }
 
   .tab-item:hover {
-    background: var(--color-tab-hover);
+    color: var(--fg-1);
+    background: var(--bg-hover);
   }
 
   .tab-item.active {
-    color: var(--color-text);
-    background: var(--color-bg);
+    color: var(--fg-0);
+    background: var(--bg-2);
+    border-color: var(--line);
   }
 
   .tab-item.active:hover {
-    background: var(--color-bg);
+    background: var(--bg-2);
   }
 
   .dirty-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--color-accent);
+    background: var(--accent);
     flex-shrink: 0;
   }
 
@@ -164,39 +167,41 @@ $effect(() => {
     justify-content: center;
     width: 16px;
     height: 16px;
-    border-radius: 2px;
+    border-radius: var(--radius-s);
     border: none;
     background: none;
-    color: var(--color-text-muted);
+    color: var(--fg-3);
     cursor: pointer;
     padding: 0;
     flex-shrink: 0;
-    transition: background-color 0.15s;
+    transition: background-color 0.15s, color 0.15s;
   }
 
   .close-btn:hover {
-    background: var(--color-border);
+    background: var(--bg-3);
+    color: var(--fg-1);
   }
 
   .new-tab-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-    border: none;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-m);
+    border: 1px dashed var(--line);
     background: none;
-    color: var(--color-text-muted);
+    color: var(--fg-2);
     cursor: pointer;
     padding: 0;
     flex-shrink: 0;
     margin-left: 4px;
-    transition: background-color 0.15s;
+    transition: background-color 0.15s, color 0.15s;
   }
 
   .new-tab-btn:hover {
-    background: var(--color-border);
+    background: var(--bg-hover);
+    color: var(--fg-1);
   }
 
   :global(.tab-ghost) {
@@ -204,7 +209,7 @@ $effect(() => {
   }
 
   :global(.tab-chosen) {
-    background: var(--color-selected-row) !important;
+    background: var(--bg-selected) !important;
   }
 
   :global(.tab-drag) {
