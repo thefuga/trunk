@@ -1806,12 +1806,14 @@ $effect(() => {
           {#if columnVisibility.ref}
             <g class="overlay-pills">
               {#each visible.pills as pill}
-                <!-- Connector line from pill to commit dot (uses sticky X position, scroll-adjusted) -->
+                {@const overflowBadgeWidth = pill.overflowCount > 0 ? `+${pill.overflowCount}`.length * BADGE_FONT_SIZE * 0.7 + PILL_PADDING_X * 2 : 0}
+                {@const pillGroupRightX = pill.x + pill.width + (pill.overflowCount > 0 ? PILL_GAP + overflowBadgeWidth : 0)}
+                <!-- Connector line from the pill group (incl. the +N overflow badge) to the commit dot, so the line never passes behind the translucent badge (uses sticky X position, scroll-adjusted) -->
                 {#if columnVisibility.graph}
                   {@const stickyDotCx = Math.max(displaySettings.laneWidth / 2, Math.min(graphColWidth - 2 * COLUMN_PADDING_X - displaySettings.dotRadius, pill.dotCx - scrollX))}
                   {@const connectorEndX = refOffset + COLUMN_PADDING_X + stickyDotCx - (pill.isHollow ? displaySettings.dotRadius : 0)}
                   <line
-                    x1={pill.x + pill.width}
+                    x1={pillGroupRightX}
                     y1={pill.y}
                     x2={connectorEndX}
                     y2={pill.dotCy}
@@ -1878,11 +1880,10 @@ $effect(() => {
                 <!-- Overflow +N badge -->
                 {#if pill.overflowCount > 0}
                   {@const badgeText = `+${pill.overflowCount}`}
-                  {@const badgeWidth = badgeText.length * BADGE_FONT_SIZE * 0.7 + PILL_PADDING_X * 2}
                   <rect
                     x={pill.x + pill.width + PILL_GAP}
                     y={pill.y - BADGE_HEIGHT / 2}
-                    width={badgeWidth}
+                    width={overflowBadgeWidth}
                     height={BADGE_HEIGHT}
                     rx={BADGE_HEIGHT / 2}
                     ry={BADGE_HEIGHT / 2}
@@ -1897,7 +1898,7 @@ $effect(() => {
                   <foreignObject
                     x={pill.x + pill.width + PILL_GAP}
                     y={pill.y - BADGE_HEIGHT / 2}
-                    width={badgeWidth}
+                    width={overflowBadgeWidth}
                     height={BADGE_HEIGHT}
                   >
                     <span
