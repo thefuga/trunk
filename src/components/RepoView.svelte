@@ -37,6 +37,7 @@ import MessageEditor from "./MessageEditor.svelte";
 import RebaseEditor from "./RebaseEditor.svelte";
 import ReviewPanel from "./ReviewPanel.svelte";
 import StagingPanel from "./StagingPanel.svelte";
+import SubBar from "./SubBar.svelte";
 
 interface DirtyCounts {
 	staged: number;
@@ -178,6 +179,9 @@ let dirtyCounts = $state<DirtyCounts>({
 	conflicted: 0,
 });
 let headBranch = $state<string | undefined>(undefined);
+let headAhead = $state(0);
+let headBehind = $state(0);
+let headHasUpstream = $state(false);
 let wipSubject = $state("");
 let treeViewEnabled = $state(false);
 
@@ -245,7 +249,11 @@ async function loadHeadBranch() {
 		const refs = await safeInvoke<RefsResponse>("list_refs", {
 			path: repoPath,
 		});
-		headBranch = refs.local.find((b) => b.is_head)?.name;
+		const head = refs.local.find((b) => b.is_head);
+		headBranch = head?.name;
+		headAhead = head?.ahead ?? 0;
+		headBehind = head?.behind ?? 0;
+		headHasUpstream = head?.upstream != null;
 	} catch {
 		// non-fatal -- keep previous value
 	}
@@ -800,6 +808,14 @@ function startRightResize(e: MouseEvent) {
     background: linear-gradient(to right, transparent 1px, var(--color-accent) 1px, var(--color-accent) 3px, transparent 3px);
   }
 </style>
+
+<SubBar
+  branch={headBranch}
+  ahead={headAhead}
+  behind={headBehind}
+  filesChanged={wipCount}
+  hasUpstream={headHasUpstream}
+/>
 
 <main class="flex-1 overflow-hidden flex">
   {#if showRebaseEditor}
