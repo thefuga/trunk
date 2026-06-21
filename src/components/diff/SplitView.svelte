@@ -478,7 +478,8 @@ const pairedData = $derived(
   }
 
   .split-hunk-header {
-    background: var(--color-bg);
+    background: color-mix(in oklch, var(--info) 6%, var(--bg-2));
+    color: color-mix(in oklch, var(--info) 70%, var(--fg-3));
     display: flex;
     align-items: center;
     padding: 4px 8px;

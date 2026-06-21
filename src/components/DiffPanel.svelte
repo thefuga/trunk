@@ -800,7 +800,7 @@ async function handleDiscardLines(filePath: string, hunkIndex: number) {
 }
 </script>
 
-<div style="height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg);">
+<div style="height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-1);">
 	<DiffToolbar
 		{contentMode}
 		{layoutMode}

@@ -176,7 +176,7 @@ function gutterWidth(maxNum: number): string {
         <div
           bind:this={hunkElements[`${fd.path}-${hunkIdx}`]}
           style="
-            background: var(--color-bg);
+            background: color-mix(in oklch, var(--info) 6%, var(--bg-2));
             display: flex;
             align-items: center;
             padding: 4px 8px;
@@ -188,7 +188,7 @@ function gutterWidth(maxNum: number): string {
             box-sizing: border-box;
           "
         >
-          <span style="flex: 1; color: var(--color-text-muted); font-size: 11px; font-family: var(--font-mono, monospace);">
+          <span style="flex: 1; color: color-mix(in oklch, var(--info) 70%, var(--fg-3)); font-size: 11px; font-family: var(--font-mono, monospace);">
             {hunk.header}
           </span>
           {#if diffKind === 'unstaged'}

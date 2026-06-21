@@ -91,6 +91,7 @@ let parentShort = $derived(
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--bg-1);
 ">
 
   <!-- Toolbar -->
