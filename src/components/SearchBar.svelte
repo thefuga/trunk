@@ -61,10 +61,10 @@ function autofocus(node: HTMLElement) {
     z-index: 10;
     width: 300px;
     height: 34px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-md);
     display: flex;
     align-items: center;
     padding: 0 6px;
@@ -167,6 +167,6 @@ function autofocus(node: HTMLElement) {
 
 <style>
   .search-btn:hover {
-    background: var(--color-bg);
+    background: var(--bg-hover);
   }
 </style>

@@ -25,11 +25,12 @@ function pillClasses(ref: RefLabel, expanded: boolean = false): string {
 }
 
 function pillStyle(ref: RefLabel, bright: boolean = false): string {
-	const bg = `background: var(--lane-${ref.color_index % 8})`;
-	const color = "color: white";
-	const opacity = !bright && isRemoteOnly(ref) ? "opacity: 0.5" : "";
-	const brightness = ref.is_head || bright ? "" : "filter: brightness(0.75)";
-	return [bg, color, opacity, brightness].filter(Boolean).join("; ");
+	const lane = `var(--lane-${ref.color_index % 8})`;
+	const bg = `background: color-mix(in oklch, ${lane} 22%, transparent)`;
+	const color = `color: ${lane}`;
+	const ring = `box-shadow: inset 0 0 0 1px color-mix(in oklch, ${lane} 50%, transparent)`;
+	const opacity = !bright && isRemoteOnly(ref) ? "opacity: 0.6" : "";
+	return [bg, color, ring, opacity].filter(Boolean).join("; ");
 }
 
 function isRemoteOnly(ref: RefLabel): boolean {

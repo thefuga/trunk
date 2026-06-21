@@ -587,13 +587,13 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
 <aside data-testid="branch-sidebar" style="
   width: 100%;
   min-width: 0;
-  background: var(--color-bg);
+  background: var(--bg-1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 ">
   <!-- Search input (sticky at top) -->
-  <div style="padding: 6px 8px; border-bottom: 1px solid var(--color-border);">
+  <div style="padding: 8px; border-bottom: 1px solid var(--line);">
     <input
       type="text"
       placeholder="Filter branches…"
@@ -601,12 +601,12 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
       style="
         width: 100%;
         box-sizing: border-box;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        color: var(--color-text);
+        background: var(--bg-0);
+        border: 1px solid var(--line);
+        color: var(--fg-1);
         font-size: 12px;
-        padding: 4px 8px;
-        border-radius: 4px;
+        padding: 5px 8px;
+        border-radius: var(--radius-m);
         outline: none;
       "
     />
@@ -635,13 +635,14 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
               style="
                 width: 100%;
                 box-sizing: border-box;
-                background: var(--color-surface);
-                border: 1px solid var(--color-accent);
-                color: var(--color-text);
+                background: var(--bg-0);
+                border: 1px solid var(--accent);
+                box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent);
+                color: var(--fg-0);
                 font-size: 12px;
                 padding: 2px 6px;
                 height: 26px;
-                border-radius: 3px;
+                border-radius: var(--radius-m);
                 outline: none;
               "
               onkeydown={(e) => {
@@ -786,20 +787,20 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
     flex: 1;
     font-size: 12px;
     padding: 2px 6px;
-    background: var(--color-input-bg, #1a1a1a);
-    border: 1px solid var(--color-border, #333);
-    color: var(--color-text);
-    border-radius: 3px;
+    background: var(--bg-0);
+    border: 1px solid var(--line);
+    color: var(--fg-1);
+    border-radius: var(--radius-s);
   }
 
   .stash-save-btn {
     font-size: 11px;
     padding: 2px 8px;
     cursor: pointer;
-    background: var(--color-accent, #0d7a5f);
-    color: white;
+    background: var(--accent);
+    color: var(--accent-fg);
     border: none;
-    border-radius: 3px;
+    border-radius: var(--radius-s);
   }
 
   .stash-row {
@@ -815,7 +816,7 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
   }
 
   .stash-index {
-    color: var(--color-text-muted, #888);
+    color: var(--fg-3);
     flex-shrink: 0;
   }
 
@@ -828,7 +829,7 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
 
   .stash-error {
     font-size: 11px;
-    color: var(--color-error, #e05252);
+    color: var(--err);
     padding: 2px 12px 4px;
     margin: 0;
   }

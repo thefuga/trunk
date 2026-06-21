@@ -31,19 +31,17 @@ let {
     onclick={ontoggle}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') ontoggle(); }}
     style="
-      height: 28px;
-      border-bottom: 1px solid var(--color-border);
-      padding: 0 8px;
+      padding: 10px 10px 6px;
       display: flex;
       flex-direction: row;
       align-items: center;
       cursor: pointer;
     "
   >
-    <span style="color: var(--color-text-muted); display: inline-flex; align-items: center; margin-right: 4px;">
+    <span style="color: var(--fg-3); display: inline-flex; align-items: center; margin-right: 4px;">
       {#if expanded}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
     </span>
-    <span style="color: var(--color-text); font-size: 12px; font-weight: 500; flex: 1;">
+    <span style="color: var(--fg-3); font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; flex: 1;">
       {label} ({count})
     </span>
     {#if showCreateButton}

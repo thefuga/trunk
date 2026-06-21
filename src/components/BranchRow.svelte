@@ -47,12 +47,15 @@ let hovered = $state(false);
     onmouseleave={() => (hovered = false)}
     style="
       height: 26px;
-      padding: 0 12px;
+      margin: 0 6px;
+      padding: 0 8px;
+      border-radius: var(--radius-m);
       display: flex;
       align-items: center;
       overflow: hidden;
       cursor: pointer;
-      background: {hovered ? 'var(--color-surface)' : 'transparent'};
+      background: {isHead ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : hovered ? 'var(--bg-hover)' : 'transparent'};
+      box-shadow: {isHead ? 'inset 0 0 0 1px color-mix(in oklch, var(--accent) 30%, transparent)' : 'none'};
       color: {isHead ? 'var(--color-accent)' : isLoading ? 'var(--color-text-muted)' : 'var(--color-text)'};
       font-weight: {isHead ? '600' : 'normal'};
       font-size: 13px;
