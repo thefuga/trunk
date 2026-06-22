@@ -569,6 +569,6 @@ const pairedData = $derived(
   /* Trailing whitespace warning */
   .trailing-ws {
     background-color: var(--color-trailing-ws-bg);
-    color: var(--color-invisible);
+    color: var(--color-trailing-ws-fg);
   }
 </style>

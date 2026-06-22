@@ -1751,7 +1751,7 @@ $effect(() => {
           class="absolute top-0"
           width={refOffset + Math.max(graphColWidth, naturalGraphWidth)}
           height={contentHeight}
-          style="left: 0; pointer-events: none; z-index: 1; {searchDimmingActive ? 'opacity: 0.4;' : ''}"
+          style="left: 0; pointer-events: none; z-index: 1; {searchDimmingActive ? 'opacity: var(--opacity-search-dim);' : ''}"
         >
           <!-- GRAPH-02: clip graph content to column width -->
           <defs>

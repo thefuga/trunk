@@ -226,6 +226,6 @@ function gutterWidth(maxNum: number): string {
   /* Trailing whitespace warning (Phase 63 -- D-12) */
   .trailing-ws {
     background-color: var(--color-trailing-ws-bg);
-    color: var(--color-invisible);
+    color: var(--color-trailing-ws-fg);
   }
 </style>

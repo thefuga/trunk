@@ -43,8 +43,12 @@
 	/* ── Semantic status ── */
 	--ok: oklch(0.74 0.12 150);
 	--warn: oklch(0.82 0.14 90);
-	/* err lifted from 0.68 so red text (errors, "D" status, danger labels) clears AAA on panels */
-	--err: oklch(0.72 0.16 25);
+	/* err lifted to 0.76 so red text (errors, "D" status, danger labels) clears
+	   AAA — including the Discard/Abort danger buttons whose red label sits on a
+	   doubly-stacked info-tinted hunk header / operation banner. Verified to keep
+	   diff-delete syntax AAA and the word-emphasis-delete stack within its
+	   documented AA exemption (see diff_contrast_aaa). */
+	--err: oklch(0.76 0.16 25);
 	--info: oklch(0.72 0.1 235);
 
 	/* ── Diff backgrounds — calm color-mix ──
@@ -139,7 +143,10 @@
 	/* Syntax highlighting (Phase 61) — VSCode-dark base, lifted for contrast.
 	   The six dim hues (keyword, string, comment, punctuation, tag, regex) were
 	   brightened so every token clears WCAG AAA (7:1) on context, add, delete,
-	   and selected lines; the nine already-passing hues are unchanged. */
+	   and selected lines; the nine already-passing hues are unchanged. Punctuation
+	   is a neutral gray (no hue to wash), so it was lifted further to #cccccc to
+	   also clear AAA on the word-emphasis stack where the colored hues stay at the
+	   documented AA exemption. */
 	--color-syn-keyword: #6db2ee;
 	--color-syn-string: #dc9e84;
 	--color-syn-comment: #88b974;
@@ -149,7 +156,7 @@
 	--color-syn-variable: #9cdcfe;
 	--color-syn-constant: #4fc1ff;
 	--color-syn-operator: #d4d4d4;
-	--color-syn-punctuation: #acacac;
+	--color-syn-punctuation: #cccccc;
 	--color-syn-attribute: #9cdcfe;
 	--color-syn-tag: #6db2ee;
 	--color-syn-property: #9cdcfe;
@@ -198,11 +205,18 @@
 	/* Hunk highlight flash */
 	--color-hunk-flash: color-mix(in oklch, var(--info) 30%, transparent);
 
-	/* Invisible character markers (Phase 63 — WHSP-03) */
-	--color-invisible: color-mix(in oklch, var(--fg-3) 60%, transparent);
+	/* Invisible character markers (Phase 63 — WHSP-03). Opaque, not a translucent
+	   fill: a <1-alpha glyph composites toward the diff-line tint and can't hold
+	   AAA. L0.78 clears 7:1 on every single-tint diff line while staying dimmer
+	   than body text. */
+	--color-invisible: oklch(0.78 0.006 260);
 
-	/* Trailing whitespace warning (Phase 63 — D-12) */
+	/* Trailing whitespace warning (Phase 63 — D-12). The ·/→ substitution glyphs
+	   sit on the red trailing-ws tint stacked over a diff-line tint, so they need
+	   a brighter opaque foreground than ordinary invisibles to clear AAA on the
+	   worst (selected delete + word-emphasis) stack. */
 	--color-trailing-ws-bg: color-mix(in oklch, var(--err) 12%, transparent);
+	--color-trailing-ws-fg: oklch(0.9 0.004 260);
 
 	/* Search match highlights */
 	--color-search-current: color-mix(in oklch, var(--accent) 20%, transparent);
@@ -213,11 +227,20 @@
 	--shadow-md: var(--shadow-1);
 	--shadow-lg: var(--shadow-2);
 
-	/* De-emphasis opacity for rebase "drop" rows and orphaned review comments.
-	   Raised from 0.4 so the de-emphasized primary text (commit message,
-	   comment excerpt) still clears AA; this is an intentional transient
-	   de-emphasis, not AAA. */
-	--opacity-dimmed: 0.6;
+	/* De-emphasis opacity for rebase "drop" rows. Raised to 0.8 so the dimmed
+	   primary text (commit message / author, --fg-1) clears AAA (7.65) on the
+	   worst selected-row backdrop; the secondary date (--fg-2) lands at AA (5.11),
+	   an accepted transient de-emphasis also carried by the row's strike-through
+	   and Drop control. (Orphaned review comments no longer use this — they dim
+	   via a solid --fg-3 color instead of opacity-on-text.) */
+	--opacity-dimmed: 0.8;
+
+	/* De-emphasis for non-matching content while a graph search is active
+	   (CommitRow rows + the CommitGraph SVG overlay). 0.75 keeps the dimmed
+	   secondary text (--fg-2 author/date/sha) and ref-pill labels at AA while
+	   preserving a visible match-vs-rest distinction; this is a transient search
+	   state, not default text. */
+	--opacity-search-dim: 0.75;
 }
 
 html,

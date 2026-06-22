@@ -722,10 +722,7 @@ $effect(() => {
                        No syntax highlighting (the project's syntect-based path
                        isn't wired into the panel — deferred). -->
                   {#if comment.anchor !== null && comment.cached_excerpt}
-                    <div
-                      class="comment-card-diff"
-                      class:comment-card-diff-dim={isOrphan(comment)}
-                    >
+                    <div class="comment-card-diff">
                       {#each parseExcerpt(comment.cached_excerpt, comment.anchor.source) as line, i (i)}
                         <div class="diff-line diff-line-{line.kind}">
                           <span class="diff-gutter">{line.gutter}</span>
@@ -807,7 +804,10 @@ $effect(() => {
     font-family: inherit;
     cursor: pointer;
   }
-  .comment-card-fileref-dim { opacity: var(--opacity-dimmed); }
+  /* Orphan de-emphasis via a solid dim color, not opacity-on-text (which would
+     composite the glyph toward the card and drop it below AAA). --fg-3 on the
+     card surface is 7.68:1 (AAA) while still reading as muted. */
+  .comment-card-fileref-dim { color: var(--fg-3); }
 
   /* Diff hunk inside the card — line-level red/green backgrounds, no
      syntax highlighting (deferred). */
@@ -818,7 +818,6 @@ $effect(() => {
     line-height: 1.5;
     border-bottom: 1px solid var(--color-border);
   }
-  .comment-card-diff-dim { opacity: var(--opacity-dimmed); }
   .diff-line {
     display: flex;
   }

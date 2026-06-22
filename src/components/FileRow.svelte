@@ -42,14 +42,14 @@ const STATUS_BADGES: Record<FileStatusType, StatusBadge> = {
 let badge = $derived(
 	STATUS_BADGES[file.status] ?? {
 		letter: "?",
-		color: "var(--color-text-muted)",
+		color: "var(--color-text)",
 	},
 );
 
 let badgeBg = $derived(
 	isLoading
 		? "transparent"
-		: `color-mix(in oklch, ${badge.color} 8%, transparent)`,
+		: `color-mix(in oklch, ${badge.color} 6%, transparent)`,
 );
 </script>
 
