@@ -21,12 +21,17 @@
 	--line: oklch(0.22 0.004 260);
 	--line-strong: oklch(0.3 0.006 260);
 
-	/* ── Text ramp ── */
+	/* ── Text ramp ──
+	   fg-0/1/2/3 all carry real informational text, so each clears WCAG AAA
+	   (7:1) on the surfaces it renders on. AAA forces neutral text to L≳0.67 on
+	   these near-black surfaces, so the dim end (fg-2/fg-3) is compressed upward
+	   from its original ramp; fg-4 is the only sub-AAA tier and is used solely
+	   for genuinely disabled controls (WCAG 1.4.6 exempt). */
 	--fg-0: oklch(0.98 0.002 260); /* primary */
 	--fg-1: oklch(0.86 0.003 260); /* body */
-	--fg-2: oklch(0.68 0.005 260); /* secondary */
-	--fg-3: oklch(0.54 0.006 260); /* tertiary / captions */
-	--fg-4: oklch(0.38 0.006 260); /* disabled */
+	--fg-2: oklch(0.73 0.005 260); /* secondary — AAA through bg-selected */
+	--fg-3: oklch(0.7 0.006 260); /* tertiary / captions — AAA on bg-0..2 */
+	--fg-4: oklch(0.38 0.006 260); /* disabled — exempt, never real text */
 
 	/* ── Accent — electric blue ── */
 	--accent: oklch(0.76 0.15 245);
@@ -38,7 +43,8 @@
 	/* ── Semantic status ── */
 	--ok: oklch(0.74 0.12 150);
 	--warn: oklch(0.82 0.14 90);
-	--err: oklch(0.68 0.16 25);
+	/* err lifted from 0.68 so red text (errors, "D" status, danger labels) clears AAA on panels */
+	--err: oklch(0.72 0.16 25);
 	--info: oklch(0.72 0.1 235);
 
 	/* ── Diff backgrounds — calm color-mix ──
@@ -50,15 +56,17 @@
 	--diff-del-bg: color-mix(in oklch, var(--err) 11%, transparent);
 	--diff-del-hi: color-mix(in oklch, var(--err) 18%, transparent);
 
-	/* ── Graph lanes — equal-chroma across hues ── */
+	/* ── Graph lanes — equal-chroma across hues ──
+	   lane-5 and lane-7 were lifted from L0.70 to the sibling L0.76 so ref-pill
+	   text (lane color on its own translucent capsule) clears AAA. */
 	--lane-0: oklch(0.76 0.12 225);
 	--lane-1: oklch(0.76 0.14 55);
 	--lane-2: oklch(0.76 0.14 350);
 	--lane-3: oklch(0.76 0.12 275);
 	--lane-4: oklch(0.78 0.14 135);
-	--lane-5: oklch(0.7 0.12 200);
+	--lane-5: oklch(0.76 0.12 200);
 	--lane-6: oklch(0.76 0.14 160);
-	--lane-7: oklch(0.7 0.02 75);
+	--lane-7: oklch(0.76 0.02 75);
 
 	/* ── Radius & elevation ── */
 	--radius-s: 4px;
@@ -94,7 +102,7 @@
 	/* Accent */
 	--color-accent: var(--accent);
 	--color-accent-alt: var(--lane-3);
-	--color-accent-bg: color-mix(in oklch, var(--accent) 15%, transparent);
+	--color-accent-bg: color-mix(in oklch, var(--accent) 9%, transparent);
 	--color-accent-border: color-mix(in oklch, var(--accent) 30%, transparent);
 	--color-on-accent: var(--accent-fg);
 
@@ -148,10 +156,17 @@
 
 	/* Semantic status */
 	--color-success: var(--ok);
-	--color-success-bg: color-mix(in oklch, var(--ok) 15%, transparent);
+	/* Lowered with --color-danger-bg so semantic-color button text (ok/err on
+	   their own tints) clears AAA; these fills only ever sit behind light or
+	   same-hue text, so a darker wash strictly helps contrast. */
+	--color-success-bg: color-mix(in oklch, var(--ok) 9%, transparent);
 	--color-success-border: color-mix(in oklch, var(--ok) 30%, transparent);
 	--color-danger: var(--err);
-	--color-danger-bg: color-mix(in oklch, var(--err) 15%, transparent);
+	/* Faint fill behind red danger-button/alert text; kept low so the red-on-red
+	   pair (err text over its own tint) clears AAA on panels. */
+	--color-danger-bg: color-mix(in oklch, var(--err) 9%, transparent);
+	/* armed/hover danger fill — still dark enough for light text */
+	--color-danger-bg-strong: color-mix(in oklch, var(--err) 30%, transparent);
 	--color-danger-border: color-mix(in oklch, var(--err) 30%, transparent);
 	--color-danger-bg-subtle: color-mix(in oklch, var(--err) 8%, transparent);
 	--color-error: var(--err);
@@ -196,8 +211,11 @@
 	--shadow-md: var(--shadow-1);
 	--shadow-lg: var(--shadow-2);
 
-	/* Utility */
-	--opacity-dimmed: 0.4;
+	/* De-emphasis opacity for rebase "drop" rows and orphaned review comments.
+	   Raised from 0.4 so the de-emphasized primary text (commit message,
+	   comment excerpt) still clears AA; this is an intentional transient
+	   de-emphasis, not AAA. */
+	--opacity-dimmed: 0.6;
 }
 
 html,
@@ -215,4 +233,12 @@ body {
 	margin: 0;
 	-webkit-user-select: none;
 	user-select: none;
+}
+
+/* Placeholders render at full token contrast, not the UA's ~0.54-opacity
+   default dimming of the input color (which drops them below AA). */
+input::placeholder,
+textarea::placeholder {
+	color: var(--color-text-muted);
+	opacity: 1;
 }

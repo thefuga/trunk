@@ -829,7 +829,7 @@ async function showRemoteContextMenu(_e: MouseEvent, fullRefName: string) {
   }
 
   .stash-index {
-    color: var(--fg-4);
+    color: var(--fg-2);
     font-family: var(--font-mono);
     flex-shrink: 0;
   }

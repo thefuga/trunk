@@ -762,7 +762,7 @@ $effect(() => {
       {#if currentBranch}
         <span style="font-size: 11px; color: var(--color-text-muted);">on</span>
         <span style="
-          background: color-mix(in oklch, var(--lane-0) 22%, transparent);
+          background: color-mix(in oklch, var(--lane-0) 14%, transparent);
           box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--lane-0) 50%, transparent);
           border-radius: 9999px;
           padding: 0 8px;

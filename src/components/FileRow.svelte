@@ -49,7 +49,7 @@ let badge = $derived(
 let badgeBg = $derived(
 	isLoading
 		? "transparent"
-		: `color-mix(in oklch, ${badge.color} 18%, transparent)`,
+		: `color-mix(in oklch, ${badge.color} 8%, transparent)`,
 );
 </script>
 

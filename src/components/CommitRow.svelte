@@ -95,7 +95,7 @@ const rowShadow = $derived(
   class="relative flex items-center cursor-pointer text-[13px]"
   class:hover:bg-[var(--bg-hover)]={!selected && !isCurrentMatch && !isSearchMatch}
   style:height="{rowHeight}px"
-  style="color: var(--color-text); {isCurrentMatch ? 'background: var(--color-search-current);' : isSearchMatch ? 'background: var(--color-search-match);' : selected ? 'background: var(--color-selected-row);' : ''} {isSearchActive && !isSearchMatch && !isCurrentMatch ? 'opacity: 0.35;' : ''} {rowShadow ? `box-shadow: ${rowShadow};` : ''}"
+  style="color: var(--color-text); {isCurrentMatch ? 'background: var(--color-search-current);' : isSearchMatch ? 'background: var(--color-search-match);' : selected ? 'background: var(--color-selected-row);' : ''} {isSearchActive && !isSearchMatch && !isCurrentMatch ? 'opacity: 0.6;' : ''} {rowShadow ? `box-shadow: ${rowShadow};` : ''}"
   onclick={() => onselect?.(commit.oid)}
   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect?.(commit.oid); } }}
   oncontextmenu={(e: MouseEvent) => { if (oncontextmenu && !isWip) { e.preventDefault(); oncontextmenu(e, commit); } }}

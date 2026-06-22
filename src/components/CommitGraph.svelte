@@ -1751,7 +1751,7 @@ $effect(() => {
           class="absolute top-0"
           width={refOffset + Math.max(graphColWidth, naturalGraphWidth)}
           height={contentHeight}
-          style="left: 0; pointer-events: none; z-index: 1; {searchDimmingActive ? 'opacity: 0.2;' : ''}"
+          style="left: 0; pointer-events: none; z-index: 1; {searchDimmingActive ? 'opacity: 0.4;' : ''}"
         >
           <!-- GRAPH-02: clip graph content to column width -->
           <defs>
@@ -1846,7 +1846,7 @@ $effect(() => {
                   rx={PILL_HEIGHT / 2}
                   ry={PILL_HEIGHT / 2}
                   fill={laneColor(pill.colorIndex)}
-                  fill-opacity={pill.isRemoteOnly ? 0.12 : 0.2}
+                  fill-opacity={pill.isRemoteOnly ? 0.1 : 0.14}
                   stroke={laneColor(pill.colorIndex)}
                   stroke-opacity="0.5"
                   pointer-events="auto"
@@ -1901,7 +1901,7 @@ $effect(() => {
                     rx={BADGE_HEIGHT / 2}
                     ry={BADGE_HEIGHT / 2}
                     fill={laneColor(pill.colorIndex)}
-                    fill-opacity="0.2"
+                    fill-opacity="0.14"
                     stroke={laneColor(pill.colorIndex)}
                     stroke-opacity="0.5"
                     pointer-events="auto"
@@ -1955,7 +1955,7 @@ $effect(() => {
                 {@const ri = refFromLabel(ref)}
                 <div
                   style="display: flex; align-items: center; gap: 3px; cursor: {ri.refType === 'LocalBranch' || ri.refType === 'RemoteBranch' ? 'pointer' : 'context-menu'}; border-radius: 4px; color: var(--lane-{ref.color_index % 8});"
-                  class="text-[11px] leading-5 font-medium whitespace-nowrap hover:bg-white/15 px-1 -mx-1"
+                  class="text-[11px] leading-5 font-medium whitespace-nowrap hover:bg-white/8 px-1 -mx-1"
                   oncontextmenu={(e) => showRefContextMenu(e, ri)}
                   ondblclick={ri.refType === 'LocalBranch' || ri.refType === 'RemoteBranch' ? (e: MouseEvent) => handleRefCheckout(e, ri) : undefined}
                 >
@@ -1975,7 +1975,7 @@ $effect(() => {
                 left: {hoveredPill.x}px;
                 top: {hoveredPill.y - PILL_HEIGHT / 2}px;
                 height: {PILL_HEIGHT}px;
-                background: color-mix(in oklch, var(--lane-{hoveredPill.colorIndex % 8}) 20%, var(--bg-2));
+                background: color-mix(in oklch, var(--lane-{hoveredPill.colorIndex % 8}) 14%, var(--bg-2));
                 box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--lane-{hoveredPill.colorIndex % 8}) 50%, transparent);
                 padding: 0 {PILL_PADDING_X}px;
                 z-index: 50;
