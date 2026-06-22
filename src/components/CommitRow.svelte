@@ -118,7 +118,7 @@ const rowShadow = $derived(
     </div>
   {:else}
     <div data-testid="commit-row-summary" class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap" style="padding: 0 {COLUMN_PADDING_X}px;"
-    >{#if parsed.prefix}<span class="font-mono font-medium" style="color: {prefixToneVar(parsed.prefix)};">{parsed.prefix}{parsed.scope}{parsed.bang}</span><span style="color: var(--fg-4);">{": "}</span>{parsed.rest}{:else}{commit.summary}{/if}</div>
+    >{#if parsed.prefix}<span style="color: {prefixToneVar(parsed.prefix)};">{parsed.prefix}{parsed.scope}{parsed.bang}</span><span style="color: var(--fg-4);">{": "}</span>{parsed.rest}{:else}{commit.summary}{/if}</div>
   {/if}
 
   <!-- Column 4: Author -->
