@@ -200,6 +200,11 @@ async function requestDelete() {
     border-radius: 4px;
     background: var(--color-comment-card-bg);
     overflow: hidden;
+    /* Own the typography so the card renders identically regardless of the
+       host's inherited font — the inline diff host and the review panel pass
+       different defaults, which is why the body prose drifted in size. */
+    font-family: var(--font-sans);
+    font-size: 12px;
   }
   /* Inline hosts (diff / commit-detail) span the full row width naturally; the
      panel card sits inside the per-commit list. The variants exist so width and
@@ -236,8 +241,7 @@ async function requestDelete() {
   /* Diff hunk inside the card — line-level red/green backgrounds, no
      syntax highlighting (deferred). */
   .comment-card-diff {
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     line-height: 1.5;
     border-bottom: 1px solid var(--color-border);
