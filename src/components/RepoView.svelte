@@ -73,10 +73,12 @@ interface Props {
 	// with what's rendered: it's lit only when the panel shows, and a click while a
 	// diff is up returns to the panel rather than ending the session (260531-l02e).
 	onreviewpanelshowingchange: (showing: boolean) => void;
-	// Reports the inline-comment badge count up to App for the Toolbar bubble. The
-	// predicate (which view's count to report) lives here because RepoView owns the
-	// view state. Optional so the gate stays green until App provides it.
-	oninlinecommentcountchange?: (count: number) => void;
+	// Reports both Toolbar badge counts up to App: `view` is the current view's
+	// comment count (show-comments toggle badge), `total` is the whole session's
+	// (Review button badge). The predicate (which view's count to report) lives
+	// here because RepoView owns the view state. Optional so the gate stays green
+	// until App provides it.
+	oncommentcountschange?: (counts: { view: number; total: number }) => void;
 	onleftpanecollapsedchange: (collapsed: boolean) => void;
 	onrightpanecollapsedchange: (collapsed: boolean) => void;
 	onleftpanewidthchange: (width: number) => void;
@@ -96,7 +98,7 @@ let {
 	reviewActive,
 	showInlineComments = true,
 	onreviewpanelshowingchange,
-	oninlinecommentcountchange,
+	oncommentcountschange,
 	onleftpanecollapsedchange,
 	onrightpanecollapsedchange,
 	onleftpanewidthchange,
@@ -293,11 +295,12 @@ let viewComments = $derived(
 		: [],
 );
 
-// Inline-comment badge count reported to App for the Toolbar bubble.
+// Inline-comment badge count for the show-comments toggle: only the comments
+// this toggle governs in the CURRENT view.
 //   no session            → 0 (badge hidden)
 //   a diff open for a file → comments for that view/file
 //   CommitDetail is the active right pane → commit-level notes for its oid
-//   otherwise (commit graph / staging, no file) → totalCount
+//   otherwise (commit graph / staging, no file) → 0 (nothing in this view)
 let inlineCommentCount = $derived(
 	!reviewComments.active
 		? 0
@@ -307,17 +310,25 @@ let inlineCommentCount = $derived(
 				? reviewComments.comments.filter(
 						(c) => c.anchor === null && c.commit_oid === commitDetail?.oid,
 					).length
-				: reviewComments.totalCount,
+				: 0,
 );
 
-// Report the count up through untrack: App's setInlineCommentCount copies the
-// counts map (`new Map(inlineCommentCounts)`) before writing it, so calling the
+// Total comments in the session, for the Review button badge — independent of
+// which pane the user is looking at. 0 when no session so the badge hides.
+let reviewCommentTotal = $derived(
+	reviewComments.active ? reviewComments.totalCount : 0,
+);
+
+// Report both counts up through untrack: App's setCommentCounts copies the
+// counts map (`new Map(commentCounts)`) before writing it, so calling the
 // callback inside a tracked effect would make this effect depend on the very
-// state it writes → effect_update_depth_exceeded. Tracking only inlineCommentCount
-// keeps the report strictly one-way.
+// state it writes → effect_update_depth_exceeded. Reading both derived values
+// before the untrack callback keeps the report one-way yet re-fires when either
+// count changes.
 $effect(() => {
-	const count = inlineCommentCount;
-	untrack(() => oninlinecommentcountchange?.(count));
+	const view = inlineCommentCount;
+	const total = reviewCommentTotal;
+	untrack(() => oncommentcountschange?.({ view, total }));
 });
 
 async function loadDirtyCounts() {

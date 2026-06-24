@@ -29,7 +29,10 @@ interface Props {
 	// (260531-l02e).
 	reviewPanelShowing?: boolean;
 	showInlineComments?: boolean;
+	// Comments in the current view (show-comments toggle badge).
 	inlineCommentCount?: number;
+	// Total comments in the session (Review button badge).
+	reviewCommentCount?: number;
 	ontoggleinlinecomments?: () => void;
 }
 
@@ -41,6 +44,7 @@ let {
 	reviewPanelShowing = true,
 	showInlineComments = true,
 	inlineCommentCount = 0,
+	reviewCommentCount = 0,
 	ontoggleinlinecomments,
 }: Props = $props();
 
@@ -386,7 +390,7 @@ async function handleBranchCreate(values: Record<string, string>) {
       {/if}
     </button>
     <button
-      class="toolbar-btn"
+      class="toolbar-btn toolbar-btn-badged"
       class:toolbar-btn-active={reviewButtonActive}
       aria-pressed={reviewButtonActive}
       aria-label="Review"
@@ -394,6 +398,9 @@ async function handleBranchCreate(values: Record<string, string>) {
       onclick={handleReviewToggle}
     >
       <ClipboardCheck size={14} />
+      {#if reviewCommentCount > 0}
+        <span class="toolbar-badge">{reviewCommentCount}</span>
+      {/if}
     </button>
   </div>
 </div>

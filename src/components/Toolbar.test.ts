@@ -255,6 +255,53 @@ describe("Toolbar", () => {
 		expect(btn.querySelector(".toolbar-badge")).toBeNull();
 	});
 
+	it("shows the review-comment count on the Review button badge", () => {
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: false,
+				reviewCommentCount: 4,
+			},
+		});
+		const btn = screen.getByRole("button", { name: /Review/ });
+		expect(btn.querySelector(".toolbar-badge")?.textContent).toBe("4");
+	});
+
+	it("hides the Review button badge when review-comment count is zero", () => {
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: false,
+				reviewCommentCount: 0,
+			},
+		});
+		const btn = screen.getByRole("button", { name: /Review/ });
+		expect(btn.querySelector(".toolbar-badge")).toBeNull();
+	});
+
+	it("renders distinct badges for the view and total counts", () => {
+		render(Toolbar, {
+			props: {
+				repoPath: "/test/repo",
+				remoteState: makeRemoteState(),
+				undoRedo: makeUndoRedo(),
+				reviewActive: false,
+				inlineCommentCount: 2,
+				reviewCommentCount: 4,
+			},
+		});
+		const toggleBtn = screen.getByRole("button", {
+			name: /Toggle inline comments/,
+		});
+		const reviewBtn = screen.getByRole("button", { name: /Review/ });
+		expect(toggleBtn.querySelector(".toolbar-badge")?.textContent).toBe("2");
+		expect(reviewBtn.querySelector(".toolbar-badge")?.textContent).toBe("4");
+	});
+
 	it("fires ontoggleinlinecomments when the toggle is clicked", async () => {
 		const ontoggleinlinecomments = vi.fn();
 		render(Toolbar, {
