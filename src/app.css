@@ -275,3 +275,32 @@ textarea::placeholder {
 	color: var(--color-text-muted);
 	opacity: 1;
 }
+
+/* Custom tooltip rendered by the `tooltip` action (src/lib/tooltip.ts). Appended
+   to <body> and positioned via fixed coordinates, so the styles live here rather
+   than in a component's scoped block. fg-1 on bg-2 is 13.17:1 (AAA). */
+.tooltip-pop {
+	position: fixed;
+	z-index: 1000;
+	padding: 3px 7px;
+	background: var(--bg-2);
+	color: var(--fg-1);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-s);
+	box-shadow: var(--shadow-md);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.2;
+	white-space: nowrap;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 80ms ease;
+}
+.tooltip-pop-shown {
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.tooltip-pop {
+		transition: none;
+	}
+}
