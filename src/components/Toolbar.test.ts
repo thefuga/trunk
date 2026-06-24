@@ -64,7 +64,7 @@ describe("Toolbar", () => {
 				reviewActive: false,
 			},
 		});
-		expect(screen.getByText("Pull")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Pull" })).toBeInTheDocument();
 	});
 
 	it("renders Push button", () => {
@@ -76,7 +76,7 @@ describe("Toolbar", () => {
 				reviewActive: false,
 			},
 		});
-		expect(screen.getByText("Push")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Push" })).toBeInTheDocument();
 	});
 
 	it("renders Branch button", () => {
@@ -88,7 +88,7 @@ describe("Toolbar", () => {
 				reviewActive: false,
 			},
 		});
-		expect(screen.getByText("Branch")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Branch" })).toBeInTheDocument();
 	});
 
 	it("renders Stash and Pop buttons", () => {
@@ -100,8 +100,8 @@ describe("Toolbar", () => {
 				reviewActive: false,
 			},
 		});
-		expect(screen.getByText("Stash")).toBeInTheDocument();
-		expect(screen.getByText("Pop")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Stash" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Pop" })).toBeInTheDocument();
 	});
 
 	it("renders Undo and Redo buttons", () => {
@@ -113,8 +113,8 @@ describe("Toolbar", () => {
 				reviewActive: false,
 			},
 		});
-		expect(screen.getByText("Undo")).toBeInTheDocument();
-		expect(screen.getByText("Redo")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
 	});
 
 	it("disables Pull and Push when remote operation is running", () => {
@@ -130,8 +130,8 @@ describe("Toolbar", () => {
 			},
 		});
 
-		const pullBtn = screen.getByText("Pull").closest("button");
-		const pushBtn = screen.getByText("Push").closest("button");
+		const pullBtn = screen.getByRole("button", { name: "Pull" });
+		const pushBtn = screen.getByRole("button", { name: "Push" });
 		expect(pullBtn).toBeDisabled();
 		expect(pushBtn).toBeDisabled();
 	});
@@ -146,7 +146,7 @@ describe("Toolbar", () => {
 			},
 		});
 
-		const redoBtn = screen.getByText("Redo").closest("button");
+		const redoBtn = screen.getByRole("button", { name: "Redo" });
 		expect(redoBtn).toBeDisabled();
 	});
 

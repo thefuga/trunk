@@ -1,12 +1,12 @@
 <script lang="ts">
 import {
 	Archive,
+	ArchiveRestore,
 	ArrowDown,
 	ArrowUp,
+	ClipboardCheck,
 	GitBranch,
 	MessageSquare,
-	MessagesSquare,
-	PackageOpen,
 	Redo2,
 	Undo2,
 } from "@lucide/svelte";
@@ -249,16 +249,14 @@ async function handleBranchCreate(values: Record<string, string>) {
   .toolbar-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    width: 26px;
     height: 26px;
-    padding: 0 10px;
+    padding: 0;
     border: 1px solid var(--line);
     border-radius: var(--radius-m);
     background: transparent;
     color: var(--fg-1);
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
     cursor: pointer;
   }
   .toolbar-btn:focus-visible {
@@ -335,11 +333,11 @@ async function handleBranchCreate(values: Record<string, string>) {
 
 <div data-tauri-drag-region class="toolbar">
   <div class="toolbar-group">
-    <button class="toolbar-btn" disabled={!canUndo} onclick={handleUndo}>
-      <Undo2 size={14} /> Undo
+    <button class="toolbar-btn" disabled={!canUndo} onclick={handleUndo} aria-label="Undo" title="Undo">
+      <Undo2 size={14} />
     </button>
-    <button class="toolbar-btn" disabled={undoRedo.state.redoStack.length === 0} onclick={handleRedo}>
-      <Redo2 size={14} /> Redo
+    <button class="toolbar-btn" disabled={undoRedo.state.redoStack.length === 0} onclick={handleRedo} aria-label="Redo" title="Redo">
+      <Redo2 size={14} />
     </button>
   </div>
 
@@ -347,27 +345,27 @@ async function handleBranchCreate(values: Record<string, string>) {
 
   <div class="toolbar-group">
     <div class="btn-group">
-      <button class="toolbar-btn" disabled={remoteState.isRunning} onclick={handlePull}>
-        <ArrowDown size={14} /> Pull
+      <button class="toolbar-btn" disabled={remoteState.isRunning} onclick={handlePull} aria-label="Pull" title="Pull">
+        <ArrowDown size={14} />
       </button>
       <PullDropdown {repoPath} disabled={remoteState.isRunning} {remoteState} />
     </div>
-    <button class="toolbar-btn" disabled={remoteState.isRunning} onclick={handlePush}>
-      <ArrowUp size={14} /> Push
+    <button class="toolbar-btn" disabled={remoteState.isRunning} onclick={handlePush} aria-label="Push" title="Push">
+      <ArrowUp size={14} />
     </button>
   </div>
 
   <div class="toolbar-divider"></div>
 
   <div class="toolbar-group">
-    <button class="toolbar-btn" onclick={handleBranch}>
-      <GitBranch size={14} /> Branch
+    <button class="toolbar-btn" onclick={handleBranch} aria-label="Branch" title="Branch">
+      <GitBranch size={14} />
     </button>
-    <button class="toolbar-btn" onclick={handleStash}>
-      <Archive size={14} /> Stash
+    <button class="toolbar-btn" onclick={handleStash} aria-label="Stash" title="Stash">
+      <Archive size={14} />
     </button>
-    <button class="toolbar-btn" onclick={handlePop}>
-      <PackageOpen size={14} /> Pop
+    <button class="toolbar-btn" onclick={handlePop} aria-label="Pop" title="Pop">
+      <ArchiveRestore size={14} />
     </button>
   </div>
 
@@ -379,6 +377,7 @@ async function handleBranchCreate(values: Record<string, string>) {
       class:toolbar-btn-toggle-on={showInlineComments}
       aria-pressed={showInlineComments}
       aria-label="Toggle inline comments"
+      title="Toggle inline comments"
       onclick={ontoggleinlinecomments}
     >
       <MessageSquare size={14} />
@@ -390,9 +389,11 @@ async function handleBranchCreate(values: Record<string, string>) {
       class="toolbar-btn"
       class:toolbar-btn-active={reviewButtonActive}
       aria-pressed={reviewButtonActive}
+      aria-label="Review"
+      title="Review"
       onclick={handleReviewToggle}
     >
-      <MessagesSquare size={14} /> Review
+      <ClipboardCheck size={14} />
     </button>
   </div>
 </div>
