@@ -171,7 +171,8 @@ exit 0
     }
 
     // 5. Run git rebase -i (blocking — waits for completion)
-    let repo_descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
     let mut command =
         command_runner::GitCommandSpec::for_repo(&repo_descriptor, &["rebase", "-i", base_oid])
             .command();

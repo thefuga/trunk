@@ -776,7 +776,8 @@ mod tests {
         let (dir, _repo) = ff_repo();
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
-        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
+        let result =
+            merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
         assert_eq!(kind_of(&result), "fast_forwarded");
         assert!(
             !merge_head_path(&dir).exists(),
@@ -789,7 +790,8 @@ mod tests {
         let (dir, _repo) = clean_divergent_repo();
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
-        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
+        let result =
+            merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
         assert_eq!(kind_of(&result), "ready");
         let message = match result {
             MergeBeginResult::Ready { message, .. } => message,
@@ -819,7 +821,8 @@ mod tests {
         repo.set_head("refs/heads/devel").unwrap();
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
-        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
+        let result =
+            merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
         let message = match result {
             MergeBeginResult::Ready { message, .. } => message,
             other => panic!("expected Ready, got {:?}", kind_of(&other)),
@@ -835,7 +838,8 @@ mod tests {
         let (dir, _repo) = conflict_divergent_repo();
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
-        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
+        let result =
+            merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
         assert_eq!(kind_of(&result), "conflicts");
         assert!(
             merge_head_path(&dir).exists(),
@@ -874,7 +878,8 @@ mod tests {
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
         // Begin the conflicted merge so MERGE_HEAD + `# Conflicts:` MERGE_MSG exist.
-        let result = merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
+        let result =
+            merge_branch_begin_inner(&path_str(&dir), "feature", &map, &descriptors).unwrap();
         assert_eq!(kind_of(&result), "conflicts");
         // Resolve the conflict by staging a fixed version of the file.
         let blob = repo.blob(b"resolved\n").unwrap();

@@ -297,7 +297,11 @@ pub fn fast_forward_to_inner(
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
     let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    let output = command_runner::git_output(&repo, &["merge", "--ff-only", target_oid], "merge_error")?;
+    let output = command_runner::git_output(
+        &repo,
+        &["merge", "--ff-only", target_oid],
+        "merge_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();

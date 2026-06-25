@@ -701,7 +701,8 @@ mod tests {
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
         let descriptors = HashMap::new();
-        let result = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors).unwrap();
+        let result =
+            revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors).unwrap();
         let message = result.message.expect("clean revert must carry a message");
         assert!(
             message.starts_with("Revert \"change to v2\""),
