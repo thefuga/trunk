@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use uuid::Uuid;
 
 use crate::error::TrunkError;
+use crate::git::command_runner;
 use crate::git::editor::shell_single_quote;
 use crate::git::types::{RepoDescriptor, RepoLocator};
 use crate::shell_env;
@@ -111,6 +112,70 @@ pub fn write_repo_file(
                 distro,
                 linux_path,
                 &format!("mkdir -p -- \"$(dirname -- {rel})\" && cat > {rel}"),
+                Some(content.as_bytes()),
+            )?;
+            Ok(())
+        }
+    }
+}
+
+fn resolve_git_path(repo: &RepoDescriptor, git_relative_path: &str) -> Result<String, TrunkError> {
+    validate_repo_relative(git_relative_path)?;
+    let output = command_runner::git_output(
+        repo,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            git_relative_path,
+        ],
+        "git_path_error",
+    )?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(TrunkError::new("git_path_error", stderr.trim().to_string()));
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() {
+        return Err(TrunkError::new(
+            "git_path_error",
+            format!("Git path not found: {git_relative_path}"),
+        ));
+    }
+    Ok(path)
+}
+
+pub fn read_git_file(repo: &RepoDescriptor, git_relative_path: &str) -> Result<String, TrunkError> {
+    let git_path = resolve_git_path(repo, git_relative_path)?;
+    match &repo.locator {
+        RepoLocator::Local { .. } => std::fs::read_to_string(&git_path)
+            .map_err(|e| TrunkError::new("io_error", e.to_string())),
+        RepoLocator::Wsl { distro, linux_path } => {
+            let path = shell_single_quote(&git_path);
+            let bytes = wsl_output(distro, linux_path, &format!("cat -- {path}"), None)?;
+            String::from_utf8(bytes).map_err(|e| TrunkError::new("utf8_error", e.to_string()))
+        }
+    }
+}
+
+pub fn write_git_file(
+    repo: &RepoDescriptor,
+    git_relative_path: &str,
+    content: &str,
+) -> Result<(), TrunkError> {
+    let git_path = resolve_git_path(repo, git_relative_path)?;
+    match &repo.locator {
+        RepoLocator::Local { .. } => {
+            std::fs::write(&git_path, content)
+                .map_err(|e| TrunkError::new("write_error", e.to_string()))?;
+            Ok(())
+        }
+        RepoLocator::Wsl { distro, linux_path } => {
+            let path = shell_single_quote(&git_path);
+            wsl_output(
+                distro,
+                linux_path,
+                &format!("mkdir -p -- \"$(dirname -- {path})\" && cat > {path}"),
                 Some(content.as_bytes()),
             )?;
             Ok(())
@@ -267,5 +332,68 @@ pub fn wsl_poll_token(repo: &RepoDescriptor) -> Result<Option<String>, TrunkErro
             let bytes = wsl_output(distro, linux_path, script, None)?;
             Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::process::Command;
+
+    fn run_git(dir: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git command should spawn");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn git_file_helpers_resolve_gitfile_worktree_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let main_path = root.path().join("main");
+        let worktree_path = root.path().join("linked");
+        fs::create_dir(&main_path).unwrap();
+
+        run_git(&main_path, &["init", "-b", "main"]);
+        run_git(&main_path, &["config", "user.name", "Test"]);
+        run_git(&main_path, &["config", "user.email", "test@example.com"]);
+        fs::write(main_path.join("README.md"), "initial\n").unwrap();
+        run_git(&main_path, &["add", "README.md"]);
+        run_git(&main_path, &["commit", "-m", "initial"]);
+        run_git(
+            &main_path,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "linked-branch",
+                worktree_path.to_str().unwrap(),
+            ],
+        );
+
+        let descriptor = RepoDescriptor::local(worktree_path.to_string_lossy().into_owned());
+        assert!(
+            worktree_path.join(".git").is_file(),
+            "linked worktree should use a .git file"
+        );
+
+        write_git_file(&descriptor, "MERGE_MSG", "Merge branch 'feature'\n").unwrap();
+
+        assert_eq!(
+            read_git_file(&descriptor, "MERGE_MSG").unwrap(),
+            "Merge branch 'feature'\n"
+        );
+        assert!(
+            !worktree_path.join(".git").join("MERGE_MSG").exists(),
+            "helper must not assume .git is a directory"
+        );
     }
 }

@@ -33,7 +33,7 @@ fn run_git_operation(
     command_runner::git_output(&repo, args, spawn_error_code)
 }
 
-fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
+pub(crate) fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
     let msg = merge_msg?;
     // Patterns: "Merge branch 'feature'" or "Merge remote-tracking branch 'origin/feature'"
     if let Some(rest) = msg.strip_prefix("Merge branch '") {
@@ -223,7 +223,7 @@ pub fn rebase_continue_inner(
     let repo_descriptor =
         crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
 
-    // Write edited message to .git/rebase-merge/message before continuing
+    // Write edited message to Git's rebase message file before continuing.
     if let Some(msg) = message {
         match read_model::backend_from_state(path, state_map, descriptor_map)? {
             read_model::ReadBackend::Local(path_buf) => {
@@ -241,21 +241,12 @@ pub fn rebase_continue_inner(
                 }
             }
             read_model::ReadBackend::Wsl(_) => {
-                if backend_fs::read_repo_file(&repo_descriptor, ".git/rebase-merge/message").is_ok()
-                {
-                    backend_fs::write_repo_file(
-                        &repo_descriptor,
-                        ".git/rebase-merge/message",
-                        msg,
-                    )?;
-                } else if backend_fs::read_repo_file(&repo_descriptor, ".git/rebase-apply/message")
+                if backend_fs::read_git_file(&repo_descriptor, "rebase-merge/message").is_ok() {
+                    backend_fs::write_git_file(&repo_descriptor, "rebase-merge/message", msg)?;
+                } else if backend_fs::read_git_file(&repo_descriptor, "rebase-apply/message")
                     .is_ok()
                 {
-                    backend_fs::write_repo_file(
-                        &repo_descriptor,
-                        ".git/rebase-apply/message",
-                        msg,
-                    )?;
+                    backend_fs::write_git_file(&repo_descriptor, "rebase-apply/message", msg)?;
                 }
             }
         }
@@ -337,12 +328,10 @@ pub fn get_merge_message_inner_with_descriptors(
 ) -> Result<Option<String>, TrunkError> {
     match read_model::backend_from_state(path, state_map, descriptor_map)? {
         read_model::ReadBackend::Local(_) => get_merge_message_inner(path, state_map),
-        read_model::ReadBackend::Wsl(repo) => {
-            match backend_fs::read_repo_file(&repo, ".git/MERGE_MSG") {
-                Ok(message) => Ok(Some(message)),
-                Err(_) => Ok(None),
-            }
-        }
+        read_model::ReadBackend::Wsl(repo) => match backend_fs::read_git_file(&repo, "MERGE_MSG") {
+            Ok(message) => Ok(Some(message)),
+            Err(_) => Ok(None),
+        },
     }
 }
 

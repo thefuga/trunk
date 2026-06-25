@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::error::TrunkError;
-use crate::git::command_runner;
 use crate::git::types::{
     BranchInfo, CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus,
     EdgeType, FileDiff, FileStatus, FileStatusType, GraphCommit, GraphEdge, GraphResult,
     OperationInfo, OperationType, RefLabel, RefType, RefsResponse, RepoDescriptor, RepoLocator,
     StashEntry, WorkingTreeStatus,
 };
+use crate::git::{backend_fs, command_runner};
 
 pub enum ReadBackend {
     Local(PathBuf),
@@ -770,47 +770,135 @@ pub fn wsl_refs(repo: &RepoDescriptor) -> Result<RefsResponse, TrunkError> {
     })
 }
 
+fn git_verify_ref(repo: &RepoDescriptor, name: &str) -> bool {
+    git_output(repo, &["rev-parse", "-q", "--verify", name])
+        .ok()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn read_wsl_git_file(repo: &RepoDescriptor, path: &str) -> Option<String> {
+    backend_fs::read_git_file(repo, path)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+fn wsl_rebase_dir(repo: &RepoDescriptor) -> Option<&'static str> {
+    if read_wsl_git_file(repo, "rebase-merge/head-name").is_some()
+        || read_wsl_git_file(repo, "rebase-merge/msgnum").is_some()
+    {
+        Some("rebase-merge")
+    } else if read_wsl_git_file(repo, "rebase-apply/head-name").is_some()
+        || read_wsl_git_file(repo, "rebase-apply/msgnum").is_some()
+    {
+        Some("rebase-apply")
+    } else {
+        None
+    }
+}
+
+fn resolve_wsl_oid_to_branch(repo: &RepoDescriptor, oid: &str) -> Option<String> {
+    let refs = git_output(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)%00%(objectname)",
+            "refs/heads",
+        ],
+    )
+    .ok()?;
+    for line in refs.lines() {
+        let mut fields = line.splitn(2, '\0');
+        let name = fields.next().unwrap_or("");
+        let object = fields.next().unwrap_or("");
+        if object == oid {
+            return Some(name.to_string());
+        }
+    }
+    Some(short_oid(oid))
+}
+
 pub fn wsl_operation_state(repo: &RepoDescriptor) -> Result<OperationInfo, TrunkError> {
     let files = git_output(repo, &["ls-files", "-u"]).unwrap_or_default();
     let has_conflicts = !files.trim().is_empty();
-    let status = git_output(repo, &["status"]).unwrap_or_default();
-    let status_lower = status.to_lowercase();
-    let op_type = if status_lower.contains("rebase") {
-        OperationType::Rebase
-    } else if status_lower.contains("cherry-pick") {
-        OperationType::CherryPick
-    } else if status_lower.contains("revert") {
-        OperationType::Revert
-    } else if has_conflicts
-        || !git_output_owned(
-            repo,
-            &[
-                "rev-parse".into(),
-                "-q".into(),
-                "--verify".into(),
-                "MERGE_HEAD".into(),
-            ],
-        )
-        .unwrap_or_default()
-        .trim()
-        .is_empty()
-    {
-        OperationType::Merge
+    let target_branch = git_output(repo, &["branch", "--show-current"])
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if let Some(rebase_dir) = wsl_rebase_dir(repo) {
+        let head_name = read_wsl_git_file(repo, &format!("{rebase_dir}/head-name"))
+            .map(|value| value.replace("refs/heads/", ""));
+        let onto_branch = read_wsl_git_file(repo, &format!("{rebase_dir}/onto"))
+            .and_then(|oid| resolve_wsl_oid_to_branch(repo, &oid));
+        let msgnum = read_wsl_git_file(repo, &format!("{rebase_dir}/msgnum"));
+        let end = read_wsl_git_file(repo, &format!("{rebase_dir}/end"));
+        let progress = match (msgnum, end) {
+            (Some(m), Some(e)) => Some(format!("{m}/{e}")),
+            _ => None,
+        };
+        let rebase_message = read_wsl_git_file(repo, &format!("{rebase_dir}/message"));
+        return Ok(OperationInfo {
+            op_type: OperationType::Rebase,
+            source_branch: head_name,
+            target_branch: onto_branch.or(target_branch),
+            progress,
+            source_color_index: None,
+            target_color_index: None,
+            rebase_message,
+        });
+    }
+
+    if git_verify_ref(repo, "CHERRY_PICK_HEAD") {
+        return Ok(OperationInfo {
+            op_type: OperationType::CherryPick,
+            source_branch: None,
+            target_branch,
+            progress: None,
+            source_color_index: None,
+            target_color_index: None,
+            rebase_message: None,
+        });
+    }
+
+    if git_verify_ref(repo, "REVERT_HEAD") {
+        return Ok(OperationInfo {
+            op_type: OperationType::Revert,
+            source_branch: None,
+            target_branch,
+            progress: None,
+            source_color_index: None,
+            target_color_index: None,
+            rebase_message: None,
+        });
+    }
+
+    if has_conflicts || git_verify_ref(repo, "MERGE_HEAD") {
+        let merge_msg = backend_fs::read_git_file(repo, "MERGE_MSG").ok();
+        let source_branch = merge_msg.as_deref().and_then(|message| {
+            crate::commands::operation_state::extract_merge_source(Some(message))
+        });
+        Ok(OperationInfo {
+            op_type: OperationType::Merge,
+            source_branch,
+            target_branch,
+            progress: None,
+            source_color_index: None,
+            target_color_index: None,
+            rebase_message: None,
+        })
     } else {
-        OperationType::None
-    };
-    Ok(OperationInfo {
-        op_type,
-        source_branch: None,
-        target_branch: git_output(repo, &["branch", "--show-current"])
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
-        progress: None,
-        source_color_index: None,
-        target_color_index: None,
-        rebase_message: None,
-    })
+        Ok(OperationInfo {
+            op_type: OperationType::None,
+            source_branch: None,
+            target_branch,
+            progress: None,
+            source_color_index: None,
+            target_color_index: None,
+            rebase_message: None,
+        })
+    }
 }
 
 #[cfg(test)]
