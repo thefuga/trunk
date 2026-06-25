@@ -1,11 +1,11 @@
 // Diff commands — Phase 6 implementation
 
 use crate::error::TrunkError;
-use crate::git::syntax;
 use crate::git::types::{
     CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus, FileDiff,
     WordSpan,
 };
+use crate::git::{read_model, syntax};
 use crate::state::RepoState;
 use similar::{ChangeTag, TextDiff};
 use std::collections::HashMap;
@@ -514,8 +514,18 @@ pub async fn diff_unstaged(
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        diff_unstaged_inner(&path, &file_path, &state_map, &options)
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                diff_unstaged_inner(&path, &file_path, &state_map, &options)
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                let mut diffs = read_model::wsl_diff_unstaged(&repo, &file_path, &options)?;
+                enrich_file_diffs(&mut diffs);
+                Ok(diffs)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -530,8 +540,18 @@ pub async fn diff_staged(
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        diff_staged_inner(&path, &file_path, &state_map, &options)
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                diff_staged_inner(&path, &file_path, &state_map, &options)
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                let mut diffs = read_model::wsl_diff_staged(&repo, &file_path, &options)?;
+                enrich_file_diffs(&mut diffs);
+                Ok(diffs)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -545,10 +565,16 @@ pub async fn list_commit_files(
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || list_commit_files_inner(&path, &oid, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => list_commit_files_inner(&path, &oid, &state_map),
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_list_commit_files(&repo, &oid),
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -560,8 +586,19 @@ pub async fn diff_commit_file(
     state: State<'_, RepoState>,
 ) -> Result<Vec<FileDiff>, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        diff_commit_file_inner(&path, &oid, &file_path, &state_map, &options)
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                diff_commit_file_inner(&path, &oid, &file_path, &state_map, &options)
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                let mut diffs =
+                    read_model::wsl_diff_commit(&repo, &oid, Some(&file_path), &options)?;
+                enrich_file_diffs(&mut diffs);
+                Ok(diffs)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -575,10 +612,16 @@ pub async fn get_commit_detail(
     state: State<'_, RepoState>,
 ) -> Result<CommitDetail, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || get_commit_detail_inner(&path, &oid, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => get_commit_detail_inner(&path, &oid, &state_map),
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_detail(&repo, &oid),
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[cfg(test)]

@@ -28,7 +28,9 @@ pub(crate) fn repo_descriptor_from_state(
     let path_buf = state_map
         .get(repo_id)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", repo_id)))?;
-    Ok(RepoDescriptor::local(path_buf.to_string_lossy().into_owned()))
+    Ok(RepoDescriptor::local(
+        path_buf.to_string_lossy().into_owned(),
+    ))
 }
 
 pub mod branches;

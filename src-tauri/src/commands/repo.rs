@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    graph, repository,
+    graph, read_model, repository,
     types::{RepoDescriptor, RepoLocator},
 };
 use crate::state::{kill_process, CommitCache, RepoState, ReviewSessionsState, RunningOp};
@@ -37,14 +37,20 @@ pub async fn open_repo(
     };
     let repo_key = descriptor.id.clone();
     let is_local_repo = matches!(descriptor.locator, RepoLocator::Local { .. });
+    let descriptor_for_graph = descriptor.clone();
     let path_clone = execution_path.clone();
 
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<crate::git::types::GraphResult, TrunkError> {
-            let path_buf = std::path::PathBuf::from(&path_clone);
-            repository::validate_and_open(&path_buf)?;
-            let mut repo = git2::Repository::open(&path_buf)?;
-            graph::walk_commits(&mut repo, 0, usize::MAX)
+            match descriptor_for_graph.locator {
+                RepoLocator::Local { .. } => {
+                    let path_buf = std::path::PathBuf::from(&path_clone);
+                    repository::validate_and_open(&path_buf)?;
+                    let mut repo = git2::Repository::open(&path_buf)?;
+                    graph::walk_commits(&mut repo, 0, usize::MAX)
+                }
+                RepoLocator::Wsl { .. } => read_model::wsl_commit_graph(&descriptor_for_graph),
+            }
         },
     )
     .await

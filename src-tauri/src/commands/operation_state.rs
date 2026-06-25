@@ -1,7 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    command_runner,
-    graph,
+    command_runner, graph, read_model,
     types::{GraphResult, OperationInfo, OperationType, RepoDescriptor},
 };
 use crate::state::{CommitCache, RepoState};
@@ -417,9 +416,13 @@ pub async fn get_operation_state(
     cache: State<'_, CommitCache>,
 ) -> Result<OperationInfo, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let graph_cache = cache.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut info = get_operation_state_inner(&path, &state_map)?;
+        let mut info = match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => get_operation_state_inner(&path, &state_map)?,
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_operation_state(&repo)?,
+        };
         // Look up branch color indexes from the cached graph
         if let Some(graph) = graph_cache.get(&path) {
             if let Some(ref src) = info.source_branch {
@@ -852,12 +855,9 @@ mod tests {
         let (dir, _repo) = conflict_divergent_repo();
         // Start a conflicted merge so MERGE_MSG carries a `# Conflicts:` block.
         let repo = RepoDescriptor::local(path_str(&dir));
-        let _ = command_runner::git_output(
-            &repo,
-            &["merge", "--no-commit", "feature"],
-            "merge_error",
-        )
-        .unwrap();
+        let _ =
+            command_runner::git_output(&repo, &["merge", "--no-commit", "feature"], "merge_error")
+                .unwrap();
         let raw = read_merge_msg(&dir);
         assert!(
             raw.contains("# Conflicts:"),

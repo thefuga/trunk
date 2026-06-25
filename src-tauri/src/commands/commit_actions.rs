@@ -1,7 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    command_runner,
-    graph,
+    command_runner, graph,
     types::{GraphResult, RepoDescriptor, UndoResult},
 };
 use crate::state::{CommitCache, RepoState};
@@ -477,10 +476,6 @@ pub fn undo_commit_inner(
     let body = head.body().map(str::to_owned);
     drop(head);
     drop(repo);
-
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
     let output = run_git_action(
         path,

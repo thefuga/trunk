@@ -18,6 +18,11 @@ impl TestContext {
     }
 
     pub fn get_fork_point(&self, branch: &str) -> Result<String, TrunkError> {
-        interactive_rebase::get_fork_point_inner(self.path(), branch, self.state_map())
+        interactive_rebase::get_fork_point_inner(
+            self.path(),
+            branch,
+            self.state_map(),
+            self.descriptor_map(),
+        )
     }
 }

@@ -26,33 +26,49 @@ impl TestContext {
 
     /// Cherry-pick a commit by OID onto the current branch (shells out to git CLI)
     pub fn cherry_pick(&self, oid: &str) -> Result<GraphResult, TrunkError> {
-        commit_actions::cherry_pick_inner(self.path(), oid, self.state_map())
+        commit_actions::cherry_pick_inner(self.path(), oid, self.state_map(), self.descriptor_map())
     }
 
     /// Stage a revert without committing (two-step begin); shells out to git CLI.
     /// Returns the rebuilt graph + default message read from MERGE_MSG.
     pub fn revert_commit_begin(&self, oid: &str) -> Result<RevertBeginResult, TrunkError> {
-        commit_actions::revert_commit_begin_inner(self.path(), oid, self.state_map())
+        commit_actions::revert_commit_begin_inner(
+            self.path(),
+            oid,
+            self.state_map(),
+            self.descriptor_map(),
+        )
     }
 
     /// Finish a staged revert with the edited message (git commit -m --cleanup=strip).
     pub fn revert_continue(&self, message: &str) -> Result<GraphResult, TrunkError> {
-        commit_actions::revert_continue_inner(self.path(), message, self.state_map())
+        commit_actions::revert_continue_inner(
+            self.path(),
+            message,
+            self.state_map(),
+            self.descriptor_map(),
+        )
     }
 
     /// Abort a staged revert (git revert --abort), restoring a clean tree.
     pub fn revert_abort(&self) -> Result<GraphResult, TrunkError> {
-        commit_actions::revert_abort_inner(self.path(), self.state_map())
+        commit_actions::revert_abort_inner(self.path(), self.state_map(), self.descriptor_map())
     }
 
     /// Reset HEAD to a commit by OID with the given mode (soft/mixed/hard)
     pub fn reset_to_commit(&self, oid: &str, mode: &str) -> Result<GraphResult, TrunkError> {
-        commit_actions::reset_to_commit_inner(self.path(), oid, mode, self.state_map())
+        commit_actions::reset_to_commit_inner(
+            self.path(),
+            oid,
+            mode,
+            self.state_map(),
+            self.descriptor_map(),
+        )
     }
 
     /// Undo the last commit (soft reset HEAD~1), returning the undone commit message
     pub fn undo_commit(&self) -> Result<UndoResult, TrunkError> {
-        commit_actions::undo_commit_inner(self.path(), self.state_map())
+        commit_actions::undo_commit_inner(self.path(), self.state_map(), self.descriptor_map())
     }
 
     /// Redo a previously undone commit by creating a new commit with the given message

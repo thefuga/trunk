@@ -2,6 +2,7 @@ pub mod backend_fs;
 pub mod command_runner;
 pub mod editor;
 pub mod graph;
+pub mod read_model;
 pub mod repository;
 pub mod review;
 pub mod review_store;

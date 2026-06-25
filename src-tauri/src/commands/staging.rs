@@ -1,4 +1,5 @@
 use crate::error::TrunkError;
+use crate::git::read_model;
 use crate::git::types::{FileStatus, FileStatusType, WorkingTreeStatus};
 use crate::state::RepoState;
 use git2::{Status, StatusOptions};
@@ -606,10 +607,24 @@ pub async fn get_dirty_counts(
     state: State<'_, RepoState>,
 ) -> Result<DirtyCounts, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || get_dirty_counts_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e: TrunkError| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => get_dirty_counts_inner(&path, &state_map),
+            read_model::ReadBackend::Wsl(repo) => {
+                let (staged, unstaged, conflicted) =
+                    read_model::status_dirty_counts(read_model::wsl_status(&repo)?);
+                Ok(DirtyCounts {
+                    staged,
+                    unstaged,
+                    conflicted,
+                })
+            }
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]
@@ -618,10 +633,16 @@ pub async fn get_status(
     state: State<'_, RepoState>,
 ) -> Result<WorkingTreeStatus, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || get_status_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => get_status_inner(&path, &state_map),
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_status(&repo),
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
