@@ -87,6 +87,24 @@ export interface RepoDescriptor {
 	locator: RepoLocator;
 }
 
+export interface WslAvailability {
+	available: boolean;
+	supported_platform: boolean;
+	message: string | null;
+}
+
+export interface WslDistro {
+	name: string;
+	default: boolean;
+}
+
+export interface WslRepoValidation {
+	distro: string;
+	linux_path: string;
+	repo_root: string;
+	descriptor: RepoDescriptor;
+}
+
 function normalizeRepoPathForId(path: string): string {
 	const trimmed = path.replace(/[\\/]+$/, "");
 	return trimmed.length === 0 ? path : trimmed;
@@ -119,6 +137,26 @@ export function localRepoDescriptor(
 		id: repoIdForLocator(locator),
 		display_name: name,
 		display_path: path,
+		locator,
+	};
+}
+
+export function wslRepoDescriptor(
+	distro: string,
+	linuxPath: string,
+	name?: string,
+): RepoDescriptor {
+	const locator: RepoLocator = {
+		backend: "Wsl",
+		distro,
+		linux_path: linuxPath,
+	};
+	const displayName =
+		name ?? linuxPath.replace(/\/+$/, "").split("/").at(-1) ?? linuxPath;
+	return {
+		id: repoIdForLocator(locator),
+		display_name: displayName,
+		display_path: `${distro}:${linuxPath}`,
 		locator,
 	};
 }

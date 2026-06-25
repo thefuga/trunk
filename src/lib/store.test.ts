@@ -196,6 +196,46 @@ describe("store", () => {
 			]);
 			expect(backingStore.get("recent_repos")).toEqual(repos);
 		});
+
+		it("getRecentRepos preserves WSL repo descriptors", async () => {
+			backingStore.set("recent_repos", [
+				{
+					name: "trunk",
+					path: "Ubuntu:/home/me/trunk/",
+					repoId: "stale",
+					repoDescriptor: {
+						id: "stale",
+						display_name: "trunk",
+						display_path: "Ubuntu:/home/me/trunk/",
+						locator: {
+							backend: "Wsl",
+							distro: "Ubuntu",
+							linux_path: "/home/me/trunk/",
+						},
+					},
+				},
+			]);
+
+			const repos = await getRecentRepos();
+
+			expect(repos).toEqual([
+				expect.objectContaining({
+					name: "trunk",
+					path: "Ubuntu:/home/me/trunk/",
+					repoId: "wsl:Ubuntu:/home/me/trunk",
+					repoDescriptor: expect.objectContaining({
+						id: "wsl:Ubuntu:/home/me/trunk",
+						display_path: "Ubuntu:/home/me/trunk/",
+						locator: {
+							backend: "Wsl",
+							distro: "Ubuntu",
+							linux_path: "/home/me/trunk/",
+						},
+					}),
+				}),
+			]);
+			expect(backingStore.get("recent_repos")).toEqual(repos);
+		});
 	});
 
 	describe("open tabs", () => {
@@ -249,6 +289,48 @@ describe("store", () => {
 						id: "local:C:\\repo",
 						display_path: "C:\\repo\\",
 						locator: { backend: "Local", path: "C:\\repo\\" },
+					}),
+				}),
+			]);
+			expect(backingStore.get("open_tabs")).toEqual(tabs);
+		});
+
+		it("getOpenTabs preserves WSL repo descriptors", async () => {
+			backingStore.set("open_tabs", [
+				{
+					id: "tab-1",
+					repoPath: "Ubuntu:/home/me/trunk/",
+					repoName: "trunk",
+					repoId: "stale",
+					repoDescriptor: {
+						id: "stale",
+						display_name: "trunk",
+						display_path: "Ubuntu:/home/me/trunk/",
+						locator: {
+							backend: "Wsl",
+							distro: "Ubuntu",
+							linux_path: "/home/me/trunk/",
+						},
+					},
+				},
+			]);
+
+			const tabs = await getOpenTabs();
+
+			expect(tabs).toEqual([
+				expect.objectContaining({
+					id: "tab-1",
+					repoPath: "Ubuntu:/home/me/trunk/",
+					repoName: "trunk",
+					repoId: "wsl:Ubuntu:/home/me/trunk",
+					repoDescriptor: expect.objectContaining({
+						id: "wsl:Ubuntu:/home/me/trunk",
+						display_path: "Ubuntu:/home/me/trunk/",
+						locator: {
+							backend: "Wsl",
+							distro: "Ubuntu",
+							linux_path: "/home/me/trunk/",
+						},
 					}),
 				}),
 			]);

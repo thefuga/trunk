@@ -45,3 +45,4 @@ pub mod repo;
 pub mod review;
 pub mod staging;
 pub mod stash;
+pub mod wsl;
