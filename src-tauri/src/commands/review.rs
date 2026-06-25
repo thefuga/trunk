@@ -787,9 +787,9 @@ pub async fn delete_comment(
 
 /// List the session's commits in graph order (SEL-04). No mutation, no emit.
 ///
-/// Dual path-keying (Pitfall 3): the session set is read by CANONICAL key from the
-/// in-memory map; the graph order comes from `CommitCache` by RAW path. A missing
-/// in-memory session is `no_session` (distinct from `canonical_repo_path`'s
+/// Dual keying: the session set is read by CANONICAL execution path from the
+/// in-memory map; the graph order comes from `CommitCache` by stable repo id. A
+/// missing in-memory session is `no_session` (distinct from `canonical_repo_path`'s
 /// `not_open`) so the frontend can branch on session-active vs repo-not-open.
 #[tauri::command]
 pub async fn list_session_commits(
@@ -800,6 +800,10 @@ pub async fn list_session_commits(
 ) -> Result<Vec<SessionCommit>, String> {
     let state_map = state.0.lock().unwrap().clone();
     let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_path = state_map
+        .get(&path)
+        .cloned()
+        .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?;
 
     // Read the session set by CANONICAL key; a missing entry is `no_session`.
     // Also read the snapshot oids (working-tree + index) to mark SessionCommits as
@@ -819,7 +823,7 @@ pub async fn list_session_commits(
         (session.commits.clone(), snaps)
     };
 
-    // Read the full graph order from CommitCache by RAW path (Pitfall 3).
+    // Read the full graph order from CommitCache by stable repo id.
     let graph = {
         let map = cache.0.lock().unwrap();
         map.get(&path)
@@ -831,7 +835,7 @@ pub async fn list_session_commits(
     // never hold the RepoState lock across git2 work.
     let mut result =
         tauri::async_runtime::spawn_blocking(move || -> Result<Vec<SessionCommit>, TrunkError> {
-            let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
+            let repo = git2::Repository::open(&repo_path).map_err(TrunkError::from)?;
             Ok(intersect_graph_order(&commits, &graph, &repo))
         })
         .await
@@ -938,6 +942,10 @@ pub async fn resolve_session_comments(
 ) -> Result<Vec<CommentResolution>, String> {
     let state_map = state.0.lock().unwrap().clone();
     let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_path = state_map
+        .get(&path)
+        .cloned()
+        .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?;
 
     let comments = {
         let map = sessions.0.lock().unwrap();
@@ -952,7 +960,7 @@ pub async fn resolve_session_comments(
 
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<Vec<CommentResolution>, TrunkError> {
-            let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
+            let repo = git2::Repository::open(&repo_path).map_err(TrunkError::from)?;
             Ok(resolve_all(&comments, &repo))
         },
     )
@@ -991,6 +999,10 @@ pub async fn generate_review_doc(
 ) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
     let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_path = state_map
+        .get(&path)
+        .cloned()
+        .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?;
 
     let session = {
         let map = sessions.0.lock().unwrap();
@@ -1013,7 +1025,7 @@ pub async fn generate_review_doc(
     }
 
     let doc = tauri::async_runtime::spawn_blocking(move || -> Result<String, TrunkError> {
-        let repo = git2::Repository::open(&path).map_err(TrunkError::from)?;
+        let repo = git2::Repository::open(&repo_path).map_err(TrunkError::from)?;
         Ok(crate::git::review::render(&session, &repo))
     })
     .await
