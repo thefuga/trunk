@@ -225,9 +225,9 @@ pub async fn get_fork_point(
     tauri::async_runtime::spawn_blocking(move || {
         get_fork_point_inner(&path, &branch, &state_map, &descriptor_map)
     })
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e: TrunkError| e.to_json())
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]

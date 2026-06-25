@@ -35,6 +35,7 @@ impl TestContext {
             &self.path,
             target_oid,
             &self.state_map,
+            &self.descriptor_map,
             &mut self.cache_map,
         )
     }

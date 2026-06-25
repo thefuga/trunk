@@ -42,7 +42,9 @@ impl GitCommandSpec {
 
     pub fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
-        command.args(&self.args).env("PATH", shell_env::system_path());
+        command
+            .args(&self.args)
+            .env("PATH", shell_env::system_path());
         if let Some(current_dir) = &self.current_dir {
             command.current_dir(current_dir);
         }
@@ -51,7 +53,9 @@ impl GitCommandSpec {
 
     pub fn tokio_command(&self) -> TokioCommand {
         let mut command = TokioCommand::new(&self.program);
-        command.args(&self.args).env("PATH", shell_env::system_path());
+        command
+            .args(&self.args)
+            .env("PATH", shell_env::system_path());
         if let Some(current_dir) = &self.current_dir {
             command.current_dir(current_dir);
         }
@@ -68,6 +72,15 @@ pub fn git_output(
         .command()
         .output()
         .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))
+}
+
+pub fn git_output_owned(
+    repo: &RepoDescriptor,
+    args: &[String],
+    spawn_error_code: &str,
+) -> Result<Output, TrunkError> {
+    let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+    git_output(repo, &borrowed, spawn_error_code)
 }
 
 pub fn git_tokio_piped(repo: &RepoDescriptor, args: &[&str]) -> TokioCommand {

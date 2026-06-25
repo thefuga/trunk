@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use trunk_lib::git::types::GraphResult;
+use trunk_lib::git::types::{GraphResult, RepoDescriptor};
 
 pub struct TestContext {
     _dir: tempfile::TempDir,
     _data_dir: tempfile::TempDir,
     pub(crate) path: String,
     pub(crate) state_map: HashMap<String, PathBuf>,
+    pub(crate) descriptor_map: HashMap<String, RepoDescriptor>,
     pub(crate) cache_map: HashMap<String, GraphResult>,
 }
 
@@ -37,6 +38,7 @@ impl TestContext {
             _data_dir: data_dir,
             path,
             state_map,
+            descriptor_map: HashMap::new(),
             cache_map: HashMap::new(),
         }
     }
@@ -67,6 +69,10 @@ impl TestContext {
         &self.state_map
     }
 
+    pub fn descriptor_map(&self) -> &HashMap<String, RepoDescriptor> {
+        &self.descriptor_map
+    }
+
     /// Mutable borrow of cache_map (for branch _inner functions taking &mut HashMap)
     pub fn cache_map(&mut self) -> &mut HashMap<String, GraphResult> {
         &mut self.cache_map
@@ -84,6 +90,7 @@ impl TestContext {
             _data_dir: data_dir,
             path,
             state_map,
+            descriptor_map: HashMap::new(),
             cache_map: HashMap::new(),
         }
     }

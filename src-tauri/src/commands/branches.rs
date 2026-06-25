@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
-use crate::git::command_runner;
 use crate::git::types::GraphResult;
+use crate::git::{command_runner, read_model};
 use crate::git::{
     graph,
     types::{BranchInfo, RefLabel, RefType, RefsResponse, StashEntry},
@@ -195,10 +195,16 @@ pub fn rename_branch_inner(
 #[tauri::command]
 pub async fn list_refs(path: String, state: State<'_, RepoState>) -> Result<RefsResponse, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || list_refs_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => list_refs_inner(&path, &state_map),
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_refs(&repo),
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 /// Inner implementation of resolve_ref — separated for testability.
@@ -297,11 +303,8 @@ pub fn fast_forward_to_inner(
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
     let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    let output = command_runner::git_output(
-        &repo,
-        &["merge", "--ff-only", target_oid],
-        "merge_error",
-    )?;
+    let output =
+        command_runner::git_output(&repo, &["merge", "--ff-only", target_oid], "merge_error")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -337,7 +340,7 @@ pub async fn fast_forward_to(
             &descriptor_map,
             &mut cache_map,
         )
-            .map(|_| cache_map)
+        .map(|_| cache_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

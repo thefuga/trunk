@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    graph,
+    graph, read_model,
     types::{GraphCommit, GraphResult, MatchType, SearchResult},
 };
 use crate::state::{CommitCache, RepoState};
@@ -41,14 +41,17 @@ pub async fn refresh_commit_graph(
     cache: State<'_, CommitCache>,
 ) -> Result<GraphResponse, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
 
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        let path_buf = state_map.get(&path_clone).ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path_clone))
-        })?;
-        let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
-        graph::walk_commits(&mut repo, 0, usize::MAX)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(path_buf) => {
+                let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
+                graph::walk_commits(&mut repo, 0, usize::MAX)
+            }
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
