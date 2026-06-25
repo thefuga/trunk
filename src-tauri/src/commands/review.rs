@@ -4,8 +4,8 @@
 //! functions, mirroring `stash.rs`. The `_inner` wedge takes plain args (no Tauri
 //! state) so disk behavior is provable with a `tempfile::TempDir`.
 //!
-//! Canonical-path keying (D-11): the repo's `PathBuf` is canonicalized so a repo
-//! opened via a symlink or alias resumes the SAME session.
+//! Stable-id keying (D-11): the repo's backend-aware id is used so WSL sessions
+//! do not depend on host canonicalization or UNC path spelling.
 //!
 //! Disk-first mutation ordering (D-10): `_inner` writes the file → the thin
 //! command then updates `ReviewSessionsState` → then emits `session-changed`, so
@@ -13,7 +13,7 @@
 
 use crate::error::TrunkError;
 use crate::git::review_store::{self, LoadOutcome};
-use crate::git::types::{Comment, DraftComment, ReviewSession};
+use crate::git::types::{Comment, DraftComment, RepoDescriptor, ReviewSession};
 use crate::state::{CommitCache, RepoState, ReviewSessionsState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -45,9 +45,9 @@ pub enum SessionState {
 
 /// Status payload for `get_review_session_status`. `_inner` fills the DISK half
 /// (`file_exists` + `state` = ResumeAvailable/None); the thin command promotes to
-/// `Active` after locking `ReviewSessionsState`. `canonical_path` is the
-/// canonicalized path as a String so the frontend can match `session-changed`
-/// payloads without re-canonicalizing (it cannot call `std::fs::canonicalize`).
+/// `Active` after locking `ReviewSessionsState`. `canonical_path` is retained as
+/// the wire name, but carries the backend-aware stable repo id used by
+/// `session-changed`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionStatus {
     pub state: SessionState,
@@ -71,16 +71,20 @@ pub struct SessionCommit {
     pub is_snapshot: bool,
 }
 
-/// Look the repo up in `RepoState`'s map and canonicalize its `PathBuf`.
+/// Look the repo up and return the backend-aware stable id.
 /// Returns `not_open` when the path is not a currently-open repo (SESS-01).
-fn canonical_repo_path(
+fn session_repo_id(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<PathBuf, TrunkError> {
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<String, TrunkError> {
+    if let Some(descriptor) = descriptor_map.get(path) {
+        return Ok(crate::git::backend_fs::repo_identity(descriptor));
+    }
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-    std::fs::canonicalize(path_buf).map_err(|e| TrunkError::new("io", e.to_string()))
+    Ok(RepoDescriptor::local(path_buf.to_string_lossy().into_owned()).id)
 }
 
 /// Start a fresh review session for a currently-open repo (SESS-01 / D-08).
@@ -90,9 +94,10 @@ pub fn start_review_session_inner(
     data_dir: &Path,
     path: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<(PathBuf, ReviewSession), TrunkError> {
-    let canonical = canonical_repo_path(path, state_map)?;
-    if review_store::session_exists(data_dir, &canonical) {
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<(String, ReviewSession), TrunkError> {
+    let repo_id = session_repo_id(path, state_map, descriptor_map)?;
+    if review_store::session_exists(data_dir, &repo_id) {
         return Err(TrunkError::new(
             "session_exists",
             "A review session already exists for this repository — resume or end it first",
@@ -106,8 +111,8 @@ pub fn start_review_session_inner(
         working_tree_snapshot: None,
         index_snapshot: None,
     };
-    review_store::save_session(data_dir, &canonical, &session)?;
-    Ok((canonical, session))
+    review_store::save_session(data_dir, &repo_id, &session)?;
+    Ok((repo_id, session))
 }
 
 /// Load an existing session from disk for a currently-open repo (SESS-02 / D-14).
@@ -117,10 +122,11 @@ pub fn resume_review_session_inner(
     data_dir: &Path,
     path: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<(PathBuf, LoadOutcome), TrunkError> {
-    let canonical = canonical_repo_path(path, state_map)?;
-    let outcome = review_store::load_session(data_dir, &canonical)?;
-    Ok((canonical, outcome))
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<(String, LoadOutcome), TrunkError> {
+    let repo_id = session_repo_id(path, state_map, descriptor_map)?;
+    let outcome = review_store::load_session(data_dir, &repo_id)?;
+    Ok((repo_id, outcome))
 }
 
 /// Hard-delete the session file for a currently-open repo (SESS-03 / D-13).
@@ -128,10 +134,11 @@ pub fn end_review_session_inner(
     data_dir: &Path,
     path: &str,
     state_map: &HashMap<String, PathBuf>,
-) -> Result<PathBuf, TrunkError> {
-    let canonical = canonical_repo_path(path, state_map)?;
-    review_store::delete_session(data_dir, &canonical)?;
-    Ok(canonical)
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<String, TrunkError> {
+    let repo_id = session_repo_id(path, state_map, descriptor_map)?;
+    review_store::delete_session(data_dir, &repo_id)?;
+    Ok(repo_id)
 }
 
 /// Report the DISK half of the session status (D-14). `_inner` has no Tauri state
@@ -141,9 +148,10 @@ pub fn get_review_session_status_inner(
     data_dir: &Path,
     path: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<SessionStatus, TrunkError> {
-    let canonical = canonical_repo_path(path, state_map)?;
-    let file_exists = review_store::session_exists(data_dir, &canonical);
+    let repo_id = session_repo_id(path, state_map, descriptor_map)?;
+    let file_exists = review_store::session_exists(data_dir, &repo_id);
     let state = if file_exists {
         SessionState::ResumeAvailable
     } else {
@@ -152,7 +160,7 @@ pub fn get_review_session_status_inner(
     Ok(SessionStatus {
         state,
         file_exists,
-        canonical_path: canonical.to_string_lossy().into_owned(),
+        canonical_path: repo_id,
     })
 }
 
@@ -174,18 +182,9 @@ fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| TrunkError::new("app_data_dir", e.to_string()).to_json())
 }
 
-/// Emit the `session-changed` Tauri event for `canonical`, logging on failure
-/// (66/WR-04). Phase 65's stance is "never silently destroy" — the previous
-/// silent-discard pattern violated it. Failure here is an unrecoverable
-/// runtime fault (dead event bus); the diagnostic goes to stderr because the
-/// codebase has no `log`/`tracing` dependency.
-fn emit_session_changed(app: &AppHandle, canonical: &Path) {
-    if let Err(e) = app.emit("session-changed", canonical.to_string_lossy().into_owned()) {
-        eprintln!(
-            "session-changed emit failed for {}: {}",
-            canonical.display(),
-            e
-        );
+fn emit_session_changed_for_id(app: &AppHandle, repo_id: &str) {
+    if let Err(e) = app.emit("session-changed", repo_id.to_string()) {
+        eprintln!("session-changed emit failed for {repo_id}: {e}");
     }
 }
 
@@ -206,8 +205,8 @@ fn emit_session_changed(app: &AppHandle, canonical: &Path) {
 /// when there is no in-memory session for `canonical` (distinct from `not_open`).
 fn mutate_session_rmw<F>(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     mutate: F,
 ) -> Result<(), TrunkError>
 where
@@ -220,14 +219,14 @@ where
     // so disk and memory never diverge (matches start/end_review_session's
     // verified-correct ordering and the docstring contract above).
     let mut next = map
-        .get(canonical)
+        .get(repo_id)
         .ok_or_else(|| {
             TrunkError::new("no_session", "No active review session for this repository")
         })?
         .clone();
     mutate(&mut next);
-    review_store::save_session(data_dir, canonical, &next)?;
-    map.insert(canonical.to_path_buf(), next);
+    review_store::save_session(data_dir, repo_id, &next)?;
+    map.insert(repo_id.to_string(), next);
     Ok(())
 }
 
@@ -235,11 +234,11 @@ where
 /// save, one map-write — never decomposed into N adds.
 fn seed_review_range_rmw(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     range_oids: Vec<String>,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         session.commits = union_dedup(&session.commits, range_oids);
     })
 }
@@ -247,11 +246,11 @@ fn seed_review_range_rmw(
 /// Add `oid` to the session set if absent (SEL-02, idempotent).
 fn add_review_commit_rmw(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         apply_add(&mut session.commits, oid);
     })
 }
@@ -259,11 +258,11 @@ fn add_review_commit_rmw(
 /// Remove every occurrence of `oid` from the session set (SEL-03, no-op if absent).
 fn remove_review_commit_rmw(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     oid: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         apply_remove(&mut session.commits, oid);
     })
 }
@@ -280,13 +279,13 @@ fn remove_review_commit_rmw(
 /// stay consistent.
 fn set_review_snapshot_rmw(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     kind: crate::git::workdir_snapshot::SnapshotKind,
     new_oid: &str,
 ) -> Result<(), TrunkError> {
     use crate::git::workdir_snapshot::SnapshotKind;
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         apply_add(&mut session.commits, new_oid);
         match kind {
             SnapshotKind::Workdir => {
@@ -341,11 +340,11 @@ pub struct AddCommitCommentRequest {
 /// write and disk/memory never diverge.
 fn add_comment_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     req: AddCommentRequest,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         session.comments.push(Comment {
             id: uuid::Uuid::new_v4().to_string(),
             text: req.text,
@@ -363,11 +362,11 @@ fn add_comment_inner(
 /// draft slot — a commit-level note is independent of the diff composer.
 fn add_commit_comment_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     req: AddCommitCommentRequest,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         session.comments.push(Comment {
             id: uuid::Uuid::new_v4().to_string(),
             text: req.text,
@@ -386,13 +385,13 @@ fn add_commit_comment_inner(
 /// inside the single critical section (no TOCTOU) and the error surfaced after.
 fn edit_comment_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     id: &str,
     text: String,
 ) -> Result<(), TrunkError> {
     let mut found = false;
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         if let Some(comment) = session.comments.iter_mut().find(|c| c.id == id) {
             comment.text = text;
             found = true;
@@ -412,11 +411,11 @@ fn edit_comment_inner(
 /// matches, so a double-delete or a stale id from another tab never errors.
 fn delete_comment_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     id: &str,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         session.comments.retain(|c| c.id != id);
     })
 }
@@ -427,11 +426,11 @@ fn delete_comment_inner(
 /// not panel-visible until Phase 69; per-keystroke emits would cause reload storms).
 fn save_draft_comment_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     req: SaveDraftCommentRequest,
 ) -> Result<(), TrunkError> {
-    mutate_session_rmw(data_dir, canonical, sessions, |session| {
+    mutate_session_rmw(data_dir, repo_id, sessions, |session| {
         session.draft_comment = Some(DraftComment {
             text: req.text,
             anchor: req.anchor,
@@ -453,8 +452,8 @@ fn save_draft_comment_inner(
 #[cfg(test)]
 fn seed_review_range_inner(
     data_dir: &Path,
-    canonical: &Path,
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
+    repo_id: &str,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
     base_oid: &str,
     tip_oid: &str,
     repo_path: &str,
@@ -469,7 +468,7 @@ fn seed_review_range_inner(
     // user-visible result is identical (RESEARCH §3 Option A).
     {
         let map = sessions.lock().unwrap();
-        if !map.contains_key(canonical) {
+        if !map.contains_key(repo_id) {
             return Err(TrunkError::new(
                 "no_session",
                 "No active review session for this repository",
@@ -481,7 +480,7 @@ fn seed_review_range_inner(
     let tip = git2::Oid::from_str(tip_oid).map_err(TrunkError::from)?;
     validate_range(&repo, base, tip)?;
     let range_oids = compute_range_oids(&repo, base, tip)?;
-    seed_review_range_rmw(data_dir, canonical, sessions, range_oids)
+    seed_review_range_rmw(data_dir, repo_id, sessions, range_oids)
 }
 
 /// Seed the session from an inclusive commit range `[base..tip]` (SEL-01, D-02/D-03).
@@ -501,8 +500,9 @@ pub async fn seed_review_range(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     // Fast-fail precheck (66/WR-03): bail before spawning the git2 walk when no
     // session exists for this canonical. Mirrors the precheck inside
@@ -511,7 +511,7 @@ pub async fn seed_review_range(
     // whose borrow cannot satisfy `spawn_blocking`'s `'static + Send` bound.
     {
         let map = sessions.0.lock().unwrap();
-        if !map.contains_key(&canonical) {
+        if !map.contains_key(&repo_id) {
             return Err(TrunkError::new(
                 "no_session",
                 "No active review session for this repository",
@@ -520,7 +520,10 @@ pub async fn seed_review_range(
         }
     }
 
-    let path_for_blocking = path.clone();
+    let path_for_blocking = state_map
+        .get(&path)
+        .cloned()
+        .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?;
     let range_oids =
         tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, TrunkError> {
             let repo = git2::Repository::open(&path_for_blocking).map_err(TrunkError::from)?;
@@ -533,9 +536,8 @@ pub async fn seed_review_range(
         .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
         .map_err(|e| e.to_json())?;
 
-    seed_review_range_rmw(&data_dir, &canonical, &sessions.0, range_oids)
-        .map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    seed_review_range_rmw(&data_dir, &repo_id, &sessions.0, range_oids).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -549,11 +551,12 @@ pub async fn add_review_commit(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
-    add_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    add_review_commit_rmw(&data_dir, &repo_id, &sessions.0, &oid).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -583,8 +586,9 @@ pub async fn ensure_review_snapshot(
     };
 
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     // Fast-fail precheck (mirrors seed_review_range): bail before the git2 work
     // when no session exists. Also read the prior snapshot oid FOR THIS KIND under
@@ -592,7 +596,7 @@ pub async fn ensure_review_snapshot(
     // read-prior-then-decide TOCTOU is benign (worst case one redundant snapshot).
     let prior_oid = {
         let map = sessions.0.lock().unwrap();
-        match map.get(&canonical) {
+        match map.get(&repo_id) {
             None => {
                 return Err(TrunkError::new(
                     "no_session",
@@ -609,7 +613,10 @@ pub async fn ensure_review_snapshot(
 
     // git2::Repository is not Sync; decide off the async runtime and never hold a
     // lock across spawn_blocking (same constraint as seed_review_range).
-    let path_for_blocking = path.clone();
+    let path_for_blocking = state_map
+        .get(&path)
+        .cloned()
+        .ok_or_else(|| TrunkError::new("not_open", "Repository not open").to_json())?;
     let snapshot_oid =
         tauri::async_runtime::spawn_blocking(move || -> Result<String, TrunkError> {
             let repo = git2::Repository::open(&path_for_blocking).map_err(TrunkError::from)?;
@@ -629,13 +636,13 @@ pub async fn ensure_review_snapshot(
 
     set_review_snapshot_rmw(
         &data_dir,
-        &canonical,
+        &repo_id,
         &sessions.0,
         snapshot_kind,
         &snapshot_oid,
     )
     .map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(snapshot_oid)
 }
 
@@ -649,11 +656,12 @@ pub async fn remove_review_commit(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
-    remove_review_commit_rmw(&data_dir, &canonical, &sessions.0, &oid).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    remove_review_commit_rmw(&data_dir, &repo_id, &sessions.0, &oid).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -675,8 +683,9 @@ pub async fn add_comment(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     let req = AddCommentRequest {
         path,
@@ -684,8 +693,8 @@ pub async fn add_comment(
         anchor,
         cached_excerpt,
     };
-    add_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    add_comment_inner(&data_dir, &repo_id, &sessions.0, req).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -705,11 +714,12 @@ pub async fn save_draft_comment(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     let req = SaveDraftCommentRequest { path, text, anchor };
-    save_draft_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
+    save_draft_comment_inner(&data_dir, &repo_id, &sessions.0, req).map_err(|e| e.to_json())?;
     Ok(())
 }
 
@@ -730,12 +740,13 @@ pub async fn add_commit_comment(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     let req = AddCommitCommentRequest { commit_oid, text };
-    add_commit_comment_inner(&data_dir, &canonical, &sessions.0, req).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    add_commit_comment_inner(&data_dir, &repo_id, &sessions.0, req).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -755,11 +766,12 @@ pub async fn edit_comment(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
-    edit_comment_inner(&data_dir, &canonical, &sessions.0, &id, text).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    edit_comment_inner(&data_dir, &repo_id, &sessions.0, &id, text).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -777,11 +789,12 @@ pub async fn delete_comment(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
-    delete_comment_inner(&data_dir, &canonical, &sessions.0, &id).map_err(|e| e.to_json())?;
-    emit_session_changed(&app, &canonical);
+    delete_comment_inner(&data_dir, &repo_id, &sessions.0, &id).map_err(|e| e.to_json())?;
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -799,7 +812,8 @@ pub async fn list_session_commits(
     cache: State<'_, CommitCache>,
 ) -> Result<Vec<SessionCommit>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
     let repo_path = state_map
         .get(&path)
         .cloned()
@@ -810,7 +824,7 @@ pub async fn list_session_commits(
     // snapshots so the panel can hide EMPTY snapshot sections (260531-l02d).
     let (commits, snapshot_oids) = {
         let map = sessions.0.lock().unwrap();
-        let session = map.get(&canonical).ok_or_else(|| {
+        let session = map.get(&repo_id).ok_or_else(|| {
             TrunkError::new("no_session", "No active review session for this repository").to_json()
         })?;
         let mut snaps: Vec<String> = Vec::new();
@@ -862,11 +876,12 @@ pub async fn list_session_comments(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<Vec<Comment>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
     let comments = {
         let map = sessions.0.lock().unwrap();
-        map.get(&canonical)
+        map.get(&repo_id)
             .ok_or_else(|| {
                 TrunkError::new("no_session", "No active review session for this repository")
                     .to_json()
@@ -892,11 +907,11 @@ pub struct ReviewSnapshots {
 /// session yields both `None` (not an error). No `save_session`, no emit — the
 /// testable read core behind `get_review_snapshots`.
 fn read_snapshots(
-    sessions: &Mutex<HashMap<PathBuf, ReviewSession>>,
-    canonical: &Path,
+    sessions: &Mutex<HashMap<String, ReviewSession>>,
+    repo_id: &str,
 ) -> ReviewSnapshots {
     let map = sessions.lock().unwrap();
-    match map.get(canonical) {
+    match map.get(repo_id) {
         Some(session) => ReviewSnapshots {
             working_tree_snapshot: session.working_tree_snapshot.clone(),
             index_snapshot: session.index_snapshot.clone(),
@@ -921,9 +936,10 @@ pub async fn get_review_snapshots(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<ReviewSnapshots, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
 
-    Ok(read_snapshots(&sessions.0, &canonical))
+    Ok(read_snapshots(&sessions.0, &repo_id))
 }
 
 /// Eagerly resolve every comment's anchor against the live repo (CMT-04, D-06):
@@ -941,7 +957,8 @@ pub async fn resolve_session_comments(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<Vec<CommentResolution>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
     let repo_path = state_map
         .get(&path)
         .cloned()
@@ -949,7 +966,7 @@ pub async fn resolve_session_comments(
 
     let comments = {
         let map = sessions.0.lock().unwrap();
-        map.get(&canonical)
+        map.get(&repo_id)
             .ok_or_else(|| {
                 TrunkError::new("no_session", "No active review session for this repository")
                     .to_json()
@@ -998,7 +1015,8 @@ pub async fn generate_review_doc(
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
-    let canonical = canonical_repo_path(&path, &state_map).map_err(|e| e.to_json())?;
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo_id = session_repo_id(&path, &state_map, &descriptor_map).map_err(|e| e.to_json())?;
     let repo_path = state_map
         .get(&path)
         .cloned()
@@ -1006,7 +1024,7 @@ pub async fn generate_review_doc(
 
     let session = {
         let map = sessions.0.lock().unwrap();
-        map.get(&canonical)
+        map.get(&repo_id)
             .ok_or_else(|| {
                 TrunkError::new("no_session", "No active review session for this repository")
                     .to_json()
@@ -1043,21 +1061,18 @@ pub async fn start_review_session(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let (canonical, session) = tauri::async_runtime::spawn_blocking(move || {
-        start_review_session_inner(&data_dir, &path, &state_map)
+    let (repo_id, session) = tauri::async_runtime::spawn_blocking(move || {
+        start_review_session_inner(&data_dir, &path, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
     .map_err(|e| e.to_json())?;
 
     // Disk-first ordering (D-10): _inner already wrote the file → in-memory → emit.
-    sessions
-        .0
-        .lock()
-        .unwrap()
-        .insert(canonical.clone(), session);
-    emit_session_changed(&app, &canonical);
+    sessions.0.lock().unwrap().insert(repo_id.clone(), session);
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -1069,10 +1084,11 @@ pub async fn resume_review_session(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
     let data_dir_for_save = data_dir.clone();
-    let (canonical, outcome) = tauri::async_runtime::spawn_blocking(move || {
-        resume_review_session_inner(&data_dir, &path, &state_map)
+    let (repo_id, outcome) = tauri::async_runtime::spawn_blocking(move || {
+        resume_review_session_inner(&data_dir, &path, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1080,11 +1096,7 @@ pub async fn resume_review_session(
 
     match outcome {
         LoadOutcome::Loaded(session) => {
-            sessions
-                .0
-                .lock()
-                .unwrap()
-                .insert(canonical.clone(), session);
+            sessions.0.lock().unwrap().insert(repo_id.clone(), session);
         }
         LoadOutcome::None => {
             // No file to resume — nothing to load, nothing to insert.
@@ -1100,9 +1112,9 @@ pub async fn resume_review_session(
                 working_tree_snapshot: None,
                 index_snapshot: None,
             };
-            review_store::save_session(&data_dir_for_save, &canonical, &fresh)
+            review_store::save_session(&data_dir_for_save, &repo_id, &fresh)
                 .map_err(|e| e.to_json())?;
-            sessions.0.lock().unwrap().insert(canonical.clone(), fresh);
+            sessions.0.lock().unwrap().insert(repo_id.clone(), fresh);
         }
         LoadOutcome::RefusedNewer => {
             // D-16: a newer-schema file is left untouched; do NOT create a fresh
@@ -1114,7 +1126,7 @@ pub async fn resume_review_session(
             .to_json());
         }
     }
-    emit_session_changed(&app, &canonical);
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -1126,10 +1138,11 @@ pub async fn end_review_session(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
-    let path_for_refs = path.clone();
-    let canonical = tauri::async_runtime::spawn_blocking(move || {
-        end_review_session_inner(&data_dir, &path, &state_map)
+    let path_for_refs = state_map.get(&path).cloned();
+    let repo_id = tauri::async_runtime::spawn_blocking(move || {
+        end_review_session_inner(&data_dir, &path, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1138,15 +1151,17 @@ pub async fn end_review_session(
     // Best-effort: drop the working-tree snapshot keepalive refs (C3). The session is
     // already ended; a failure here only delays gc reachability, so it never aborts End.
     let _ = tauri::async_runtime::spawn_blocking(move || {
-        if let Ok(repo) = git2::Repository::open(&path_for_refs) {
-            let _ = crate::git::workdir_snapshot::clear_snapshot_refs(&repo);
+        if let Some(path_for_refs) = path_for_refs {
+            if let Ok(repo) = git2::Repository::open(&path_for_refs) {
+                let _ = crate::git::workdir_snapshot::clear_snapshot_refs(&repo);
+            }
         }
     })
     .await;
 
     // Disk-first ordering (D-10): _inner deleted the file → drop in-memory → emit.
-    sessions.0.lock().unwrap().remove(&canonical);
-    emit_session_changed(&app, &canonical);
+    sessions.0.lock().unwrap().remove(&repo_id);
+    emit_session_changed_for_id(&app, &repo_id);
     Ok(())
 }
 
@@ -1158,18 +1173,22 @@ pub async fn get_review_session_status(
     app: AppHandle,
 ) -> Result<SessionStatus, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let data_dir = resolve_data_dir(&app)?;
     let mut status = tauri::async_runtime::spawn_blocking(move || {
-        get_review_session_status_inner(&data_dir, &path, &state_map)
+        get_review_session_status_inner(&data_dir, &path, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
     .map_err(|e| e.to_json())?;
 
     // THREE-STATE MERGE: _inner returned the disk half; promote to Active here by
-    // checking the canonical key in the in-memory map (the only place Active is born).
-    let canonical = PathBuf::from(&status.canonical_path);
-    let in_memory_present = sessions.0.lock().unwrap().contains_key(&canonical);
+    // checking the stable repo id in the in-memory map (the only place Active is born).
+    let in_memory_present = sessions
+        .0
+        .lock()
+        .unwrap()
+        .contains_key(&status.canonical_path);
     status.state = merge_status(status.file_exists, in_memory_present);
     Ok(status)
 }
@@ -1203,8 +1222,8 @@ mod tests {
         use std::thread;
 
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("repo-canonical");
-        let sessions: Arc<Mutex<HashMap<PathBuf, ReviewSession>>> =
+        let canonical = "local:/repo-canonical".to_string();
+        let sessions: Arc<Mutex<HashMap<String, ReviewSession>>> =
             Arc::new(Mutex::new(HashMap::new()));
         sessions.lock().unwrap().insert(
             canonical.clone(),
@@ -1275,8 +1294,8 @@ mod tests {
     #[test]
     fn working_tree_snapshot_never_orphans_prior() {
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("repo-canonical");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let canonical = "local:/repo-canonical".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
         sessions.lock().unwrap().insert(
             canonical.clone(),
             ReviewSession {
@@ -1323,8 +1342,8 @@ mod tests {
     fn rmw_missing_session_is_no_session_error() {
         use std::sync::Mutex;
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("absent");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let canonical = "local:/absent".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
         // No in-memory session for `canonical` → RMW must reject with `no_session`.
         let err = add_review_commit_rmw(data_dir.path(), &canonical, &sessions, "x").unwrap_err();
         assert_eq!(err.code, "no_session");
@@ -1342,8 +1361,8 @@ mod tests {
         // A non-repo dir: `Repository::open` would fail here BEFORE the RMW lock
         // reports `no_session` — so a passing assertion proves the precheck ran first.
         let non_repo = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("absent");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let canonical = "local:/absent".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
 
         let err = seed_review_range_inner(
             data_dir.path(),
@@ -1375,7 +1394,7 @@ mod tests {
         // Block save_session by placing a FILE where it expects a DIRECTORY.
         std::fs::write(data_dir.path().join("sessions"), b"blocker").unwrap();
 
-        let canonical = data_dir.path().join("repo-canonical");
+        let canonical = "local:/repo-canonical".to_string();
         let original = ReviewSession {
             schema_version: 2,
             commits: vec!["pre-existing".to_string()],
@@ -1384,7 +1403,7 @@ mod tests {
             working_tree_snapshot: None,
             index_snapshot: None,
         };
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
         sessions
             .lock()
             .unwrap()
@@ -1410,8 +1429,8 @@ mod tests {
     /// A `TempDir` data dir + a sessions map seeded with one empty session keyed
     /// by a synthetic canonical path. No git repo is needed — these writers only
     /// touch the persisted JSON store (mirrors `selection_rmw_serialized:940-952`).
-    fn seeded_sessions(data_dir: &TempDir) -> (PathBuf, Mutex<HashMap<PathBuf, ReviewSession>>) {
-        let canonical = data_dir.path().join("repo-canonical");
+    fn seeded_sessions(_data_dir: &TempDir) -> (String, Mutex<HashMap<String, ReviewSession>>) {
+        let canonical = "local:/repo-canonical".to_string();
         let mut map = HashMap::new();
         map.insert(
             canonical.clone(),
@@ -1439,7 +1458,7 @@ mod tests {
         }
     }
 
-    fn loaded(data_dir: &TempDir, canonical: &Path) -> ReviewSession {
+    fn loaded(data_dir: &TempDir, canonical: &str) -> ReviewSession {
         match review_store::load_session(data_dir.path(), canonical).unwrap() {
             LoadOutcome::Loaded(s) => s,
             _ => panic!("expected a loadable session on disk"),
@@ -1504,8 +1523,8 @@ mod tests {
     #[test]
     fn add_comment_missing_session_is_no_session_error() {
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("absent");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let canonical = "local:/absent".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
         let req = AddCommentRequest {
             path: "ignored".to_string(),
             text: "t".to_string(),
@@ -1572,8 +1591,8 @@ mod tests {
         use std::thread;
 
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("repo-canonical");
-        let sessions: Arc<Mutex<HashMap<PathBuf, ReviewSession>>> =
+        let canonical = "local:/repo-canonical".to_string();
+        let sessions: Arc<Mutex<HashMap<String, ReviewSession>>> =
             Arc::new(Mutex::new(HashMap::new()));
         sessions.lock().unwrap().insert(
             canonical.clone(),
@@ -1687,8 +1706,8 @@ mod tests {
     #[test]
     fn save_draft_comment_missing_session_is_no_session_error() {
         let data_dir = TempDir::new().unwrap();
-        let canonical = data_dir.path().join("absent");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let canonical = "local:/absent".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
         let req = SaveDraftCommentRequest {
             path: "ignored".to_string(),
             text: "t".to_string(),
@@ -1953,8 +1972,8 @@ mod tests {
     #[test]
     fn read_snapshots_returns_nulls_when_no_session() {
         let data_dir = TempDir::new().unwrap();
-        let absent = data_dir.path().join("absent");
-        let sessions: Mutex<HashMap<PathBuf, ReviewSession>> = Mutex::new(HashMap::new());
+        let absent = "local:/absent".to_string();
+        let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
 
         let snapshots = read_snapshots(&sessions, &absent);
 

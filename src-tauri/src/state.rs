@@ -45,8 +45,8 @@ pub fn kill_process(pid: u32) {
 pub struct CommitCache(pub Mutex<HashMap<String, crate::git::types::GraphResult>>);
 
 // In-memory cache of the active review session per open repo.
-// Keyed by CANONICAL PathBuf (D-11) — the ONE place keying diverges from the
-// raw-String maps above, so a repo opened via a symlink or alias resumes the
-// SAME session. ReviewSession is owned plain data, satisfying the top-of-file
-// "PathBuf/owned only — git2::Repository is not Sync" constraint.
-pub struct ReviewSessionsState(pub Mutex<HashMap<PathBuf, crate::git::types::ReviewSession>>);
+// Keyed by stable backend-aware repo id, so local and WSL repos do not depend on
+// host canonicalization or UNC spellings. ReviewSession is owned plain data,
+// satisfying the top-of-file "PathBuf/owned only — git2::Repository is not Sync"
+// constraint.
+pub struct ReviewSessionsState(pub Mutex<HashMap<String, crate::git::types::ReviewSession>>);

@@ -7,14 +7,10 @@ use crate::state::{kill_process, CommitCache, RepoState, ReviewSessionsState, Ru
 use crate::watcher::{self, WatcherState};
 use tauri::{AppHandle, State};
 
-/// Drop ONLY the in-memory session entry for `path` (canonical-keyed). The file
-/// on disk is left untouched so resume works on reopen — only `end_review_session`
-/// hard-deletes (D-13/D-14). Best-effort: if the path no longer canonicalizes
-/// (repo dir gone), there is nothing to remove.
-fn drop_in_memory_session(path: &str, sessions: &State<'_, ReviewSessionsState>) {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
-        sessions.0.lock().unwrap().remove(&canonical);
-    }
+/// Drop ONLY the in-memory session entry for `repo_id`. The file on disk is left
+/// untouched so resume works on reopen — only `end_review_session` hard-deletes.
+fn drop_in_memory_session(repo_id: &str, sessions: &State<'_, ReviewSessionsState>) {
+    sessions.0.lock().unwrap().remove(repo_id);
 }
 
 #[tauri::command]
@@ -61,10 +57,16 @@ pub async fn open_repo(
         .lock()
         .unwrap()
         .insert(repo_key.clone(), path_buf.clone());
-    state.1.lock().unwrap().insert(repo_key.clone(), descriptor);
+    state
+        .1
+        .lock()
+        .unwrap()
+        .insert(repo_key.clone(), descriptor.clone());
     cache.0.lock().unwrap().insert(repo_key.clone(), result);
     if is_local_repo {
         watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
+    } else {
+        watcher::start_wsl_poller_for_repo(descriptor, app, &watcher_state);
     }
 
     Ok(())
@@ -82,11 +84,8 @@ pub async fn close_repo(
     state.1.lock().unwrap().remove(&path);
     cache.0.lock().unwrap().remove(&path);
     watcher::stop_watcher(&path, &watcher_state);
-    if let Some(execution_path) = execution_path {
-        drop_in_memory_session(&execution_path.to_string_lossy(), &sessions);
-    } else {
-        drop_in_memory_session(&path, &sessions);
-    }
+    let _ = execution_path;
+    drop_in_memory_session(&path, &sessions);
     Ok(())
 }
 
@@ -111,10 +110,7 @@ pub async fn force_close_repo(
     state.1.lock().unwrap().remove(&path);
     cache.0.lock().unwrap().remove(&path);
     watcher::stop_watcher(&path, &watcher_state);
-    if let Some(execution_path) = execution_path {
-        drop_in_memory_session(&execution_path.to_string_lossy(), &sessions);
-    } else {
-        drop_in_memory_session(&path, &sessions);
-    }
+    let _ = execution_path;
+    drop_in_memory_session(&path, &sessions);
     Ok(())
 }
