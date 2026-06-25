@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    command_runner, graph, read_model,
+    backend_fs, command_runner, read_model,
     types::{GraphResult, OperationInfo, OperationType, RepoDescriptor},
 };
 use crate::state::{CommitCache, RepoState};
@@ -33,7 +33,7 @@ fn run_git_operation(
     command_runner::git_output(&repo, args, spawn_error_code)
 }
 
-fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
+pub(crate) fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
     let msg = merge_msg?;
     // Patterns: "Merge branch 'feature'" or "Merge remote-tracking branch 'origin/feature'"
     if let Some(rest) = msg.strip_prefix("Merge branch '") {
@@ -43,6 +43,14 @@ fn extract_merge_source(merge_msg: Option<&str>) -> Option<String> {
         return rest.split('\'').next().map(String::from);
     }
     None // Unparseable -- caller shows generic "Merge in progress"
+}
+
+fn refresh_graph(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<GraphResult, TrunkError> {
+    crate::commands::refresh_graph_from_state(path, state_map, descriptor_map)
 }
 
 fn resolve_oid_to_branch(repo: &git2::Repository, oid_str: &str) -> Option<String> {
@@ -167,9 +175,6 @@ pub fn merge_continue_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     // The editor flow always supplies a message (frontend aborts on null and
     // never invokes). --cleanup=strip drops git's `# Conflicts:` comment block
     // so conflicted-merge bodies stay clean (MSG-01 fidelity).
@@ -187,8 +192,7 @@ pub fn merge_continue_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("merge_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn merge_abort_inner(
@@ -196,9 +200,6 @@ pub fn merge_abort_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     let output = run_git_operation(
         path,
         &["merge", "--abort"],
@@ -210,8 +211,7 @@ pub fn merge_abort_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("merge_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn rebase_continue_inner(
@@ -220,23 +220,35 @@ pub fn rebase_continue_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
 
-    // Write edited message to .git/rebase-merge/message before continuing
+    // Write edited message to Git's rebase message file before continuing.
     if let Some(msg) = message {
-        let repo = git2::Repository::open(path_buf)?;
-        let git_dir = repo.path();
-        let rebase_dir = if git_dir.join("rebase-merge").exists() {
-            git_dir.join("rebase-merge")
-        } else {
-            git_dir.join("rebase-apply")
-        };
-        let msg_file = rebase_dir.join("message");
-        if msg_file.exists() {
-            std::fs::write(&msg_file, msg)
-                .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+        match read_model::backend_from_state(path, state_map, descriptor_map)? {
+            read_model::ReadBackend::Local(path_buf) => {
+                let repo = git2::Repository::open(path_buf)?;
+                let git_dir = repo.path();
+                let rebase_dir = if git_dir.join("rebase-merge").exists() {
+                    git_dir.join("rebase-merge")
+                } else {
+                    git_dir.join("rebase-apply")
+                };
+                let msg_file = rebase_dir.join("message");
+                if msg_file.exists() {
+                    std::fs::write(&msg_file, msg)
+                        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
+                }
+            }
+            read_model::ReadBackend::Wsl(_) => {
+                if backend_fs::read_git_file(&repo_descriptor, "rebase-merge/message").is_ok() {
+                    backend_fs::write_git_file(&repo_descriptor, "rebase-merge/message", msg)?;
+                } else if backend_fs::read_git_file(&repo_descriptor, "rebase-apply/message")
+                    .is_ok()
+                {
+                    backend_fs::write_git_file(&repo_descriptor, "rebase-apply/message", msg)?;
+                }
+            }
         }
     }
 
@@ -256,8 +268,7 @@ pub fn rebase_continue_inner(
             return Err(TrunkError::new("rebase_error", stderr));
         }
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn rebase_skip_inner(
@@ -265,9 +276,6 @@ pub fn rebase_skip_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     let output = run_git_operation(
         path,
         &["rebase", "--skip"],
@@ -279,8 +287,7 @@ pub fn rebase_skip_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("rebase_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn rebase_abort_inner(
@@ -288,9 +295,6 @@ pub fn rebase_abort_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     let output = run_git_operation(
         path,
         &["rebase", "--abort"],
@@ -302,8 +306,7 @@ pub fn rebase_abort_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("rebase_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 // --- Start merge/rebase ---
@@ -318,16 +321,26 @@ pub fn get_merge_message_inner(
     Ok(std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok())
 }
 
+pub fn get_merge_message_inner_with_descriptors(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<Option<String>, TrunkError> {
+    match read_model::backend_from_state(path, state_map, descriptor_map)? {
+        read_model::ReadBackend::Local(_) => get_merge_message_inner(path, state_map),
+        read_model::ReadBackend::Wsl(repo) => match backend_fs::read_git_file(&repo, "MERGE_MSG") {
+            Ok(message) => Ok(Some(message)),
+            Err(_) => Ok(None),
+        },
+    }
+}
+
 pub fn merge_branch_begin_inner(
     path: &str,
     branch: &str,
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<MergeBeginResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
     // 1. Probe fast-forward (RESEARCH OQ-1). `--ff-only` succeeds silently on an
     //    ff-able or already-up-to-date merge (no MERGE_HEAD, no merge commit) and
     //    fails clean on a non-ff merge (exit 128, MERGE_HEAD absent, tree clean).
@@ -339,8 +352,7 @@ pub fn merge_branch_begin_inner(
         "merge_error",
     )?;
     if probe.status.success() {
-        let mut repo = git2::Repository::open(path_buf)?;
-        let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+        let graph = refresh_graph(path, state_map, descriptor_map)?;
         return Ok(MergeBeginResult::FastForwarded { graph });
     }
 
@@ -364,18 +376,16 @@ pub fn merge_branch_begin_inner(
         if is_conflict {
             // Conflicts: rebuild graph so the merge-continue UI picks up the
             // state. NOT an error, NOT an editor — the message isn't ready yet.
-            let mut repo = git2::Repository::open(path_buf)?;
-            let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+            let graph = refresh_graph(path, state_map, descriptor_map)?;
             return Ok(MergeBeginResult::Conflicts { graph });
         }
         return Err(TrunkError::new("merge_error", stderr.to_string()));
     }
 
     // Clean non-ff merge staged: read the default message git wrote verbatim.
-    let mut repo = git2::Repository::open(path_buf)?;
-    let message = std::fs::read_to_string(repo.path().join("MERGE_MSG"))
-        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
-    let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+    let message = get_merge_message_inner_with_descriptors(path, state_map, descriptor_map)?
+        .ok_or_else(|| TrunkError::new("merge_error", "MERGE_MSG not found"))?;
+    let graph = refresh_graph(path, state_map, descriptor_map)?;
     Ok(MergeBeginResult::Ready { graph, message })
 }
 
@@ -385,9 +395,6 @@ pub fn rebase_branch_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     let output = run_git_operation(
         path,
         &["rebase", onto_branch],
@@ -398,13 +405,11 @@ pub fn rebase_branch_inner(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.to_lowercase().contains("conflict") {
-            let mut repo = git2::Repository::open(path_buf)?;
-            return graph::walk_commits(&mut repo, 0, usize::MAX);
+            return refresh_graph(path, state_map, descriptor_map);
         }
         return Err(TrunkError::new("rebase_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 // --- Tauri command wrappers ---
@@ -567,10 +572,13 @@ pub async fn get_merge_message(
     state: State<'_, RepoState>,
 ) -> Result<Option<String>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || get_merge_message_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e: TrunkError| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        get_merge_message_inner_with_descriptors(&path, &state_map, &descriptor_map)
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e: TrunkError| e.to_json())
 }
 
 #[tauri::command]

@@ -30,6 +30,14 @@ fn run_git_action(
     command_runner::git_output(&repo, args, spawn_error_code)
 }
 
+fn refresh_graph(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<GraphResult, TrunkError> {
+    crate::commands::refresh_graph_from_state(path, state_map, descriptor_map)
+}
+
 pub fn checkout_commit_inner(
     path: &str,
     oid: &str,
@@ -108,10 +116,6 @@ pub fn cherry_pick_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
     let output = run_git_action(
         path,
         &["cherry-pick", oid],
@@ -130,8 +134,7 @@ pub fn cherry_pick_inner(
         return Err(TrunkError::new(code, stderr.to_string()));
     }
 
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn revert_commit_begin_inner(
@@ -140,10 +143,6 @@ pub fn revert_commit_begin_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<RevertBeginResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
     // Stage the revert without committing so the editor can edit the message.
     // git writes the default message (Revert "<subject>" + full 40-char OID) to
     // .git/MERGE_MSG. REVERT_HEAD is set; the wrapper emits repo-changed.
@@ -165,11 +164,14 @@ pub fn revert_commit_begin_inner(
         return Err(TrunkError::new(code, stderr.to_string()));
     }
 
-    let mut repo = git2::Repository::open(path_buf)?;
+    let graph = refresh_graph(path, state_map, descriptor_map)?;
     // Verbatim default — `# Conflicts:` lines (conflicted revert) are stripped at
     // commit time via --cleanup=strip, never here.
-    let message = std::fs::read_to_string(repo.path().join("MERGE_MSG")).ok();
-    let graph = graph::walk_commits(&mut repo, 0, usize::MAX)?;
+    let message = super::operation_state::get_merge_message_inner_with_descriptors(
+        path,
+        state_map,
+        descriptor_map,
+    )?;
     Ok(RevertBeginResult { graph, message })
 }
 
@@ -179,9 +181,6 @@ pub fn revert_continue_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     // --cleanup=strip drops git's `# Conflicts:` comment block so conflicted
     // revert bodies stay clean (MSG-03 fidelity). git commit -m clears REVERT_HEAD.
     let output = run_git_action(
@@ -195,8 +194,7 @@ pub fn revert_continue_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("revert_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn revert_abort_inner(
@@ -204,9 +202,6 @@ pub fn revert_abort_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     // The MSG-06 recovery path for revert: clears REVERT_HEAD + restores a clean
     // tree. Without it a cancelled revert traps the user (RESEARCH finding 4).
     let output = run_git_action(
@@ -220,8 +215,7 @@ pub fn revert_abort_inner(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("revert_error", stderr.to_string()));
     }
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 pub fn reset_to_commit_inner(
@@ -231,10 +225,6 @@ pub fn reset_to_commit_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
     let valid_modes = ["soft", "mixed", "hard"];
     if !valid_modes.contains(&mode) {
         return Err(TrunkError::new(
@@ -257,8 +247,7 @@ pub fn reset_to_commit_inner(
         return Err(TrunkError::new("reset_error", stderr.to_string()));
     }
 
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    refresh_graph(path, state_map, descriptor_map)
 }
 
 #[tauri::command]
@@ -456,26 +445,78 @@ pub fn undo_commit_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<UndoResult, TrunkError> {
-    let repo = crate::commands::open_repo_from_state(path, state_map)?;
-    let head = repo.head()?.peel_to_commit()?;
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    let (subject, body) = match &repo_descriptor.locator {
+        crate::git::types::RepoLocator::Local { .. } => {
+            let repo = crate::commands::open_repo_from_state(path, state_map)?;
+            let head = repo.head()?.peel_to_commit()?;
 
-    if head.parent_count() == 0 {
-        return Err(TrunkError::new(
-            "nothing_to_undo",
-            "Cannot undo the initial commit",
-        ));
-    }
-    if head.parent_count() > 1 {
-        return Err(TrunkError::new(
-            "merge_commit",
-            "Cannot undo a merge commit",
-        ));
-    }
+            if head.parent_count() == 0 {
+                return Err(TrunkError::new(
+                    "nothing_to_undo",
+                    "Cannot undo the initial commit",
+                ));
+            }
+            if head.parent_count() > 1 {
+                return Err(TrunkError::new(
+                    "merge_commit",
+                    "Cannot undo a merge commit",
+                ));
+            }
 
-    let subject = head.summary().unwrap_or("").to_owned();
-    let body = head.body().map(str::to_owned);
-    drop(head);
-    drop(repo);
+            (
+                head.summary().unwrap_or("").to_owned(),
+                head.body().map(str::to_owned),
+            )
+        }
+        crate::git::types::RepoLocator::Wsl { .. } => {
+            let parents = command_runner::git_output(
+                &repo_descriptor,
+                &["rev-list", "--parents", "-n", "1", "HEAD"],
+                "undo_error",
+            )?;
+            if !parents.status.success() {
+                let stderr = String::from_utf8_lossy(&parents.stderr);
+                return Err(TrunkError::new("undo_error", stderr.to_string()));
+            }
+            let parent_count = String::from_utf8_lossy(&parents.stdout)
+                .split_whitespace()
+                .skip(1)
+                .count();
+            if parent_count == 0 {
+                return Err(TrunkError::new(
+                    "nothing_to_undo",
+                    "Cannot undo the initial commit",
+                ));
+            }
+            if parent_count > 1 {
+                return Err(TrunkError::new(
+                    "merge_commit",
+                    "Cannot undo a merge commit",
+                ));
+            }
+
+            let message = command_runner::git_output(
+                &repo_descriptor,
+                &["log", "-1", "--format=%s%x00%b"],
+                "undo_error",
+            )?;
+            if !message.status.success() {
+                let stderr = String::from_utf8_lossy(&message.stderr);
+                return Err(TrunkError::new("undo_error", stderr.to_string()));
+            }
+            let message = String::from_utf8_lossy(&message.stdout);
+            let mut parts = message.splitn(2, '\0');
+            let subject = parts.next().unwrap_or("").trim_end().to_string();
+            let body = parts
+                .next()
+                .map(str::trim_end)
+                .filter(|body| !body.is_empty())
+                .map(str::to_owned);
+            (subject, body)
+        }
+    };
 
     let output = run_git_action(
         path,
@@ -502,6 +543,39 @@ pub fn redo_commit_inner(
     super::commit::create_commit_inner(path, subject, body, state_map)
 }
 
+pub fn redo_commit_inner_with_descriptors(
+    path: &str,
+    subject: &str,
+    body: Option<&str>,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<(), TrunkError> {
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    match repo_descriptor.locator {
+        crate::git::types::RepoLocator::Local { .. } => {
+            redo_commit_inner(path, subject, body, state_map)
+        }
+        crate::git::types::RepoLocator::Wsl { .. } => {
+            let message = match body {
+                Some(body) if !body.trim().is_empty() => format!("{subject}\n\n{body}"),
+                _ => subject.to_owned(),
+            };
+            let output = command_runner::git_output(
+                &repo_descriptor,
+                &["commit", "-m", &message],
+                "commit_error",
+            )?;
+            if output.status.success() {
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(TrunkError::new("commit_error", stderr.to_string()))
+            }
+        }
+    }
+}
+
 pub fn check_undo_available_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
@@ -518,6 +592,33 @@ pub fn check_undo_available_inner(
     Ok(head.parent_count() == 1)
 }
 
+pub fn check_undo_available_inner_with_descriptors(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<bool, TrunkError> {
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    match repo_descriptor.locator {
+        crate::git::types::RepoLocator::Local { .. } => check_undo_available_inner(path, state_map),
+        crate::git::types::RepoLocator::Wsl { .. } => {
+            let output = command_runner::git_output(
+                &repo_descriptor,
+                &["rev-list", "--parents", "-n", "1", "HEAD"],
+                "undo_error",
+            )?;
+            if !output.status.success() {
+                return Ok(false);
+            }
+            Ok(String::from_utf8_lossy(&output.stdout)
+                .split_whitespace()
+                .skip(1)
+                .count()
+                == 1)
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn undo_commit(
     path: String,
@@ -530,13 +631,7 @@ pub async fn undo_commit(
     let path_clone = path.clone();
     let (undo_result, graph_result) = tauri::async_runtime::spawn_blocking(move || {
         let undo = undo_commit_inner(&path_clone, &state_map, &descriptor_map)?;
-        let graph = {
-            let path_buf = state_map.get(path_clone.as_str()).ok_or_else(|| {
-                TrunkError::new("not_open", format!("Repository not open: {}", path_clone))
-            })?;
-            let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
-            graph::walk_commits(&mut repo, 0, usize::MAX)?
-        };
+        let graph = refresh_graph(&path_clone, &state_map, &descriptor_map)?;
         Ok::<(UndoResult, GraphResult), TrunkError>((undo, graph))
     })
     .await
@@ -558,14 +653,17 @@ pub async fn redo_commit(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        redo_commit_inner(&path_clone, &subject, body.as_deref(), &state_map)?;
-        let path_buf = state_map.get(path_clone.as_str()).ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path_clone))
-        })?;
-        let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
-        graph::walk_commits(&mut repo, 0, usize::MAX)
+        redo_commit_inner_with_descriptors(
+            &path_clone,
+            &subject,
+            body.as_deref(),
+            &state_map,
+            &descriptor_map,
+        )?;
+        refresh_graph(&path_clone, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -582,10 +680,13 @@ pub async fn check_undo_available(
     state: State<'_, RepoState>,
 ) -> Result<bool, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || check_undo_available_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        check_undo_available_inner_with_descriptors(&path, &state_map, &descriptor_map)
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[cfg(test)]

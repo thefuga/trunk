@@ -1,5 +1,5 @@
 use crate::error::TrunkError;
-use crate::git::{backend_fs::BackendTempDir, command_runner, graph, types::RebaseTodoItem};
+use crate::git::{backend_fs::BackendTempDir, command_runner, read_model, types::RebaseTodoItem};
 use crate::state::{CommitCache, RepoState};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -69,6 +69,70 @@ pub fn get_rebase_todo_inner(
     Ok(items)
 }
 
+pub fn get_rebase_todo_inner_with_descriptors(
+    path: &str,
+    base_oid: &str,
+    inclusive: bool,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
+) -> Result<Vec<RebaseTodoItem>, TrunkError> {
+    match read_model::backend_from_state(path, state_map, descriptor_map)? {
+        read_model::ReadBackend::Local(_) => {
+            get_rebase_todo_inner(path, base_oid, inclusive, state_map)
+        }
+        read_model::ReadBackend::Wsl(repo) => {
+            let range = if inclusive {
+                let parent = command_runner::git_output(
+                    &repo,
+                    &["rev-parse", &format!("{base_oid}^")],
+                    "rebase_error",
+                )?;
+                if parent.status.success() {
+                    format!("{}..HEAD", String::from_utf8_lossy(&parent.stdout).trim())
+                } else {
+                    "HEAD".to_owned()
+                }
+            } else {
+                format!("{base_oid}..HEAD")
+            };
+            let output = command_runner::git_output(
+                &repo,
+                &[
+                    "log",
+                    "--reverse",
+                    "--format=%H%x00%s%x00%an%x00%at",
+                    &range,
+                ],
+                "rebase_error",
+            )?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(TrunkError::new("rebase_error", stderr.to_string()));
+            }
+            Ok(String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter_map(|line| {
+                    let mut fields = line.splitn(4, '\0');
+                    let oid = fields.next()?.to_string();
+                    let summary = fields.next().unwrap_or("").to_string();
+                    let author_name = fields.next().unwrap_or("").to_string();
+                    let author_timestamp = fields
+                        .next()
+                        .and_then(|value| value.parse::<i64>().ok())
+                        .unwrap_or(0);
+                    Some(RebaseTodoItem {
+                        short_oid: oid.chars().take(7).collect(),
+                        oid,
+                        summary,
+                        author_name,
+                        author_timestamp,
+                    })
+                })
+                .collect())
+        }
+    }
+}
+
 pub fn get_fork_point_inner(
     path: &str,
     branch: &str,
@@ -96,9 +160,6 @@ pub fn start_interactive_rebase_blocking(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
 ) -> Result<crate::git::types::GraphResult, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     let repo_descriptor =
         crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
 
@@ -176,8 +237,7 @@ exit 0
         }
     }
 
-    let mut repo = git2::Repository::open(path_buf)?;
-    graph::walk_commits(&mut repo, 0, usize::MAX)
+    crate::commands::refresh_graph_from_state(path, state_map, descriptor_map)
 }
 
 #[tauri::command]
@@ -188,9 +248,10 @@ pub async fn get_rebase_todo(
     state: State<'_, RepoState>,
 ) -> Result<Vec<RebaseTodoItem>, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let incl = inclusive.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
-        get_rebase_todo_inner(&path, &base_oid, incl, &state_map)
+        get_rebase_todo_inner_with_descriptors(&path, &base_oid, incl, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
