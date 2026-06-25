@@ -26,12 +26,9 @@ pub async fn open_repo(
     watcher_state: State<'_, WatcherState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let descriptor = repo.unwrap_or_else(|| RepoDescriptor::local(path.clone()));
-    let repo_key = if descriptor.id.is_empty() {
-        path.clone()
-    } else {
-        descriptor.id.clone()
-    };
+    let mut descriptor = repo.unwrap_or_else(|| RepoDescriptor::local(path.clone()));
+    descriptor.id = descriptor.locator.stable_id();
+    let repo_key = descriptor.id.clone();
     let execution_path = match &descriptor.locator {
         RepoLocator::Local { path } => path.clone(),
         RepoLocator::Wsl { distro, .. } => {

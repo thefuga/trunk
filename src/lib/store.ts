@@ -4,6 +4,7 @@ import {
 	type ContentMode,
 	type LayoutMode,
 	localRepoDescriptor,
+	normalizeRepoDescriptor,
 	type RepoDescriptor,
 } from "./types.js";
 
@@ -30,12 +31,13 @@ async function saveIfMigrated<T>(
 }
 
 function normalizeRecentRepo(repo: RecentRepo): RecentRepo {
-	const descriptor =
-		repo.repoDescriptor ?? localRepoDescriptor(repo.path, repo.name);
+	const descriptor = normalizeRepoDescriptor(
+		repo.repoDescriptor ?? localRepoDescriptor(repo.path, repo.name),
+	);
 	return {
 		name: repo.name || descriptor.display_name,
 		path: repo.path || descriptor.display_path,
-		repoId: repo.repoId ?? descriptor.id,
+		repoId: descriptor.id,
 		repoDescriptor: descriptor,
 	};
 }
@@ -48,11 +50,12 @@ function normalizePersistedTab(tab: PersistedTab): PersistedTab {
 			repoDescriptor: null,
 		};
 	}
-	const descriptor =
-		tab.repoDescriptor ?? localRepoDescriptor(tab.repoPath, tab.repoName);
+	const descriptor = normalizeRepoDescriptor(
+		tab.repoDescriptor ?? localRepoDescriptor(tab.repoPath, tab.repoName),
+	);
 	return {
 		...tab,
-		repoId: tab.repoId ?? descriptor.id,
+		repoId: descriptor.id,
 		repoDescriptor: descriptor,
 		repoPath: tab.repoPath || descriptor.display_path,
 		repoName: tab.repoName || descriptor.display_name,

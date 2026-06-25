@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { localRepoDescriptor, repoIdForLocator } from "./types.js";
+import {
+	localRepoDescriptor,
+	normalizeRepoDescriptor,
+	repoIdForLocator,
+} from "./types.js";
 
 describe("repo identity", () => {
 	it("builds stable ids for local and WSL locators", () => {
@@ -56,6 +60,22 @@ describe("repo identity", () => {
 			display_name: "Display Name",
 			display_path: "/repo",
 			locator: { backend: "Local", path: "/repo" },
+		});
+	});
+
+	it("recomputes descriptor ids from locator identity", () => {
+		expect(
+			normalizeRepoDescriptor({
+				id: "stale-id",
+				display_name: "repo",
+				display_path: "C:\\repo\\",
+				locator: { backend: "Local", path: "C:\\repo\\" },
+			}),
+		).toEqual({
+			id: "local:C:\\repo",
+			display_name: "repo",
+			display_path: "C:\\repo\\",
+			locator: { backend: "Local", path: "C:\\repo\\" },
 		});
 	});
 });

@@ -101,6 +101,15 @@ export function repoIdForLocator(locator: RepoLocator): string {
 	}
 }
 
+export function normalizeRepoDescriptor(
+	descriptor: RepoDescriptor,
+): RepoDescriptor {
+	return {
+		...descriptor,
+		id: repoIdForLocator(descriptor.locator),
+	};
+}
+
 export function localRepoDescriptor(
 	path: string,
 	name: string,

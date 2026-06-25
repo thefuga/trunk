@@ -166,6 +166,36 @@ describe("store", () => {
 			]);
 			expect(backingStore.get("recent_repos")).toEqual(repos);
 		});
+
+		it("getRecentRepos recomputes stale persisted repo ids from descriptors", async () => {
+			backingStore.set("recent_repos", [
+				{
+					name: "A",
+					path: "C:\\repo\\",
+					repoId: "local:C:\\repo\\",
+					repoDescriptor: {
+						id: "local:C:\\repo\\",
+						display_name: "A",
+						display_path: "C:\\repo\\",
+						locator: { backend: "Local", path: "C:\\repo\\" },
+					},
+				},
+			]);
+
+			const repos = await getRecentRepos();
+
+			expect(repos).toEqual([
+				expect.objectContaining({
+					repoId: "local:C:\\repo",
+					repoDescriptor: expect.objectContaining({
+						id: "local:C:\\repo",
+						display_path: "C:\\repo\\",
+						locator: { backend: "Local", path: "C:\\repo\\" },
+					}),
+				}),
+			]);
+			expect(backingStore.get("recent_repos")).toEqual(repos);
+		});
 	});
 
 	describe("open tabs", () => {
@@ -187,6 +217,38 @@ describe("store", () => {
 						display_name: "repo",
 						display_path: "/repo",
 						locator: { backend: "Local", path: "/repo" },
+					}),
+				}),
+			]);
+			expect(backingStore.get("open_tabs")).toEqual(tabs);
+		});
+
+		it("getOpenTabs recomputes stale persisted repo ids from descriptors", async () => {
+			backingStore.set("open_tabs", [
+				{
+					id: "tab-1",
+					repoPath: "C:\\repo\\",
+					repoName: "repo",
+					repoId: "local:C:\\repo\\",
+					repoDescriptor: {
+						id: "local:C:\\repo\\",
+						display_name: "repo",
+						display_path: "C:\\repo\\",
+						locator: { backend: "Local", path: "C:\\repo\\" },
+					},
+				},
+			]);
+
+			const tabs = await getOpenTabs();
+
+			expect(tabs).toEqual([
+				expect.objectContaining({
+					id: "tab-1",
+					repoId: "local:C:\\repo",
+					repoDescriptor: expect.objectContaining({
+						id: "local:C:\\repo",
+						display_path: "C:\\repo\\",
+						locator: { backend: "Local", path: "C:\\repo\\" },
 					}),
 				}),
 			]);
