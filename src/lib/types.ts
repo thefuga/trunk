@@ -88,7 +88,7 @@ export interface RepoDescriptor {
 }
 
 function normalizeRepoPathForId(path: string): string {
-	const trimmed = path.replace(/\/+$/, "");
+	const trimmed = path.replace(/[\\/]+$/, "");
 	return trimmed.length === 0 ? path : trimmed;
 }
 

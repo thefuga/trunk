@@ -12,7 +12,7 @@ pub enum RepoLocator {
 }
 
 fn normalize_repo_path_for_id(path: &str) -> &str {
-    let trimmed = path.trim_end_matches('/');
+    let trimmed = path.trim_end_matches(['/', '\\']);
     if trimmed.is_empty() {
         path
     } else {

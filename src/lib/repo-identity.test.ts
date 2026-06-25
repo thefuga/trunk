@@ -36,6 +36,20 @@ describe("repo identity", () => {
 		);
 	});
 
+	it("normalizes Windows trailing separators in ids without changing display paths", () => {
+		expect(repoIdForLocator({ backend: "Local", path: "C:\\repo\\" })).toBe(
+			"local:C:\\repo",
+		);
+
+		expect(localRepoDescriptor("C:\\repo\\", "repo")).toEqual(
+			expect.objectContaining({
+				id: "local:C:\\repo",
+				display_path: "C:\\repo\\",
+				locator: { backend: "Local", path: "C:\\repo\\" },
+			}),
+		);
+	});
+
 	it("keeps local display metadata separate from locator identity", () => {
 		expect(localRepoDescriptor("/repo", "Display Name")).toEqual({
 			id: "local:/repo",

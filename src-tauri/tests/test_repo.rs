@@ -59,6 +59,20 @@ fn repo_locator_ids_normalize_trailing_slashes() {
 }
 
 #[test]
+fn repo_locator_ids_normalize_windows_trailing_separators() {
+    use trunk_lib::git::types::{RepoDescriptor, RepoLocator};
+
+    let local = RepoLocator::Local {
+        path: r"C:\repo\".to_string(),
+    };
+    let descriptor = RepoDescriptor::local(r"C:\repo\".to_string());
+
+    assert_eq!(local.stable_id(), r"local:C:\repo");
+    assert_eq!(descriptor.id, r"local:C:\repo");
+    assert_eq!(descriptor.display_path, r"C:\repo\");
+}
+
+#[test]
 fn repo_locators_serialize_with_backend_tags() {
     use serde_json::json;
     use trunk_lib::git::types::RepoLocator;
