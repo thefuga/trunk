@@ -1,12 +1,117 @@
 use crate::error::TrunkError;
 use crate::git::{
-    graph,
+    command_runner, graph, read_model,
     types::{GraphResult, StashEntry},
 };
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
+
+fn git_command_error(code: &str, output: std::process::Output) -> TrunkError {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    TrunkError::new(code, if stderr.is_empty() { stdout } else { stderr })
+}
+
+fn run_git(repo: &crate::git::types::RepoDescriptor, args: &[&str]) -> Result<(), TrunkError> {
+    let output = command_runner::git_output(repo, args, "git_error")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(git_command_error("git_error", output))
+    }
+}
+
+fn wsl_has_conflicts(repo: &crate::git::types::RepoDescriptor) -> Result<bool, TrunkError> {
+    let output = command_runner::git_output(repo, &["ls-files", "-u"], "git_error")?;
+    if output.status.success() {
+        Ok(!String::from_utf8_lossy(&output.stdout).trim().is_empty())
+    } else {
+        Err(git_command_error("git_error", output))
+    }
+}
+
+fn refresh_graph_for_backend(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
+) -> Result<GraphResult, TrunkError> {
+    match read_model::backend_from_state(path, state_map, descriptor_map)? {
+        read_model::ReadBackend::Local(path_buf) => {
+            let mut repo = git2::Repository::open(path_buf)?;
+            graph::walk_commits(&mut repo, 0, usize::MAX)
+        }
+        read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
+    }
+}
+
+fn wsl_list_stashes(
+    repo: &crate::git::types::RepoDescriptor,
+) -> Result<Vec<StashEntry>, TrunkError> {
+    Ok(read_model::wsl_refs(repo)?.stashes)
+}
+
+fn wsl_stash_save(
+    repo: &crate::git::types::RepoDescriptor,
+    message: &str,
+) -> Result<(), TrunkError> {
+    let status = command_runner::git_output(repo, &["status", "--porcelain=v1"], "git_error")?;
+    if !status.status.success() {
+        return Err(git_command_error("git_error", status));
+    }
+    if String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+        return Err(TrunkError::new(
+            "nothing_to_stash",
+            "Nothing to stash — working tree is clean",
+        ));
+    }
+
+    if message.trim().is_empty() {
+        run_git(repo, &["stash", "push"])
+    } else {
+        run_git(repo, &["stash", "push", "-m", message])
+    }
+}
+
+fn wsl_stash_apply(
+    repo: &crate::git::types::RepoDescriptor,
+    index: usize,
+) -> Result<(), TrunkError> {
+    let stash_ref = format!("stash@{{{}}}", index);
+    run_git(repo, &["stash", "apply", &stash_ref]).map_err(|e| {
+        if wsl_has_conflicts(repo).unwrap_or(false) {
+            TrunkError::new(
+                "conflict_state",
+                "Stash applied with conflicts — resolve conflicts before continuing",
+            )
+        } else {
+            e
+        }
+    })?;
+    if wsl_has_conflicts(repo)? {
+        return Err(TrunkError::new(
+            "conflict_state",
+            "Stash applied with conflicts — resolve conflicts before continuing",
+        ));
+    }
+    Ok(())
+}
+
+fn wsl_stash_pop(repo: &crate::git::types::RepoDescriptor, index: usize) -> Result<(), TrunkError> {
+    let stash_ref = format!("stash@{{{}}}", index);
+    run_git(repo, &["stash", "pop", &stash_ref]).map_err(|e| {
+        if wsl_has_conflicts(repo).unwrap_or(false) {
+            TrunkError::new("conflict_state", "Stash applied with conflicts — resolve conflicts before continuing. Note: stash was NOT removed.")
+        } else {
+            e
+        }
+    })?;
+    if wsl_has_conflicts(repo)? {
+        return Err(TrunkError::new("conflict_state", "Stash applied with conflicts — resolve conflicts before continuing. Note: stash was NOT removed."));
+    }
+    Ok(())
+}
 
 pub fn list_stashes_inner(
     path: &str,
@@ -140,10 +245,16 @@ pub async fn list_stashes(
     state: State<'_, RepoState>,
 ) -> Result<Vec<StashEntry>, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || list_stashes_inner(&path, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => list_stashes_inner(&path, &state_map),
+            read_model::ReadBackend::Wsl(repo) => wsl_list_stashes(&repo),
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 #[tauri::command]
@@ -155,9 +266,18 @@ pub async fn stash_save(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        stash_save_inner(&path_clone, &message, &state_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                stash_save_inner(&path_clone, &message, &state_map)
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                wsl_stash_save(&repo, &message)?;
+                refresh_graph_for_backend(&path_clone, &state_map, &descriptor_map)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -177,9 +297,16 @@ pub async fn stash_pop(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        stash_pop_inner(&path_clone, index, &state_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => stash_pop_inner(&path_clone, index, &state_map),
+            read_model::ReadBackend::Wsl(repo) => {
+                wsl_stash_pop(&repo, index)?;
+                refresh_graph_for_backend(&path_clone, &state_map, &descriptor_map)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -199,9 +326,16 @@ pub async fn stash_apply(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        stash_apply_inner(&path_clone, index, &state_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => stash_apply_inner(&path_clone, index, &state_map),
+            read_model::ReadBackend::Wsl(repo) => {
+                wsl_stash_apply(&repo, index)?;
+                refresh_graph_for_backend(&path_clone, &state_map, &descriptor_map)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -221,9 +355,17 @@ pub async fn stash_drop(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        stash_drop_inner(&path_clone, index, &state_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => stash_drop_inner(&path_clone, index, &state_map),
+            read_model::ReadBackend::Wsl(repo) => {
+                let stash_ref = format!("stash@{{{}}}", index);
+                run_git(&repo, &["stash", "drop", &stash_ref])?;
+                refresh_graph_for_backend(&path_clone, &state_map, &descriptor_map)
+            }
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

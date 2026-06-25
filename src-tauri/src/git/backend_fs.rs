@@ -262,7 +262,8 @@ pub fn wsl_poll_token(repo: &RepoDescriptor) -> Result<Option<String>, TrunkErro
     match &repo.locator {
         RepoLocator::Local { .. } => Ok(None),
         RepoLocator::Wsl { distro, linux_path } => {
-            let script = "git status --porcelain=v1 -uall && git rev-parse HEAD 2>/dev/null || true";
+            let script =
+                "git status --porcelain=v1 -uall && git rev-parse HEAD 2>/dev/null || true";
             let bytes = wsl_output(distro, linux_path, script, None)?;
             Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
         }
