@@ -1,5 +1,5 @@
 use crate::error::TrunkError;
-use crate::git::graph;
+use crate::git::read_model;
 use crate::git::types::{MergeSides, RepoDescriptor, RepoLocator};
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
@@ -56,6 +56,45 @@ pub fn get_merge_sides_inner(
         ours: read_blob(&conflict.our)?,
         theirs: read_blob(&conflict.their)?,
     })
+}
+
+fn get_merge_sides_inner_with_descriptors(
+    path: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<MergeSides, TrunkError> {
+    match read_model::backend_from_state(path, state_map, descriptor_map)? {
+        read_model::ReadBackend::Local(_) => get_merge_sides_inner(path, file_path, state_map),
+        read_model::ReadBackend::Wsl(repo) => {
+            let read_stage = |stage: &str| -> Result<Option<String>, TrunkError> {
+                let spec = format!(":{stage}:{file_path}");
+                let output = crate::git::command_runner::git_output(
+                    &repo,
+                    &["show", &spec],
+                    "conflict_error",
+                )?;
+                if output.status.success() {
+                    Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
+                } else {
+                    Ok(None)
+                }
+            };
+            let ours = read_stage("2")?;
+            let theirs = read_stage("3")?;
+            if ours.is_none() && theirs.is_none() {
+                return Err(TrunkError::new(
+                    "not_conflicted",
+                    format!("File not in conflict: {}", file_path),
+                ));
+            }
+            Ok(MergeSides {
+                base: read_stage("1")?.unwrap_or_default(),
+                ours: ours.unwrap_or_default(),
+                theirs: theirs.unwrap_or_default(),
+            })
+        }
+    }
 }
 
 pub fn save_merge_result_inner(
@@ -117,8 +156,9 @@ pub async fn get_merge_sides(
     state: State<'_, RepoState>,
 ) -> Result<MergeSides, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        get_merge_sides_inner(&path, &file_path, &state_map)
+        get_merge_sides_inner_with_descriptors(&path, &file_path, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -155,11 +195,7 @@ pub async fn save_merge_result(
     // Repopulate cache and emit repo-changed (same pattern as merge_continue)
     let path_for_cache = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        let path_buf = state_map
-            .get(&path_for_cache)
-            .ok_or_else(|| TrunkError::new("not_open", "Repository not open"))?;
-        let mut repo = git2::Repository::open(path_buf)?;
-        graph::walk_commits(&mut repo, 0, usize::MAX)
+        crate::commands::refresh_graph_from_state(&path_for_cache, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
