@@ -28,20 +28,19 @@ pub async fn open_repo(
 ) -> Result<(), String> {
     let mut descriptor = repo.unwrap_or_else(|| RepoDescriptor::local(path.clone()));
     descriptor.id = descriptor.locator.stable_id();
-    let repo_key = descriptor.id.clone();
     let execution_path = match &descriptor.locator {
         RepoLocator::Local { path } => path.clone(),
-        RepoLocator::Wsl { distro, .. } => {
-            return Err(TrunkError::new(
-                "unsupported_backend",
-                format!(
-                    "WSL repository execution is not available yet for distro {}",
-                    distro
-                ),
-            )
-            .to_json());
+        RepoLocator::Wsl { distro, linux_path } => {
+            let validation =
+                crate::commands::wsl::validate_repo_inner(distro.clone(), linux_path.clone())
+                    .map_err(|e| e.to_json())?;
+            descriptor = validation.descriptor;
+            descriptor.id = descriptor.locator.stable_id();
+            crate::commands::wsl::unc_path(&validation.distro, &validation.repo_root)
         }
     };
+    let repo_key = descriptor.id.clone();
+    let is_local_repo = matches!(descriptor.locator, RepoLocator::Local { .. });
     let path_clone = execution_path.clone();
 
     let result = tauri::async_runtime::spawn_blocking(
@@ -64,7 +63,9 @@ pub async fn open_repo(
         .insert(repo_key.clone(), path_buf.clone());
     state.1.lock().unwrap().insert(repo_key.clone(), descriptor);
     cache.0.lock().unwrap().insert(repo_key.clone(), result);
-    watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
+    if is_local_repo {
+        watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
+    }
 
     Ok(())
 }

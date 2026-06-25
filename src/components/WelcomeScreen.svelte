@@ -8,7 +8,12 @@ import {
 	type RecentRepo,
 	removeRecentRepo,
 } from "../lib/store.js";
-import { localRepoDescriptor } from "../lib/types.js";
+import {
+	localRepoDescriptor,
+	type WslAvailability,
+	type WslDistro,
+	type WslRepoValidation,
+} from "../lib/types.js";
 
 interface Props {
 	onopen: (repo: RecentRepo) => void;
@@ -21,6 +26,11 @@ let recentRepos = $state<RecentRepo[]>([]);
 let resolvedPaths: Record<string, string> = $state({});
 let loading = $state(false);
 let error = $state<string | null>(null);
+let wslAvailability = $state<WslAvailability | null>(null);
+let wslDistros = $state<WslDistro[]>([]);
+let selectedWslDistro = $state("");
+let wslLinuxPath = $state("");
+let wslLoading = $state(false);
 
 // Storage is uncapped (the picker shows full history); the dashboard intentionally
 // shows only the most recent few to keep the welcome screen compact.
@@ -39,6 +49,23 @@ $effect(() => {
 	getRecentRepos().then((repos) => {
 		recentRepos = repos;
 	});
+});
+
+$effect(() => {
+	(async () => {
+		const availability = await safeInvoke<WslAvailability>(
+			"wsl_availability",
+		).catch(() => null);
+		wslAvailability = availability;
+		if (!availability?.available) return;
+
+		const distros = await safeInvoke<WslDistro[]>("list_wsl_distros").catch(
+			() => [],
+		);
+		wslDistros = distros;
+		selectedWslDistro =
+			distros.find((d) => d.default)?.name ?? distros[0]?.name ?? "";
+	})();
 });
 
 $effect(() => {
@@ -68,7 +95,7 @@ async function openRepository() {
 	});
 }
 
-async function openRepo(recent: RecentRepo) {
+async function openRepo(recent: RecentRepo): Promise<boolean> {
 	error = null;
 	loading = true;
 	try {
@@ -88,11 +115,40 @@ async function openRepo(recent: RecentRepo) {
 			repoId: descriptor.id,
 			repoDescriptor: descriptor,
 		});
+		return true;
 	} catch (e: unknown) {
 		const trunk = e as TrunkError;
 		error = trunk.message ?? "Failed to open repository";
+		return false;
 	} finally {
 		loading = false;
+	}
+}
+
+async function openWslRepository() {
+	error = null;
+	wslLoading = true;
+	try {
+		const validation = await safeInvoke<WslRepoValidation>(
+			"validate_wsl_repo",
+			{
+				distro: selectedWslDistro,
+				linuxPath: wslLinuxPath,
+			},
+		);
+		const descriptor = validation.descriptor;
+		const opened = await openRepo({
+			name: descriptor.display_name,
+			path: descriptor.display_path,
+			repoId: descriptor.id,
+			repoDescriptor: descriptor,
+		});
+		if (opened) wslLinuxPath = validation.repo_root;
+	} catch (e: unknown) {
+		const trunk = e as TrunkError;
+		error = trunk.message ?? "Failed to open WSL repository";
+	} finally {
+		wslLoading = false;
 	}
 }
 
@@ -125,6 +181,51 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
     >
       {loading ? 'Opening...' : 'Open Repository'}
     </button>
+
+    {#if wslAvailability?.supported_platform}
+      <div class="w-full flex flex-col gap-2 rounded-md p-3" style="border: 1px solid var(--color-border); background: var(--color-surface);">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm font-medium" style="color: var(--color-text);">Open from WSL</span>
+          {#if !wslAvailability.available}
+            <span class="text-xs" style="color: var(--color-text-muted);">Unavailable</span>
+          {/if}
+        </div>
+
+        {#if wslAvailability.available}
+          <select
+            bind:value={selectedWslDistro}
+            disabled={wslLoading || wslDistros.length === 0}
+            class="w-full rounded px-2 py-1.5 text-sm outline-none"
+            style="background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border);"
+            aria-label="WSL distro"
+          >
+            {#each wslDistros as distro (distro.name)}
+              <option value={distro.name}>{distro.name}{distro.default ? ' (default)' : ''}</option>
+            {/each}
+          </select>
+          <div class="flex gap-2">
+            <input
+              bind:value={wslLinuxPath}
+              disabled={wslLoading || !selectedWslDistro}
+              placeholder="/home/me/project"
+              class="min-w-0 flex-1 rounded px-2 py-1.5 text-sm outline-none"
+              style="background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border);"
+              onkeydown={(e) => e.key === 'Enter' && openWslRepository()}
+            />
+            <button
+              onclick={openWslRepository}
+              disabled={wslLoading || !selectedWslDistro || !wslLinuxPath.trim()}
+              class="rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              style="background: var(--color-accent); color: var(--color-on-accent);"
+            >
+              {wslLoading ? 'Opening...' : 'Open'}
+            </button>
+          </div>
+        {:else if wslAvailability.message}
+          <p class="text-xs leading-relaxed" style="color: var(--color-text-muted);">{wslAvailability.message}</p>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   {#if displayedRepos.length > 0}

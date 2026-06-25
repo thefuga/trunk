@@ -3,6 +3,7 @@ import {
 	localRepoDescriptor,
 	normalizeRepoDescriptor,
 	repoIdForLocator,
+	wslRepoDescriptor,
 } from "./types.js";
 
 describe("repo identity", () => {
@@ -60,6 +61,19 @@ describe("repo identity", () => {
 			display_name: "Display Name",
 			display_path: "/repo",
 			locator: { backend: "Local", path: "/repo" },
+		});
+	});
+
+	it("builds WSL display metadata from distro and Linux path", () => {
+		expect(wslRepoDescriptor("Ubuntu", "/home/me/trunk")).toEqual({
+			id: "wsl:Ubuntu:/home/me/trunk",
+			display_name: "trunk",
+			display_path: "Ubuntu:/home/me/trunk",
+			locator: {
+				backend: "Wsl",
+				distro: "Ubuntu",
+				linux_path: "/home/me/trunk",
+			},
 		});
 	});
 
