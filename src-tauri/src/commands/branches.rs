@@ -11,6 +11,58 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 
+fn git_command_error(code: &str, output: std::process::Output) -> TrunkError {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    TrunkError::new(code, if stderr.is_empty() { stdout } else { stderr })
+}
+
+fn run_git(repo: &crate::git::types::RepoDescriptor, args: &[&str]) -> Result<(), TrunkError> {
+    let output = command_runner::git_output(repo, args, "git_error")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(git_command_error("git_error", output))
+    }
+}
+
+fn git_stdout(
+    repo: &crate::git::types::RepoDescriptor,
+    args: &[&str],
+) -> Result<String, TrunkError> {
+    let output = command_runner::git_output(repo, args, "git_error")?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    } else {
+        Err(git_command_error("git_error", output))
+    }
+}
+
+fn refresh_graph_for_backend(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
+) -> Result<GraphResult, TrunkError> {
+    match read_model::backend_from_state(path, state_map, descriptor_map)? {
+        read_model::ReadBackend::Local(path_buf) => {
+            let mut repo = git2::Repository::open(path_buf)?;
+            graph::walk_commits(&mut repo, 0, usize::MAX)
+        }
+        read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
+    }
+}
+
+fn refresh_cache_for_backend(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
+    cache_map: &mut HashMap<String, GraphResult>,
+) -> Result<(), TrunkError> {
+    let graph_result = refresh_graph_for_backend(path, state_map, descriptor_map)?;
+    cache_map.insert(path.to_owned(), graph_result);
+    Ok(())
+}
+
 /// Inner implementation of list_refs — separated for testability without Tauri state.
 pub fn list_refs_inner(
     path: &str,
@@ -226,10 +278,18 @@ pub async fn resolve_ref(
     state: State<'_, RepoState>,
 ) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || resolve_ref_inner(&path, &ref_name, &state_map))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => resolve_ref_inner(&path, &ref_name, &state_map),
+            read_model::ReadBackend::Wsl(repo) => {
+                git_stdout(&repo, &["rev-parse", "--verify", &ref_name])
+            }
+        }
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())
 }
 
 /// Inner implementation of checkout_branch — separated for testability.
@@ -272,12 +332,26 @@ pub async fn checkout_branch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let mut cache_map = cache.0.lock().unwrap().clone();
 
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        checkout_branch_inner(&path_clone, &branch_name, &state_map, &mut cache_map)
-            .map(|_| cache_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                checkout_branch_inner(&path_clone, &branch_name, &state_map, &mut cache_map)?;
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                run_git(&repo, &["checkout", &branch_name])?;
+                refresh_cache_for_backend(
+                    &path_clone,
+                    &state_map,
+                    &descriptor_map,
+                    &mut cache_map,
+                )?;
+            }
+        }
+        Ok::<_, TrunkError>(cache_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -298,10 +372,6 @@ pub fn fast_forward_to_inner(
     descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
     let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
     let output =
         command_runner::git_output(&repo, &["merge", "--ff-only", target_oid], "merge_error")?;
@@ -311,10 +381,7 @@ pub fn fast_forward_to_inner(
         return Err(TrunkError::new("not_fast_forward", stderr));
     }
 
-    // Rebuild graph cache
-    let mut repo = git2::Repository::open(path_buf)?;
-    let graph_result = graph::walk_commits(&mut repo, 0, usize::MAX)?;
-    cache_map.insert(path.to_owned(), graph_result);
+    refresh_cache_for_backend(path, state_map, descriptor_map, cache_map)?;
 
     Ok(())
 }
@@ -427,18 +494,51 @@ pub async fn create_branch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let mut cache_map = cache.0.lock().unwrap().clone();
 
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        create_branch_inner(
-            &path_clone,
-            &name,
-            from_oid.as_deref(),
-            &state_map,
-            &mut cache_map,
-        )
-        .map(|_| cache_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                create_branch_inner(
+                    &path_clone,
+                    &name,
+                    from_oid.as_deref(),
+                    &state_map,
+                    &mut cache_map,
+                )?;
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                if let Some(from_oid) = from_oid.as_deref() {
+                    run_git(&repo, &["branch", &name, from_oid])?;
+                } else {
+                    run_git(&repo, &["branch", &name])?;
+                }
+
+                let dirty = command_runner::git_output(
+                    &repo,
+                    &["diff-index", "--quiet", "HEAD", "--"],
+                    "git_error",
+                )?;
+                if !dirty.status.success() {
+                    refresh_cache_for_backend(
+                        &path_clone,
+                        &state_map,
+                        &descriptor_map,
+                        &mut cache_map,
+                    )?;
+                    return Err(TrunkError::new(
+                        "dirty_workdir",
+                        "Branch created but working tree has uncommitted changes — checkout skipped",
+                    ));
+                }
+
+                run_git(&repo, &["checkout", &name])?;
+                refresh_cache_for_backend(&path_clone, &state_map, &descriptor_map, &mut cache_map)?;
+            }
+        }
+        Ok::<_, TrunkError>(cache_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -461,11 +561,32 @@ pub async fn delete_branch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let mut cache_map = cache.0.lock().unwrap().clone();
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        delete_branch_inner(&path_clone, &branch_name, &state_map, &mut cache_map)
-            .map(|_| cache_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                delete_branch_inner(&path_clone, &branch_name, &state_map, &mut cache_map)?;
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                let head = git_stdout(&repo, &["branch", "--show-current"]).unwrap_or_default();
+                if head == branch_name {
+                    return Err(TrunkError::new(
+                        "cannot_delete_head",
+                        "Cannot delete the currently checked-out branch",
+                    ));
+                }
+                run_git(&repo, &["branch", "-D", &branch_name])?;
+                refresh_cache_for_backend(
+                    &path_clone,
+                    &state_map,
+                    &descriptor_map,
+                    &mut cache_map,
+                )?;
+            }
+        }
+        Ok::<_, TrunkError>(cache_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -486,17 +607,31 @@ pub async fn rename_branch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let mut cache_map = cache.0.lock().unwrap().clone();
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        rename_branch_inner(
-            &path_clone,
-            &old_name,
-            &new_name,
-            &state_map,
-            &mut cache_map,
-        )
-        .map(|_| cache_map)
+        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(_) => {
+                rename_branch_inner(
+                    &path_clone,
+                    &old_name,
+                    &new_name,
+                    &state_map,
+                    &mut cache_map,
+                )?;
+            }
+            read_model::ReadBackend::Wsl(repo) => {
+                run_git(&repo, &["branch", "-m", &old_name, &new_name])?;
+                refresh_cache_for_backend(
+                    &path_clone,
+                    &state_map,
+                    &descriptor_map,
+                    &mut cache_map,
+                )?;
+            }
+        }
+        Ok::<_, TrunkError>(cache_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

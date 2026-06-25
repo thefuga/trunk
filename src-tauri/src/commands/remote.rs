@@ -6,7 +6,10 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::error::TrunkError;
-use crate::git::{command_runner, graph, types::GraphResult};
+use crate::git::{
+    command_runner, graph, read_model,
+    types::{GraphResult, OperationType},
+};
 use crate::state::{kill_process, CommitCache, RepoState, RunningOp};
 
 /// Classifies git stderr output into structured error codes.
@@ -115,21 +118,23 @@ async fn run_git_remote(
 async fn refresh_graph(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
     cache: &State<'_, CommitCache>,
     app: &AppHandle,
 ) -> Result<(), String> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
-        })?
-        .clone();
-
     let path_owned = path.to_owned();
+    let path_for_refresh = path_owned.clone();
+    let state_map = state_map.clone();
+    let descriptor_map = descriptor_map.clone();
     let graph_result: GraphResult = tauri::async_runtime::spawn_blocking(move || {
-        let mut repo = git2::Repository::open(&path_buf)
-            .map_err(|e| TrunkError::new("git_error", e.to_string()))?;
-        graph::walk_commits(&mut repo, 0, usize::MAX)
+        match read_model::backend_from_state(&path_for_refresh, &state_map, &descriptor_map)? {
+            read_model::ReadBackend::Local(path_buf) => {
+                let mut repo = git2::Repository::open(&path_buf)
+                    .map_err(|e| TrunkError::new("git_error", e.to_string()))?;
+                graph::walk_commits(&mut repo, 0, usize::MAX)
+            }
+            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
+        }
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -167,7 +172,7 @@ pub async fn git_fetch(
     .await
     .map_err(|e| e.to_json())?;
 
-    refresh_graph(&path, &state_map, &cache, &app).await
+    refresh_graph(&path, &state_map, &descriptor_map, &cache, &app).await
 }
 
 /// Silent periodic fetch. Best-effort: skips when the repo is mid-operation
@@ -183,22 +188,35 @@ pub async fn git_fetch_background(
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
-    let Some(path_buf) = state_map.get(&path).cloned() else {
-        return Ok(());
-    };
     let Ok(repo) = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
     else {
         return Ok(());
     };
 
-    let path_for_state = path_buf.clone();
-    let is_clean = tauri::async_runtime::spawn_blocking(move || {
-        git2::Repository::open(&path_for_state)
-            .map(|r| r.state() == git2::RepositoryState::Clean)
-            .unwrap_or(false)
-    })
-    .await
-    .unwrap_or(false);
+    let repo_for_state = repo.clone();
+    let path_for_state = path.clone();
+    let state_map_for_state = state_map.clone();
+    let descriptor_map_for_state = descriptor_map.clone();
+    let is_clean =
+        tauri::async_runtime::spawn_blocking(move || {
+            match read_model::backend_from_state(
+                &path_for_state,
+                &state_map_for_state,
+                &descriptor_map_for_state,
+            ) {
+                Ok(read_model::ReadBackend::Local(path_buf)) => git2::Repository::open(&path_buf)
+                    .map(|r| r.state() == git2::RepositoryState::Clean)
+                    .unwrap_or(false),
+                Ok(read_model::ReadBackend::Wsl(_)) => {
+                    read_model::wsl_operation_state(&repo_for_state)
+                        .map(|info| matches!(info.op_type, OperationType::None))
+                        .unwrap_or(false)
+                }
+                Err(_) => false,
+            }
+        })
+        .await
+        .unwrap_or(false);
     if !is_clean {
         return Ok(());
     }
@@ -216,7 +234,7 @@ pub async fn git_fetch_background(
         return Ok(());
     }
 
-    let _ = refresh_graph(&path, &state_map, &cache, &app).await;
+    let _ = refresh_graph(&path, &state_map, &descriptor_map, &cache, &app).await;
     Ok(())
 }
 
@@ -245,7 +263,7 @@ pub async fn git_pull(
         .await
         .map_err(|e| e.to_json())?;
 
-    refresh_graph(&path, &state_map, &cache, &app).await
+    refresh_graph(&path, &state_map, &descriptor_map, &cache, &app).await
 }
 
 #[tauri::command]
@@ -265,7 +283,7 @@ pub async fn git_push(
         .await
         .map_err(|e| e.to_json())?;
 
-    refresh_graph(&path, &state_map, &cache, &app).await
+    refresh_graph(&path, &state_map, &descriptor_map, &cache, &app).await
 }
 
 #[tauri::command]
@@ -303,7 +321,7 @@ pub async fn delete_remote_branch(
     .await
     .map_err(|e| e.to_json())?;
 
-    refresh_graph(&path, &state_map, &cache, &app).await
+    refresh_graph(&path, &state_map, &descriptor_map, &cache, &app).await
 }
 
 #[tauri::command]

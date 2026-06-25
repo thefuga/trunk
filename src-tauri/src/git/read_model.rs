@@ -108,6 +108,24 @@ fn wsl_refs_by_oid(repo: &RepoDescriptor) -> Result<HashMap<String, Vec<RefLabel
             color_index: 0,
         });
     }
+    let stashes =
+        git_output(repo, &["stash", "list", "--format=%H%x00%gd%x00%s"]).unwrap_or_default();
+    for line in stashes.lines() {
+        let mut parts = line.splitn(3, '\0');
+        let oid = parts.next().unwrap_or("").trim();
+        let short_name = parts.next().unwrap_or("").trim();
+        let name = parts.next().unwrap_or("").trim();
+        if oid.is_empty() || short_name.is_empty() {
+            continue;
+        }
+        map.entry(oid.to_string()).or_default().push(RefLabel {
+            name: name.to_string(),
+            short_name: short_name.to_string(),
+            ref_type: RefType::Stash,
+            is_head: false,
+            color_index: 0,
+        });
+    }
     Ok(map)
 }
 
@@ -237,6 +255,9 @@ pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError
             .parse::<i64>()
             .unwrap_or(0);
         let refs = refs_by_oid.get(&oid).cloned().unwrap_or_default();
+        let is_stash = refs
+            .iter()
+            .any(|label| matches!(label.ref_type, RefType::Stash));
         commits.push(GraphCommit {
             short_oid: short_oid(&oid),
             is_head: head_oid.as_deref() == Some(oid.as_str()),
@@ -253,7 +274,7 @@ pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError
             color_index: idx,
             edges: Vec::new(),
             refs,
-            is_stash: false,
+            is_stash,
         });
     }
     let max_columns = assign_graph_lanes(&mut commits);
