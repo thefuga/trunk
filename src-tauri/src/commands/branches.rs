@@ -1,10 +1,10 @@
 use crate::error::TrunkError;
+use crate::git::command_runner;
 use crate::git::types::GraphResult;
 use crate::git::{
     graph,
     types::{BranchInfo, RefLabel, RefType, RefsResponse, StashEntry},
 };
-use crate::shell_env;
 use crate::state::{CommitCache, RepoState};
 use git2::BranchType;
 use std::collections::HashMap;
@@ -289,18 +289,19 @@ pub fn fast_forward_to_inner(
     path: &str,
     target_oid: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
     cache_map: &mut HashMap<String, GraphResult>,
 ) -> Result<(), TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
-    let output = std::process::Command::new("git")
-        .args(["merge", "--ff-only", target_oid])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("merge_error", e.to_string()))?;
+    let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    let output = command_runner::git_output(
+        &repo,
+        &["merge", "--ff-only", target_oid],
+        "merge_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -324,11 +325,18 @@ pub async fn fast_forward_to(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let mut cache_map = cache.0.lock().unwrap().clone();
 
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        fast_forward_to_inner(&path_clone, &target_oid, &state_map, &mut cache_map)
+        fast_forward_to_inner(
+            &path_clone,
+            &target_oid,
+            &state_map,
+            &descriptor_map,
+            &mut cache_map,
+        )
             .map(|_| cache_map)
     })
     .await

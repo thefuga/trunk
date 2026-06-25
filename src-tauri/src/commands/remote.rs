@@ -4,11 +4,9 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 
 use crate::error::TrunkError;
-use crate::git::{graph, types::GraphResult};
-use crate::shell_env;
+use crate::git::{command_runner, graph, types::GraphResult};
 use crate::state::{kill_process, CommitCache, RepoState, RunningOp};
 
 /// Classifies git stderr output into structured error codes.
@@ -41,15 +39,15 @@ pub fn classify_git_error(stderr: &str) -> TrunkError {
 /// On failure, classifies the error using `classify_git_error`.
 async fn run_git_remote(
     args: &[&str],
-    cwd: &std::path::Path,
+    repo: &crate::git::types::RepoDescriptor,
     app: &AppHandle,
-    repo_path: &str,
+    repo_id: &str,
     running: &Mutex<HashMap<String, u32>>,
 ) -> Result<(), TrunkError> {
     // Check mutual exclusion (per-repo)
     {
         let guard = running.lock().unwrap();
-        if guard.contains_key(repo_path) {
+        if guard.contains_key(repo_id) {
             return Err(TrunkError::new(
                 "op_in_progress",
                 "A remote operation is already running for this repository",
@@ -57,19 +55,14 @@ async fn run_git_remote(
         }
     }
 
-    let mut child = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("PATH", shell_env::system_path())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+    let mut child = command_runner::git_tokio_piped(repo, args)
         .spawn()
         .map_err(|e| TrunkError::new("remote_error", e.to_string()))?;
 
-    // Store PID for cancel support (keyed by repo path)
+    // Store PID for cancel support keyed by stable repo id.
     if let Some(pid) = child.id() {
         let mut guard = running.lock().unwrap();
-        guard.insert(repo_path.to_owned(), pid);
+        guard.insert(repo_id.to_owned(), pid);
     }
 
     // Read stderr lines and emit progress events
@@ -94,7 +87,7 @@ async fn run_git_remote(
         if !display.is_empty() {
             let _ = app.emit(
                 "remote-progress",
-                serde_json::json!({"path": repo_path, "line": display}),
+                serde_json::json!({"path": repo_id, "repoId": repo_id, "line": display}),
             );
         }
     }
@@ -107,7 +100,7 @@ async fn run_git_remote(
     // Clear RunningOp for this repo regardless of outcome
     {
         let mut guard = running.lock().unwrap();
-        guard.remove(repo_path);
+        guard.remove(repo_id);
     }
 
     if !status.success() {
@@ -160,16 +153,13 @@ pub async fn git_fetch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
-    let path_buf = state_map
-        .get(&path)
-        .ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
-        })?
-        .clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
+        .map_err(|e| e.to_json())?;
 
     run_git_remote(
         &["fetch", "--all", "--progress"],
-        &path_buf,
+        &repo,
         &app,
         &path,
         &running.0,
@@ -192,7 +182,12 @@ pub async fn git_fetch_background(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let Some(path_buf) = state_map.get(&path).cloned() else {
+        return Ok(());
+    };
+    let Ok(repo) = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
+    else {
         return Ok(());
     };
 
@@ -210,7 +205,7 @@ pub async fn git_fetch_background(
 
     if run_git_remote(
         &["fetch", "--all", "--tags", "--prune", "--progress"],
-        &path_buf,
+        &repo,
         &app,
         &path,
         &running.0,
@@ -235,12 +230,9 @@ pub async fn git_pull(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
-    let path_buf = state_map
-        .get(&path)
-        .ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
-        })?
-        .clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
+        .map_err(|e| e.to_json())?;
 
     let args: Vec<&str> = match strategy.as_deref() {
         Some("ff") => vec!["pull", "--ff", "--progress"],
@@ -249,7 +241,7 @@ pub async fn git_pull(
         _ => vec!["pull", "--progress"],
     };
 
-    run_git_remote(&args, &path_buf, &app, &path, &running.0)
+    run_git_remote(&args, &repo, &app, &path, &running.0)
         .await
         .map_err(|e| e.to_json())?;
 
@@ -265,14 +257,11 @@ pub async fn git_push(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
-    let path_buf = state_map
-        .get(&path)
-        .ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
-        })?
-        .clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
+        .map_err(|e| e.to_json())?;
 
-    run_git_remote(&["push", "--progress"], &path_buf, &app, &path, &running.0)
+    run_git_remote(&["push", "--progress"], &repo, &app, &path, &running.0)
         .await
         .map_err(|e| e.to_json())?;
 
@@ -289,12 +278,9 @@ pub async fn delete_remote_branch(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
-    let path_buf = state_map
-        .get(&path)
-        .ok_or_else(|| {
-            TrunkError::new("not_open", format!("Repository not open: {}", path)).to_json()
-        })?
-        .clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
+    let repo = crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)
+        .map_err(|e| e.to_json())?;
 
     // Parse "origin/feature" into remote="origin", branch="feature"
     let slash = branch_name.find('/').ok_or_else(|| {
@@ -309,7 +295,7 @@ pub async fn delete_remote_branch(
 
     run_git_remote(
         &["push", "--delete", "--progress", remote, branch],
-        &path_buf,
+        &repo,
         &app,
         &path,
         &running.0,

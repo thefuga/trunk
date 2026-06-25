@@ -1,3 +1,4 @@
+pub mod command_runner;
 pub mod editor;
 pub mod graph;
 pub mod repository;

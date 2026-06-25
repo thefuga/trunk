@@ -1,9 +1,9 @@
 use crate::error::TrunkError;
 use crate::git::{
+    command_runner,
     graph,
-    types::{GraphResult, UndoResult},
+    types::{GraphResult, RepoDescriptor, UndoResult},
 };
-use crate::shell_env;
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,6 +18,17 @@ use tauri::{AppHandle, Emitter, State};
 pub struct RevertBeginResult {
     pub graph: GraphResult,
     pub message: Option<String>,
+}
+
+fn run_git_action(
+    path: &str,
+    args: &[&str],
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+    spawn_error_code: &str,
+) -> Result<std::process::Output, TrunkError> {
+    let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    command_runner::git_output(&repo, args, spawn_error_code)
 }
 
 pub fn checkout_commit_inner(
@@ -96,17 +107,19 @@ pub fn cherry_pick_inner(
     path: &str,
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
-    let output = std::process::Command::new("git")
-        .args(["cherry-pick", oid])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("cherry_pick_error", e.to_string()))?;
+    let output = run_git_action(
+        path,
+        &["cherry-pick", oid],
+        state_map,
+        descriptor_map,
+        "cherry_pick_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -126,6 +139,7 @@ pub fn revert_commit_begin_inner(
     path: &str,
     oid: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<RevertBeginResult, TrunkError> {
     let path_buf = state_map
         .get(path)
@@ -134,12 +148,13 @@ pub fn revert_commit_begin_inner(
     // Stage the revert without committing so the editor can edit the message.
     // git writes the default message (Revert "<subject>" + full 40-char OID) to
     // .git/MERGE_MSG. REVERT_HEAD is set; the wrapper emits repo-changed.
-    let output = std::process::Command::new("git")
-        .args(["revert", "--no-commit", oid])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("revert_error", e.to_string()))?;
+    let output = run_git_action(
+        path,
+        &["revert", "--no-commit", oid],
+        state_map,
+        descriptor_map,
+        "revert_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -163,18 +178,20 @@ pub fn revert_continue_inner(
     path: &str,
     message: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     // --cleanup=strip drops git's `# Conflicts:` comment block so conflicted
     // revert bodies stay clean (MSG-03 fidelity). git commit -m clears REVERT_HEAD.
-    let output = std::process::Command::new("git")
-        .args(["commit", "-m", message, "--cleanup=strip"])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("revert_error", e.to_string()))?;
+    let output = run_git_action(
+        path,
+        &["commit", "-m", message, "--cleanup=strip"],
+        state_map,
+        descriptor_map,
+        "revert_error",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("revert_error", stderr.to_string()));
@@ -186,18 +203,20 @@ pub fn revert_continue_inner(
 pub fn revert_abort_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
     let path_buf = state_map
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
     // The MSG-06 recovery path for revert: clears REVERT_HEAD + restores a clean
     // tree. Without it a cancelled revert traps the user (RESEARCH finding 4).
-    let output = std::process::Command::new("git")
-        .args(["revert", "--abort"])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("revert_error", e.to_string()))?;
+    let output = run_git_action(
+        path,
+        &["revert", "--abort"],
+        state_map,
+        descriptor_map,
+        "revert_error",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrunkError::new("revert_error", stderr.to_string()));
@@ -211,6 +230,7 @@ pub fn reset_to_commit_inner(
     oid: &str,
     mode: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
     let path_buf = state_map
         .get(path)
@@ -224,12 +244,14 @@ pub fn reset_to_commit_inner(
         ));
     }
 
-    let output = std::process::Command::new("git")
-        .args(["reset", &format!("--{}", mode), oid])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("reset_error", e.to_string()))?;
+    let reset_mode = format!("--{}", mode);
+    let output = run_git_action(
+        path,
+        &["reset", &reset_mode, oid],
+        state_map,
+        descriptor_map,
+        "reset_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -250,9 +272,10 @@ pub async fn reset_to_commit(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        reset_to_commit_inner(&path_clone, &oid, &mode, &state_map)
+        reset_to_commit_inner(&path_clone, &oid, &mode, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -340,9 +363,10 @@ pub async fn cherry_pick(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        cherry_pick_inner(&path_clone, &oid, &state_map)
+        cherry_pick_inner(&path_clone, &oid, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -362,9 +386,10 @@ pub async fn revert_commit_begin(
     app: AppHandle,
 ) -> Result<RevertBeginResult, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        revert_commit_begin_inner(&path_clone, &oid, &state_map)
+        revert_commit_begin_inner(&path_clone, &oid, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -391,9 +416,10 @@ pub async fn revert_continue(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        revert_continue_inner(&path_clone, &message, &state_map)
+        revert_continue_inner(&path_clone, &message, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -412,12 +438,14 @@ pub async fn revert_abort(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
-    let graph_result =
-        tauri::async_runtime::spawn_blocking(move || revert_abort_inner(&path_clone, &state_map))
-            .await
-            .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-            .map_err(|e| e.to_json())?;
+    let graph_result = tauri::async_runtime::spawn_blocking(move || {
+        revert_abort_inner(&path_clone, &state_map, &descriptor_map)
+    })
+    .await
+    .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+    .map_err(|e| e.to_json())?;
 
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
@@ -427,6 +455,7 @@ pub async fn revert_abort(
 pub fn undo_commit_inner(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<UndoResult, TrunkError> {
     let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let head = repo.head()?.peel_to_commit()?;
@@ -453,12 +482,13 @@ pub fn undo_commit_inner(
         .get(path)
         .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
 
-    let output = std::process::Command::new("git")
-        .args(["reset", "--soft", "HEAD~1"])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("undo_error", e.to_string()))?;
+    let output = run_git_action(
+        path,
+        &["reset", "--soft", "HEAD~1"],
+        state_map,
+        descriptor_map,
+        "undo_error",
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -501,9 +531,10 @@ pub async fn undo_commit(
     app: AppHandle,
 ) -> Result<UndoResult, String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let (undo_result, graph_result) = tauri::async_runtime::spawn_blocking(move || {
-        let undo = undo_commit_inner(&path_clone, &state_map)?;
+        let undo = undo_commit_inner(&path_clone, &state_map, &descriptor_map)?;
         let graph = {
             let path_buf = state_map.get(path_clone.as_str()).ok_or_else(|| {
                 TrunkError::new("not_open", format!("Repository not open: {}", path_clone))
@@ -669,7 +700,9 @@ mod tests {
         let (dir, _repo, oid) = two_commit_repo();
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
-        let result = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map).unwrap();
+        let descriptors = HashMap::new();
+        let result =
+            revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors).unwrap();
         let message = result.message.expect("clean revert must carry a message");
         assert!(
             message.starts_with("Revert \"change to v2\""),
@@ -695,10 +728,11 @@ mod tests {
         let (dir, repo, oid) = two_commit_repo();
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
-        revert_commit_begin_inner(&path_str(&dir), &oid_str, &map).unwrap();
+        let descriptors = HashMap::new();
+        revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors).unwrap();
 
         let edited = "Revert \"change to v2\"\n\nedited body";
-        revert_continue_inner(&path_str(&dir), edited, &map).unwrap();
+        revert_continue_inner(&path_str(&dir), edited, &map, &descriptors).unwrap();
 
         assert!(
             !revert_head_path(&dir).exists(),
@@ -722,7 +756,8 @@ mod tests {
         let (dir, _repo, oid) = conflicting_revert_repo();
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
-        let err = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map)
+        let descriptors = HashMap::new();
+        let err = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors)
             .expect_err("conflicted revert must return Err, never open the editor");
         assert_eq!(err.code, "conflict_state");
     }
@@ -732,13 +767,14 @@ mod tests {
         let (dir, repo, oid) = two_commit_repo();
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
-        revert_commit_begin_inner(&path_str(&dir), &oid_str, &map).unwrap();
+        let descriptors = HashMap::new();
+        revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors).unwrap();
         assert!(
             revert_head_path(&dir).exists(),
             "precondition: begin set REVERT_HEAD"
         );
 
-        revert_abort_inner(&path_str(&dir), &map).unwrap();
+        revert_abort_inner(&path_str(&dir), &map, &descriptors).unwrap();
 
         assert!(
             !revert_head_path(&dir).exists(),
@@ -755,8 +791,9 @@ mod tests {
         let (dir, repo, oid) = conflicting_revert_repo();
         let oid_str = oid.to_string();
         let map = state_map_for(&dir);
+        let descriptors = HashMap::new();
         // Conflicted begin leaves REVERT_HEAD set; resolve by staging a fix.
-        let _ = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map);
+        let _ = revert_commit_begin_inner(&path_str(&dir), &oid_str, &map, &descriptors);
         let blob = repo.blob(b"resolved\n").unwrap();
         let mut index = repo.index().unwrap();
         index
@@ -779,7 +816,7 @@ mod tests {
 
         // Finish with a message that carries a trailing `# Conflicts:` block.
         let msg = "Revert \"mid change to v2\"\n\n# Conflicts:\n#\tf.txt";
-        revert_continue_inner(&path_str(&dir), msg, &map).unwrap();
+        revert_continue_inner(&path_str(&dir), msg, &map, &descriptors).unwrap();
 
         let body = head_body(&repo);
         assert!(
