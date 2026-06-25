@@ -28,6 +28,7 @@ let loading = $state(false);
 let error = $state<string | null>(null);
 let wslAvailability = $state<WslAvailability | null>(null);
 let wslDistros = $state<WslDistro[]>([]);
+let wslDistroError = $state<string | null>(null);
 let selectedWslDistro = $state("");
 let wslLinuxPath = $state("");
 let wslLoading = $state(false);
@@ -59,12 +60,22 @@ $effect(() => {
 		wslAvailability = availability;
 		if (!availability?.available) return;
 
+		wslDistroError = null;
 		const distros = await safeInvoke<WslDistro[]>("list_wsl_distros").catch(
-			() => [],
+			(e: unknown) => {
+				const trunk = e as TrunkError;
+				wslDistroError =
+					trunk.message ?? "Could not list installed WSL distros.";
+				return [];
+			},
 		);
 		wslDistros = distros;
 		selectedWslDistro =
 			distros.find((d) => d.default)?.name ?? distros[0]?.name ?? "";
+		if (distros.length === 0 && !wslDistroError) {
+			wslDistroError =
+				"No WSL distros are installed. Install one with `wsl --install -d <Distro>`, then reopen Trunk.";
+		}
 	})();
 });
 
@@ -192,35 +203,39 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
         </div>
 
         {#if wslAvailability.available}
-          <select
-            bind:value={selectedWslDistro}
-            disabled={wslLoading || wslDistros.length === 0}
-            class="w-full rounded px-2 py-1.5 text-sm outline-none"
-            style="background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border);"
-            aria-label="WSL distro"
-          >
-            {#each wslDistros as distro (distro.name)}
-              <option value={distro.name}>{distro.name}{distro.default ? ' (default)' : ''}</option>
-            {/each}
-          </select>
-          <div class="flex gap-2">
-            <input
-              bind:value={wslLinuxPath}
-              disabled={wslLoading || !selectedWslDistro}
-              placeholder="/home/me/project"
-              class="min-w-0 flex-1 rounded px-2 py-1.5 text-sm outline-none"
+          {#if wslDistroError}
+            <p class="text-xs leading-relaxed" style="color: var(--color-text-muted);">{wslDistroError}</p>
+          {:else}
+            <select
+              bind:value={selectedWslDistro}
+              disabled={wslLoading}
+              class="w-full rounded px-2 py-1.5 text-sm outline-none"
               style="background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border);"
-              onkeydown={(e) => e.key === 'Enter' && openWslRepository()}
-            />
-            <button
-              onclick={openWslRepository}
-              disabled={wslLoading || !selectedWslDistro || !wslLinuxPath.trim()}
-              class="rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              style="background: var(--color-accent); color: var(--color-on-accent);"
+              aria-label="WSL distro"
             >
-              {wslLoading ? 'Opening...' : 'Open'}
-            </button>
-          </div>
+              {#each wslDistros as distro (distro.name)}
+                <option value={distro.name}>{distro.name}{distro.default ? ' (default)' : ''}</option>
+              {/each}
+            </select>
+            <div class="flex gap-2">
+              <input
+                bind:value={wslLinuxPath}
+                disabled={wslLoading || !selectedWslDistro}
+                placeholder="/home/me/project"
+                class="min-w-0 flex-1 rounded px-2 py-1.5 text-sm outline-none"
+                style="background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border);"
+                onkeydown={(e) => e.key === 'Enter' && openWslRepository()}
+              />
+              <button
+                onclick={openWslRepository}
+                disabled={wslLoading || !selectedWslDistro || !wslLinuxPath.trim()}
+                class="rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                style="background: var(--color-accent); color: var(--color-on-accent);"
+              >
+                {wslLoading ? 'Opening...' : 'Open'}
+              </button>
+            </div>
+          {/if}
         {:else if wslAvailability.message}
           <p class="text-xs leading-relaxed" style="color: var(--color-text-muted);">{wslAvailability.message}</p>
         {/if}
