@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import StagingPanel from "./StagingPanel.svelte";
+
+const menuItems = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 
 // All Tauri module mocks — declared locally for proper vi.mock hoisting
 vi.mock("@tauri-apps/api/core", () => ({
@@ -54,11 +57,17 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 vi.mock("@tauri-apps/api/menu", () => ({
 	Menu: {
-		new: vi.fn().mockResolvedValue({
-			popup: vi.fn().mockResolvedValue(undefined),
+		new: vi.fn().mockImplementation(({ items }) => {
+			menuItems.length = 0;
+			menuItems.push(...items);
+			return Promise.resolve({
+				popup: vi.fn().mockResolvedValue(undefined),
+			});
 		}),
 	},
-	MenuItem: { new: vi.fn().mockResolvedValue({}) },
+	MenuItem: {
+		new: vi.fn().mockImplementation((item) => Promise.resolve(item)),
+	},
 	CheckMenuItem: { new: vi.fn().mockResolvedValue({}) },
 	PredefinedMenuItem: { new: vi.fn().mockResolvedValue({}) },
 	Submenu: { new: vi.fn().mockResolvedValue({}) },
@@ -70,6 +79,8 @@ const mockInvoke = vi.mocked(invoke);
 
 describe("StagingPanel", () => {
 	beforeEach(() => {
+		menuItems.length = 0;
+		vi.mocked(writeText).mockClear();
 		mockInvoke.mockReset();
 		mockInvoke.mockImplementation((cmd: string) => {
 			if (cmd === "get_status")
@@ -170,6 +181,31 @@ describe("StagingPanel", () => {
 				path: "/my/repo",
 			});
 		});
+	});
+
+	it("copies absolute paths from the display path, not the repo command key", async () => {
+		render(StagingPanel, {
+			props: {
+				repoPath: "local:/test/repo",
+				repoDisplayPath: "/test/repo",
+				clearRedoStack: vi.fn(),
+			},
+		});
+
+		await fireEvent.contextMenu(await screen.findByText("README.md"));
+
+		await waitFor(() =>
+			expect(menuItems.some((item) => item.text === "Copy Absolute Path")).toBe(
+				true,
+			),
+		);
+		const copyAbsolute = menuItems.find(
+			(item) => item.text === "Copy Absolute Path",
+		);
+		expect(copyAbsolute).toBeTruthy();
+		(copyAbsolute?.action as () => void)();
+
+		expect(writeText).toHaveBeenCalledWith("/test/repo/README.md");
 	});
 });
 

@@ -16,12 +16,22 @@ impl Default for WatcherState {
 }
 
 pub fn start_watcher<R: Runtime>(path: PathBuf, app: AppHandle<R>, state: &WatcherState) {
-    let path_clone = path.clone();
+    let repo_id = path.to_string_lossy().to_string();
+    start_watcher_for_repo(path, repo_id, app, state);
+}
+
+pub fn start_watcher_for_repo<R: Runtime>(
+    path: PathBuf,
+    repo_id: String,
+    app: AppHandle<R>,
+    state: &WatcherState,
+) {
+    let event_repo_id = repo_id.clone();
     let mut debouncer = new_debouncer(
         Duration::from_millis(300),
         move |res: DebounceEventResult| {
             if res.is_ok() {
-                let _ = app.emit("repo-changed", path_clone.to_string_lossy().to_string());
+                let _ = app.emit("repo-changed", event_repo_id.clone());
             }
         },
     )
@@ -32,13 +42,9 @@ pub fn start_watcher<R: Runtime>(path: PathBuf, app: AppHandle<R>, state: &Watch
         .watch(&path, RecursiveMode::Recursive)
         .expect("failed to watch path");
 
-    state
-        .0
-        .lock()
-        .unwrap()
-        .insert(path.to_string_lossy().to_string(), debouncer);
+    state.0.lock().unwrap().insert(repo_id, debouncer);
 }
 
-pub fn stop_watcher(path: &str, state: &WatcherState) {
-    state.0.lock().unwrap().remove(path);
+pub fn stop_watcher(repo_id: &str, state: &WatcherState) {
+    state.0.lock().unwrap().remove(repo_id);
 }

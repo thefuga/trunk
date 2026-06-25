@@ -76,6 +76,53 @@ export interface GraphResponse {
 	max_columns: number;
 }
 
+export type RepoLocator =
+	| { backend: "Local"; path: string }
+	| { backend: "Wsl"; distro: string; linux_path: string };
+
+export interface RepoDescriptor {
+	id: string;
+	display_name: string;
+	display_path: string;
+	locator: RepoLocator;
+}
+
+function normalizeRepoPathForId(path: string): string {
+	const trimmed = path.replace(/[\\/]+$/, "");
+	return trimmed.length === 0 ? path : trimmed;
+}
+
+export function repoIdForLocator(locator: RepoLocator): string {
+	switch (locator.backend) {
+		case "Local":
+			return `local:${normalizeRepoPathForId(locator.path)}`;
+		case "Wsl":
+			return `wsl:${locator.distro}:${normalizeRepoPathForId(locator.linux_path)}`;
+	}
+}
+
+export function normalizeRepoDescriptor(
+	descriptor: RepoDescriptor,
+): RepoDescriptor {
+	return {
+		...descriptor,
+		id: repoIdForLocator(descriptor.locator),
+	};
+}
+
+export function localRepoDescriptor(
+	path: string,
+	name: string,
+): RepoDescriptor {
+	const locator: RepoLocator = { backend: "Local", path };
+	return {
+		id: repoIdForLocator(locator),
+		display_name: name,
+		display_path: path,
+		locator,
+	};
+}
+
 // Navigation context for the currently-selected commit, derived from the
 // loaded graph list. Emitted by CommitGraph, consumed by CommitDetail.
 export interface CommitNav {

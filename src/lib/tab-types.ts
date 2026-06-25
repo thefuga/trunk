@@ -1,5 +1,9 @@
+import type { RepoDescriptor } from "./types.js";
+
 export interface TabInfo {
 	id: string;
+	repoId?: string | null;
+	repoDescriptor?: RepoDescriptor | null;
 	repoPath: string | null;
 	repoName: string;
 	dirty: boolean;
@@ -7,6 +11,8 @@ export interface TabInfo {
 
 export interface PersistedTab {
 	id: string;
+	repoId?: string | null;
+	repoDescriptor?: RepoDescriptor | null;
 	repoPath: string | null;
 	repoName: string;
 }

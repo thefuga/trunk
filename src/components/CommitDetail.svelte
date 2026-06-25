@@ -37,6 +37,7 @@ interface Props {
 	onfileselect: (path: string) => void;
 	onclose: () => void;
 	repoPath?: string;
+	repoDisplayPath?: string;
 	treeViewEnabled?: boolean;
 	ontreeviewtoggle?: () => void;
 	nav?: CommitNav | null;
@@ -53,6 +54,7 @@ let {
 	onfileselect,
 	onclose,
 	repoPath = "",
+	repoDisplayPath = repoPath,
 	treeViewEnabled = false,
 	ontreeviewtoggle,
 	nav = null,
@@ -81,7 +83,7 @@ let fileStatusList = $derived<FileStatus[]>(
 async function showFileContextMenu(e: MouseEvent, filePath: string) {
 	e.preventDefault();
 	const { Menu, MenuItem } = await import("@tauri-apps/api/menu");
-	const absPath = `${repoPath}/${filePath}`;
+	const absPath = `${repoDisplayPath}/${filePath}`;
 	const menu = await Menu.new({
 		items: [
 			await MenuItem.new({

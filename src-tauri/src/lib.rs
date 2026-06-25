@@ -121,7 +121,7 @@ pub fn run() {
 
             Ok(())
         })
-        .manage(RepoState(Default::default()))
+        .manage(RepoState::default())
         .manage(CommitCache(Default::default()))
         .manage(RunningOp(Default::default()))
         .manage(WatcherState(Default::default()))

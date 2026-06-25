@@ -1,31 +1,92 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { PersistedTab } from "./tab-types.js";
-import type { ContentMode, LayoutMode } from "./types.js";
+import {
+	type ContentMode,
+	type LayoutMode,
+	localRepoDescriptor,
+	normalizeRepoDescriptor,
+	type RepoDescriptor,
+} from "./types.js";
 
 export type { PersistedTab } from "./tab-types.js";
 
 export interface RecentRepo {
 	name: string;
 	path: string;
+	repoId?: string;
+	repoDescriptor?: RepoDescriptor;
 }
 
 const store = new LazyStore("trunk-prefs.json");
 const RECENT_KEY = "recent_repos";
 
+async function saveIfMigrated<T>(
+	key: string,
+	raw: T[],
+	normalized: T[],
+): Promise<void> {
+	if (JSON.stringify(raw) === JSON.stringify(normalized)) return;
+	await store.set(key, normalized);
+	await store.save();
+}
+
+function normalizeRecentRepo(repo: RecentRepo): RecentRepo {
+	const descriptor = normalizeRepoDescriptor(
+		repo.repoDescriptor ?? localRepoDescriptor(repo.path, repo.name),
+	);
+	return {
+		name: repo.name || descriptor.display_name,
+		path: repo.path || descriptor.display_path,
+		repoId: descriptor.id,
+		repoDescriptor: descriptor,
+	};
+}
+
+function normalizePersistedTab(tab: PersistedTab): PersistedTab {
+	if (!tab.repoPath) {
+		return {
+			...tab,
+			repoId: null,
+			repoDescriptor: null,
+		};
+	}
+	const descriptor = normalizeRepoDescriptor(
+		tab.repoDescriptor ?? localRepoDescriptor(tab.repoPath, tab.repoName),
+	);
+	return {
+		...tab,
+		repoId: descriptor.id,
+		repoDescriptor: descriptor,
+		repoPath: tab.repoPath || descriptor.display_path,
+		repoName: tab.repoName || descriptor.display_name,
+	};
+}
+
 export async function addRecentRepo(repo: RecentRepo): Promise<void> {
-	const current = (await store.get<RecentRepo[]>(RECENT_KEY)) ?? [];
-	const updated = [repo, ...current.filter((r) => r.path !== repo.path)];
+	const normalized = normalizeRecentRepo(repo);
+	const current = ((await store.get<RecentRepo[]>(RECENT_KEY)) ?? []).map(
+		normalizeRecentRepo,
+	);
+	const updated = [
+		normalized,
+		...current.filter((r) => r.repoId !== normalized.repoId),
+	];
 	await store.set(RECENT_KEY, updated);
 	await store.save();
 }
 
 export async function getRecentRepos(): Promise<RecentRepo[]> {
-	return (await store.get<RecentRepo[]>(RECENT_KEY)) ?? [];
+	const raw = (await store.get<RecentRepo[]>(RECENT_KEY)) ?? [];
+	const normalized = raw.map(normalizeRecentRepo);
+	await saveIfMigrated(RECENT_KEY, raw, normalized);
+	return normalized;
 }
 
 export async function removeRecentRepo(path: string): Promise<void> {
-	const current = (await store.get<RecentRepo[]>(RECENT_KEY)) ?? [];
-	const updated = current.filter((r) => r.path !== path);
+	const current = ((await store.get<RecentRepo[]>(RECENT_KEY)) ?? []).map(
+		normalizeRecentRepo,
+	);
+	const updated = current.filter((r) => r.path !== path && r.repoId !== path);
 	await store.set(RECENT_KEY, updated);
 	await store.save();
 }
@@ -221,11 +282,14 @@ const TABS_KEY = "open_tabs";
 const ACTIVE_TAB_KEY = "active_tab_id";
 
 export async function getOpenTabs(): Promise<PersistedTab[]> {
-	return (await store.get<PersistedTab[]>(TABS_KEY)) ?? [];
+	const raw = (await store.get<PersistedTab[]>(TABS_KEY)) ?? [];
+	const normalized = raw.map(normalizePersistedTab);
+	await saveIfMigrated(TABS_KEY, raw, normalized);
+	return normalized;
 }
 
 export async function setOpenTabs(tabs: PersistedTab[]): Promise<void> {
-	await store.set(TABS_KEY, tabs);
+	await store.set(TABS_KEY, tabs.map(normalizePersistedTab));
 	await store.save();
 }
 

@@ -1,5 +1,8 @@
 use crate::error::TrunkError;
-use crate::git::{graph, repository};
+use crate::git::{
+    graph, repository,
+    types::{RepoDescriptor, RepoLocator},
+};
 use crate::state::{kill_process, CommitCache, RepoState, ReviewSessionsState, RunningOp};
 use crate::watcher::{self, WatcherState};
 use tauri::{AppHandle, State};
@@ -17,12 +20,29 @@ fn drop_in_memory_session(path: &str, sessions: &State<'_, ReviewSessionsState>)
 #[tauri::command]
 pub async fn open_repo(
     path: String,
+    repo: Option<RepoDescriptor>,
     state: State<'_, RepoState>,
     cache: State<'_, CommitCache>,
     watcher_state: State<'_, WatcherState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let path_clone = path.clone();
+    let mut descriptor = repo.unwrap_or_else(|| RepoDescriptor::local(path.clone()));
+    descriptor.id = descriptor.locator.stable_id();
+    let repo_key = descriptor.id.clone();
+    let execution_path = match &descriptor.locator {
+        RepoLocator::Local { path } => path.clone(),
+        RepoLocator::Wsl { distro, .. } => {
+            return Err(TrunkError::new(
+                "unsupported_backend",
+                format!(
+                    "WSL repository execution is not available yet for distro {}",
+                    distro
+                ),
+            )
+            .to_json());
+        }
+    };
+    let path_clone = execution_path.clone();
 
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<crate::git::types::GraphResult, TrunkError> {
@@ -36,14 +56,15 @@ pub async fn open_repo(
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
     .map_err(|e| e.to_json())?;
 
-    let path_buf = std::path::PathBuf::from(&path);
+    let path_buf = std::path::PathBuf::from(&execution_path);
     state
         .0
         .lock()
         .unwrap()
-        .insert(path.clone(), path_buf.clone());
-    cache.0.lock().unwrap().insert(path.clone(), result);
-    watcher::start_watcher(path_buf, app, &watcher_state);
+        .insert(repo_key.clone(), path_buf.clone());
+    state.1.lock().unwrap().insert(repo_key.clone(), descriptor);
+    cache.0.lock().unwrap().insert(repo_key.clone(), result);
+    watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
 
     Ok(())
 }
@@ -56,10 +77,15 @@ pub async fn close_repo(
     watcher_state: State<'_, WatcherState>,
     sessions: State<'_, ReviewSessionsState>,
 ) -> Result<(), String> {
-    state.0.lock().unwrap().remove(&path);
+    let execution_path = state.0.lock().unwrap().remove(&path);
+    state.1.lock().unwrap().remove(&path);
     cache.0.lock().unwrap().remove(&path);
     watcher::stop_watcher(&path, &watcher_state);
-    drop_in_memory_session(&path, &sessions);
+    if let Some(execution_path) = execution_path {
+        drop_in_memory_session(&execution_path.to_string_lossy(), &sessions);
+    } else {
+        drop_in_memory_session(&path, &sessions);
+    }
     Ok(())
 }
 
@@ -80,9 +106,14 @@ pub async fn force_close_repo(
         }
     }
     // Then clean up all other state (same as close_repo)
-    state.0.lock().unwrap().remove(&path);
+    let execution_path = state.0.lock().unwrap().remove(&path);
+    state.1.lock().unwrap().remove(&path);
     cache.0.lock().unwrap().remove(&path);
     watcher::stop_watcher(&path, &watcher_state);
-    drop_in_memory_session(&path, &sessions);
+    if let Some(execution_path) = execution_path {
+        drop_in_memory_session(&execution_path.to_string_lossy(), &sessions);
+    } else {
+        drop_in_memory_session(&path, &sessions);
+    }
     Ok(())
 }

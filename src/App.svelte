@@ -25,6 +25,7 @@ import {
 	getRightPaneWidth,
 	getShowInlineComments,
 	getZoomLevel,
+	type RecentRepo,
 	removeRecentRepo,
 	setActiveTabId,
 	setLeftPaneCollapsed,
@@ -38,6 +39,7 @@ import {
 } from "./lib/store.js";
 import type { TabInfo } from "./lib/tab-types.js";
 import { createTabId } from "./lib/tab-types.js";
+import { localRepoDescriptor, type RepoDescriptor } from "./lib/types.js";
 import {
 	createUndoRedoState,
 	type UndoRedoManager,
@@ -143,6 +145,14 @@ function getOrCreateTabState(tabId: string): TabState {
 // Active tab derived
 let activeTab = $derived(tabs.find((t) => t.id === activeTabId));
 
+function repoCommandKey(tab: TabInfo): string | null {
+	return tab.repoId ?? tab.repoPath;
+}
+
+function descriptorForLocal(path: string, name: string): RepoDescriptor {
+	return localRepoDescriptor(path, name);
+}
+
 // Tab CRUD functions
 function addNewTab() {
 	const existing = tabs.find((t) => t.repoPath === null);
@@ -153,6 +163,8 @@ function addNewTab() {
 	}
 	const tab: TabInfo = {
 		id: createTabId(),
+		repoId: null,
+		repoDescriptor: null,
 		repoPath: null,
 		repoName: "New Tab",
 		dirty: false,
@@ -165,8 +177,9 @@ function addNewTab() {
 function closeOtherTabs(keepTabId: string) {
 	const toClose = tabs.filter((t) => t.id !== keepTabId);
 	for (const t of toClose) {
-		if (t.repoPath) {
-			safeInvoke("close_repo", { path: t.repoPath }).catch(() => {});
+		const key = repoCommandKey(t);
+		if (key) {
+			safeInvoke("close_repo", { path: key }).catch(() => {});
 		}
 		tabStates.delete(t.id);
 	}
@@ -177,8 +190,9 @@ function closeOtherTabs(keepTabId: string) {
 
 function closeAllTabs() {
 	for (const t of tabs) {
-		if (t.repoPath) {
-			safeInvoke("close_repo", { path: t.repoPath }).catch(() => {});
+		const key = repoCommandKey(t);
+		if (key) {
+			safeInvoke("close_repo", { path: key }).catch(() => {});
 		}
 		tabStates.delete(t.id);
 	}
@@ -221,11 +235,17 @@ async function showTabContextMenu(tabId: string, _event: MouseEvent) {
 	await menu.popup();
 }
 
-function openRepoInTab(tabId: string, path: string, name: string) {
+function openRepoInTab(
+	tabId: string,
+	path: string,
+	name: string,
+	repoDescriptor?: RepoDescriptor,
+) {
+	const descriptor = repoDescriptor ?? descriptorForLocal(path, name);
 	// TAB-10: Duplicate detection — switch to existing tab instead of creating duplicate
-	const normalizedPath = path.replace(/\/+$/, "");
+	const normalizedId = descriptor.id.replace(/\/+$/, "");
 	const existing = tabs.find(
-		(t) => t.repoPath && t.repoPath.replace(/\/+$/, "") === normalizedPath,
+		(t) => repoCommandKey(t)?.replace(/\/+$/, "") === normalizedId,
 	);
 	if (existing) {
 		activeTabId = existing.id;
@@ -241,29 +261,40 @@ function openRepoInTab(tabId: string, path: string, name: string) {
 
 	const tab = tabs.find((t) => t.id === tabId);
 	if (tab) {
-		tab.repoPath = path;
-		tab.repoName = name;
+		tab.repoId = descriptor.id;
+		tab.repoDescriptor = descriptor;
+		tab.repoPath = descriptor.display_path;
+		tab.repoName = descriptor.display_name;
 		persistTabs();
 	}
 }
 
-async function handlePickerPick(path: string, name: string) {
+async function handlePickerPick(repo: RecentRepo) {
+	const descriptor =
+		repo.repoDescriptor ?? descriptorForLocal(repo.path, repo.name);
+	const path = descriptor.display_path;
+	const name = descriptor.display_name;
 	// No-op if the active tab already shows this repo (CONTEXT.md decision).
-	if (activeTab?.repoPath === path) {
+	if (activeTab && repoCommandKey(activeTab) === descriptor.id) {
 		pickerOpen = false;
 		return;
 	}
 	try {
-		await safeInvoke("open_repo", { path });
+		await safeInvoke("open_repo", { path: descriptor.id, repo: descriptor });
 	} catch {
 		// Path slipped past the prune step (race or transient). Drop it
 		// silently — picker stays quiet by design.
-		await removeRecentRepo(path);
+		await removeRecentRepo(descriptor.id);
 		pickerOpen = false;
 		return;
 	}
-	await addRecentRepo({ name, path });
-	openRepoInTab(activeTabId, path, name);
+	await addRecentRepo({
+		name,
+		path,
+		repoId: descriptor.id,
+		repoDescriptor: descriptor,
+	});
+	openRepoInTab(activeTabId, path, name, descriptor);
 	pickerOpen = false;
 }
 
@@ -271,7 +302,7 @@ function closeTab(tabId: string) {
 	const idx = tabs.findIndex((t) => t.id === tabId);
 	if (idx === -1) return;
 	const tab = tabs[idx];
-	const repoPath = tab.repoPath;
+	const repoKey = repoCommandKey(tab);
 
 	// Remove tab from array
 	tabs = tabs.filter((t) => t.id !== tabId);
@@ -292,8 +323,8 @@ function closeTab(tabId: string) {
 	}
 
 	// Close repo on backend (after removing from DOM to prevent stale effects)
-	if (repoPath) {
-		safeInvoke("close_repo", { path: repoPath }).catch(() => {});
+	if (repoKey) {
+		safeInvoke("close_repo", { path: repoKey }).catch(() => {});
 	}
 
 	persistTabs();
@@ -302,7 +333,7 @@ function closeTab(tabId: string) {
 function forceCloseTab(tabId: string) {
 	const tab = tabs.find((t) => t.id === tabId);
 	if (!tab) return;
-	const repoPath = tab.repoPath;
+	const repoKey = repoCommandKey(tab);
 
 	// Remove tab from array first
 	const idx = tabs.findIndex((t) => t.id === tabId);
@@ -319,8 +350,8 @@ function forceCloseTab(tabId: string) {
 	}
 
 	// Force close on backend (D-11)
-	if (repoPath) {
-		safeInvoke("force_close_repo", { path: repoPath }).catch(() => {});
+	if (repoKey) {
+		safeInvoke("force_close_repo", { path: repoKey }).catch(() => {});
 	}
 
 	persistTabs();
@@ -337,6 +368,8 @@ function persistTabs() {
 		await setOpenTabs(
 			tabs.map((t) => ({
 				id: t.id,
+				repoId: t.repoId,
+				repoDescriptor: t.repoDescriptor,
 				repoPath: t.repoPath,
 				repoName: t.repoName,
 			})),
@@ -354,7 +387,16 @@ $effect(() => {
 			const legacy = await getOpenRepo();
 			if (legacy) {
 				const id = createTabId();
-				restored = [{ id, repoPath: legacy.path, repoName: legacy.name }];
+				const descriptor = descriptorForLocal(legacy.path, legacy.name);
+				restored = [
+					{
+						id,
+						repoId: descriptor.id,
+						repoDescriptor: descriptor,
+						repoPath: legacy.path,
+						repoName: legacy.name,
+					},
+				];
 				await setOpenTabs(restored);
 				await setOpenRepo(null); // clear legacy key
 			}
@@ -368,15 +410,21 @@ $effect(() => {
 		// Restore tabs
 		const restoredTabs: TabInfo[] = [];
 		for (const pt of restored) {
+			const descriptor =
+				pt.repoDescriptor ??
+				(pt.repoPath ? descriptorForLocal(pt.repoPath, pt.repoName) : null);
 			const tab: TabInfo = {
 				id: pt.id,
+				repoId: pt.repoId ?? descriptor?.id ?? null,
+				repoDescriptor: descriptor,
 				repoPath: pt.repoPath,
 				repoName: pt.repoName,
 				dirty: false,
 			};
-			if (pt.repoPath) {
+			const repoKey = repoCommandKey(tab);
+			if (pt.repoPath && repoKey) {
 				try {
-					await safeInvoke("open_repo", { path: pt.repoPath });
+					await safeInvoke("open_repo", { path: repoKey, repo: descriptor });
 				} catch {
 					// Repo no longer exists -- skip this tab
 					continue;
@@ -387,7 +435,7 @@ $effect(() => {
 						staged: number;
 						unstaged: number;
 						conflicted: number;
-					}>("get_dirty_counts", { path: pt.repoPath });
+					}>("get_dirty_counts", { path: repoKey });
 					tab.dirty = counts.staged + counts.unstaged > 0;
 				} catch {
 					// non-fatal
@@ -597,15 +645,15 @@ $effect(() => {
 	let unlisten: (() => void) | undefined;
 
 	listen<string>("repo-changed", async (event) => {
-		const repoPath = event.payload;
-		const tab = tabs.find((t) => t.repoPath === repoPath);
+		const repoId = event.payload;
+		const tab = tabs.find((t) => repoCommandKey(t) === repoId);
 		if (!tab) return;
 		try {
 			const counts = await safeInvoke<{
 				staged: number;
 				unstaged: number;
 				conflicted: number;
-			}>("get_dirty_counts", { path: repoPath });
+			}>("get_dirty_counts", { path: repoId });
 			tab.dirty = counts.staged + counts.unstaged > 0;
 		} catch {
 			// non-fatal -- keep previous dirty state
@@ -653,7 +701,7 @@ $effect(() => {
     <div data-tauri-drag-region class="flex-1 h-full"></div>
     {#if activeTab?.repoPath}
       {@const activeState = getOrCreateTabState(activeTabId)}
-      <Toolbar repoPath={activeTab.repoPath} remoteState={activeState.remoteState} undoRedo={activeState.undoRedo} reviewActive={reviewPanelOpen} reviewPanelShowing={activeReviewPanelShowing} {showInlineComments} inlineCommentCount={activeInlineCommentCount} reviewCommentCount={activeReviewCommentCount} ontoggleinlinecomments={toggleInlineComments} />
+      <Toolbar repoPath={repoCommandKey(activeTab) ?? activeTab.repoPath} remoteState={activeState.remoteState} undoRedo={activeState.undoRedo} reviewActive={reviewPanelOpen} reviewPanelShowing={activeReviewPanelShowing} {showInlineComments} inlineCommentCount={activeInlineCommentCount} reviewCommentCount={activeReviewCommentCount} ontoggleinlinecomments={toggleInlineComments} />
     {/if}
   </div>
 
@@ -663,7 +711,8 @@ $effect(() => {
         {#if tab.repoPath}
           {@const tabState = getOrCreateTabState(tab.id)}
           <RepoView
-            repoPath={tab.repoPath}
+            repoPath={repoCommandKey(tab) ?? tab.repoPath}
+            repoDisplayPath={tab.repoPath}
             repoName={tab.repoName}
             remoteState={tabState.remoteState}
             undoRedo={tabState.undoRedo}
@@ -682,7 +731,7 @@ $effect(() => {
             onrightpanewidthchange={(w) => { rightPaneWidth = w; setRightPaneWidth(w); }}
           />
         {:else}
-          <WelcomeScreen {isFullscreen} onopen={(path, name) => openRepoInTab(tab.id, path, name)} />
+          <WelcomeScreen {isFullscreen} onopen={(repo) => openRepoInTab(tab.id, repo.path, repo.name, repo.repoDescriptor)} />
         {/if}
       </div>
     {/each}

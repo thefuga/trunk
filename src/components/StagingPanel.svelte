@@ -26,6 +26,7 @@ import TreeFileList from "./TreeFileList.svelte";
 
 interface Props {
 	repoPath: string;
+	repoDisplayPath?: string;
 	currentBranch?: string;
 	onfileselect?: (
 		path: string,
@@ -54,6 +55,7 @@ interface Props {
 
 let {
 	repoPath,
+	repoDisplayPath = repoPath,
 	currentBranch,
 	onfileselect,
 	onsubjectchange,
@@ -284,7 +286,7 @@ async function showUnstagedContextMenu(
 		"@tauri-apps/api/menu"
 	);
 	const isUntracked = fileStatus === "New";
-	const absPath = `${repoPath}/${filePath}`;
+	const absPath = `${repoDisplayPath}/${filePath}`;
 	const menu = await Menu.new({
 		items: [
 			await MenuItem.new({
@@ -321,7 +323,7 @@ async function showUnstagedDirContextMenu(_e: MouseEvent, dirPath: string) {
 	const { Menu, MenuItem, PredefinedMenuItem } = await import(
 		"@tauri-apps/api/menu"
 	);
-	const absPath = `${repoPath}/${dirPath}`;
+	const absPath = `${repoDisplayPath}/${dirPath}`;
 	const files = (status?.unstaged ?? []).filter(
 		(f) => f.path.startsWith(`${dirPath}/`) || f.path === dirPath,
 	);
@@ -363,7 +365,7 @@ async function showStagedContextMenu(_e: MouseEvent, filePath: string) {
 	const { Menu, MenuItem, PredefinedMenuItem } = await import(
 		"@tauri-apps/api/menu"
 	);
-	const absPath = `${repoPath}/${filePath}`;
+	const absPath = `${repoDisplayPath}/${filePath}`;
 	const menu = await Menu.new({
 		items: [
 			await MenuItem.new({
@@ -394,7 +396,7 @@ async function showStagedDirContextMenu(_e: MouseEvent, dirPath: string) {
 	const { Menu, MenuItem, PredefinedMenuItem } = await import(
 		"@tauri-apps/api/menu"
 	);
-	const absPath = `${repoPath}/${dirPath}`;
+	const absPath = `${repoDisplayPath}/${dirPath}`;
 	const files = (status?.staged ?? []).filter(
 		(f) => f.path.startsWith(`${dirPath}/`) || f.path === dirPath,
 	);
@@ -454,7 +456,7 @@ async function showConflictedContextMenu(_e: MouseEvent, filePath: string) {
 	const { Menu, MenuItem, PredefinedMenuItem } = await import(
 		"@tauri-apps/api/menu"
 	);
-	const absPath = `${repoPath}/${filePath}`;
+	const absPath = `${repoDisplayPath}/${filePath}`;
 	const menu = await Menu.new({
 		items: [
 			await MenuItem.new({
@@ -513,7 +515,7 @@ async function showConflictedDirContextMenu(_e: MouseEvent, dirPath: string) {
 	const { Menu, MenuItem, PredefinedMenuItem } = await import(
 		"@tauri-apps/api/menu"
 	);
-	const absPath = `${repoPath}/${dirPath}`;
+	const absPath = `${repoDisplayPath}/${dirPath}`;
 	const files = (status?.conflicted ?? []).filter(
 		(f) => f.path.startsWith(`${dirPath}/`) || f.path === dirPath,
 	);

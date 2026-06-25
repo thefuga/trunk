@@ -8,9 +8,10 @@ import {
 	type RecentRepo,
 	removeRecentRepo,
 } from "../lib/store.js";
+import { localRepoDescriptor } from "../lib/types.js";
 
 interface Props {
-	onopen: (path: string, name: string) => void;
+	onopen: (repo: RecentRepo) => void;
 	isFullscreen?: boolean;
 }
 
@@ -26,6 +27,14 @@ let error = $state<string | null>(null);
 const DASHBOARD_RECENT_LIMIT = 10;
 const displayedRepos = $derived(recentRepos.slice(0, DASHBOARD_RECENT_LIMIT));
 
+function repoKey(repo: RecentRepo): string {
+	return repo.repoId ?? repo.repoDescriptor?.id ?? repo.path;
+}
+
+function repoDisplayPath(repo: RecentRepo): string {
+	return repo.repoDescriptor?.display_path ?? repo.path;
+}
+
 $effect(() => {
 	getRecentRepos().then((repos) => {
 		recentRepos = repos;
@@ -34,9 +43,11 @@ $effect(() => {
 
 $effect(() => {
 	for (const repo of recentRepos) {
-		if (!(repo.path in resolvedPaths)) {
-			displayPath(repo.path).then((p) => {
-				resolvedPaths[repo.path] = p;
+		const key = repoKey(repo);
+		const path = repoDisplayPath(repo);
+		if (!(key in resolvedPaths)) {
+			displayPath(path).then((p) => {
+				resolvedPaths[key] = p;
 			});
 		}
 	}
@@ -47,18 +58,36 @@ async function openRepository() {
 	const selected = await open({ directory: true, multiple: false });
 	if (typeof selected !== "string") return;
 
-	await openPath(selected);
+	const name = selected.split("/").at(-1) || selected;
+	const descriptor = localRepoDescriptor(selected, name);
+	await openRepo({
+		name,
+		path: selected,
+		repoId: descriptor.id,
+		repoDescriptor: descriptor,
+	});
 }
 
-async function openPath(path: string) {
+async function openRepo(recent: RecentRepo) {
 	error = null;
 	loading = true;
 	try {
-		await safeInvoke("open_repo", { path });
-		const name = path.split("/").at(-1) || path;
-		await addRecentRepo({ name, path });
+		const descriptor =
+			recent.repoDescriptor ?? localRepoDescriptor(recent.path, recent.name);
+		await safeInvoke("open_repo", { path: descriptor.id, repo: descriptor });
+		await addRecentRepo({
+			name: recent.name,
+			path: recent.path,
+			repoId: descriptor.id,
+			repoDescriptor: descriptor,
+		});
 		recentRepos = await getRecentRepos();
-		onopen(path, name);
+		onopen({
+			name: recent.name,
+			path: recent.path,
+			repoId: descriptor.id,
+			repoDescriptor: descriptor,
+		});
 	} catch (e: unknown) {
 		const trunk = e as TrunkError;
 		error = trunk.message ?? "Failed to open repository";
@@ -102,17 +131,19 @@ async function handleRemoveRecent(path: string, event: MouseEvent) {
     <div class="w-full max-w-md px-4">
       <p class="text-xs font-medium mb-2 uppercase tracking-widest" style="color: var(--color-text-muted);">Recent</p>
       <ul class="flex flex-col gap-1">
-        {#each displayedRepos as repo (repo.path)}
-          {@const dp = resolvedPaths[repo.path] ?? repo.path}
+        {#each displayedRepos as repo (repoKey(repo))}
+          {@const key = repoKey(repo)}
+          {@const displayPathValue = repoDisplayPath(repo)}
+          {@const dp = resolvedPaths[key] ?? displayPathValue}
           <li>
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="group flex items-center gap-2 rounded px-3 py-1.5 cursor-pointer hover:bg-white/5"
-              onclick={() => openPath(repo.path)}
+              onclick={() => openRepo(repo)}
               role="button"
               tabindex="0"
-              onkeydown={(e) => e.key === 'Enter' && openPath(repo.path)}
+              onkeydown={(e) => e.key === 'Enter' && openRepo(repo)}
             >
               <span class="text-sm truncate min-w-0 flex-1">
                 <span style="color: var(--color-text-muted);">{dp.substring(0, dp.lastIndexOf('/'))}/</span><span class="font-semibold" style="color: var(--color-text);">{dp.split('/').at(-1)}</span>

@@ -54,6 +54,7 @@ interface DirtyCounts {
 
 interface Props {
 	repoPath: string;
+	repoDisplayPath?: string;
 	repoName: string;
 	remoteState: RemoteState;
 	undoRedo: UndoRedoManager;
@@ -87,6 +88,7 @@ interface Props {
 
 let {
 	repoPath,
+	repoDisplayPath = repoPath,
 	repoName,
 	remoteState,
 	undoRedo,
@@ -956,6 +958,7 @@ function startRightResize(e: MouseEvent) {
           }}
           onclose={() => { rebaseFocusedCommitDetail = null; }}
           {repoPath}
+          {repoDisplayPath}
           {treeViewEnabled}
           ontreeviewtoggle={handleTreeViewToggle}
         />
@@ -1061,6 +1064,7 @@ function startRightResize(e: MouseEvent) {
         onfileselect={handleCommitFileSelect}
         onclose={clearCommit}
         {repoPath}
+        {repoDisplayPath}
         {reviewComments}
         {treeViewEnabled}
         ontreeviewtoggle={handleTreeViewToggle}
@@ -1071,6 +1075,7 @@ function startRightResize(e: MouseEvent) {
       <StagingPanel
         bind:this={stagingPanelRef}
         {repoPath}
+        {repoDisplayPath}
         currentBranch={headBranch}
         onfileselect={handleFileSelect}
         onsubjectchange={(v) => (wipSubject = v)}

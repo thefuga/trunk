@@ -14,10 +14,11 @@ import {
 	type RecentRepo,
 	removeRecentRepo,
 } from "../lib/store.js";
+import { localRepoDescriptor } from "../lib/types.js";
 
 interface Props {
 	open: boolean;
-	onpick: (path: string, name: string) => void;
+	onpick: (repo: RecentRepo) => void;
 	onclose: () => void;
 }
 
@@ -33,6 +34,14 @@ let listEl: HTMLUListElement | undefined = $state();
 
 const filtered = $derived(filterRecents(recents, query));
 
+function repoKey(repo: RecentRepo): string {
+	return repo.repoId ?? repo.repoDescriptor?.id ?? repo.path;
+}
+
+function repoDisplayPath(repo: RecentRepo): string {
+	return repo.repoDescriptor?.display_path ?? repo.path;
+}
+
 // Prune + load each time the picker transitions to visible.
 $effect(() => {
 	if (!visible) return;
@@ -44,9 +53,11 @@ $effect(() => {
 		const all = await getRecentRepos();
 		const validations = await Promise.all(
 			all.map((r) =>
-				safeInvoke<boolean>("validate_recent_path", { path: r.path }).catch(
-					() => false,
-				),
+				r.repoDescriptor?.locator.backend === "Wsl"
+					? Promise.resolve(true)
+					: safeInvoke<boolean>("validate_recent_path", { path: r.path }).catch(
+							() => false,
+						),
 			),
 		);
 		const kept: RecentRepo[] = [];
@@ -68,9 +79,11 @@ $effect(() => {
 // Lazily tildify paths for display.
 $effect(() => {
 	for (const repo of recents) {
-		if (!(repo.path in resolvedPaths)) {
-			displayPath(repo.path).then((p) => {
-				resolvedPaths[repo.path] = p;
+		const key = repoKey(repo);
+		const path = repoDisplayPath(repo);
+		if (!(key in resolvedPaths)) {
+			displayPath(path).then((p) => {
+				resolvedPaths[key] = p;
 			});
 		}
 	}
@@ -114,7 +127,7 @@ function handleKeydown(e: KeyboardEvent) {
 			return;
 		case "pick": {
 			const target = filtered[highlightedIdx];
-			if (target) onpick(target.path, target.name);
+			if (target) onpick(target);
 			return;
 		}
 		case "close":
@@ -129,7 +142,13 @@ async function handleOpenDialog() {
 	const selected = await open({ directory: true, multiple: false });
 	if (typeof selected !== "string") return;
 	const name = selected.split("/").at(-1) || selected;
-	onpick(selected, name);
+	const descriptor = localRepoDescriptor(selected, name);
+	onpick({
+		name,
+		path: selected,
+		repoId: descriptor.id,
+		repoDescriptor: descriptor,
+	});
 }
 
 function handleBackdropClick() {
@@ -180,8 +199,10 @@ function handleBackdropClick() {
         </div>
       {:else}
         <ul bind:this={listEl} class="flex flex-col py-1 max-h-96 overflow-y-auto">
-          {#each filtered as repo, idx (repo.path)}
-            {@const dp = resolvedPaths[repo.path] ?? repo.path}
+          {#each filtered as repo, idx (repoKey(repo))}
+            {@const key = repoKey(repo)}
+            {@const display = repoDisplayPath(repo)}
+            {@const dp = resolvedPaths[key] ?? display}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
             <li
@@ -190,7 +211,7 @@ function handleBackdropClick() {
                 ? 'var(--color-hover)'
                 : 'transparent'};"
               onmousemove={() => (highlightedIdx = idx)}
-              onclick={() => onpick(repo.path, repo.name)}
+              onclick={() => onpick(repo)}
             >
               <span class="text-sm font-semibold truncate" style="color: var(--color-text);">{repo.name}</span>
               <span class="text-xs truncate" style="color: var(--color-text-muted);">{dp}</span>
