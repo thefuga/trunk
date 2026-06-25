@@ -1,16 +1,33 @@
 // Diff commands — Phase 6 implementation
 
 use crate::error::TrunkError;
+use crate::git::backend::{GitBackend, LocalBackend, WslBackend};
+use crate::git::syntax;
 use crate::git::types::{
     CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus, FileDiff,
-    WordSpan,
+    RepoDescriptor, RepoLocator, WordSpan,
 };
-use crate::git::{read_model, syntax};
 use crate::state::RepoState;
 use similar::{ChangeTag, TextDiff};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::State;
+
+fn backend_for_descriptor(descriptor: RepoDescriptor) -> Box<dyn GitBackend> {
+    match descriptor.locator {
+        RepoLocator::Local { .. } => Box::new(LocalBackend),
+        RepoLocator::Wsl { .. } => Box::new(WslBackend::new(descriptor)),
+    }
+}
+
+fn backend_for_repo(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<Box<dyn GitBackend>, TrunkError> {
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    Ok(backend_for_descriptor(descriptor))
+}
 
 fn is_head_unborn(repo: &git2::Repository) -> bool {
     match repo.head() {
@@ -506,6 +523,55 @@ pub fn get_commit_detail_inner(
     })
 }
 
+pub(crate) fn diff_unstaged_with_backend(
+    backend: &dyn GitBackend,
+    path: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
+) -> Result<Vec<FileDiff>, TrunkError> {
+    backend.diff_unstaged(path, file_path, state_map, options)
+}
+
+pub(crate) fn diff_staged_with_backend(
+    backend: &dyn GitBackend,
+    path: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
+) -> Result<Vec<FileDiff>, TrunkError> {
+    backend.diff_staged(path, file_path, state_map, options)
+}
+
+pub(crate) fn list_commit_files_with_backend(
+    backend: &dyn GitBackend,
+    path: &str,
+    oid: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<Vec<FileDiff>, TrunkError> {
+    backend.list_commit_files(path, oid, state_map)
+}
+
+pub(crate) fn diff_commit_file_with_backend(
+    backend: &dyn GitBackend,
+    path: &str,
+    oid: &str,
+    file_path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    options: &DiffRequestOptions,
+) -> Result<Vec<FileDiff>, TrunkError> {
+    backend.diff_commit_file(path, oid, file_path, state_map, options)
+}
+
+pub(crate) fn get_commit_detail_with_backend(
+    backend: &dyn GitBackend,
+    path: &str,
+    oid: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<CommitDetail, TrunkError> {
+    backend.commit_detail(path, oid, state_map)
+}
+
 #[tauri::command]
 pub async fn diff_unstaged(
     path: String,
@@ -516,16 +582,8 @@ pub async fn diff_unstaged(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                diff_unstaged_inner(&path, &file_path, &state_map, &options)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                let mut diffs = read_model::wsl_diff_unstaged(&repo, &file_path, &options)?;
-                enrich_file_diffs(&mut diffs);
-                Ok(diffs)
-            }
-        }
+        let backend = backend_for_repo(&path, &state_map, &descriptor_map)?;
+        diff_unstaged_with_backend(backend.as_ref(), &path, &file_path, &state_map, &options)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -542,16 +600,8 @@ pub async fn diff_staged(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                diff_staged_inner(&path, &file_path, &state_map, &options)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                let mut diffs = read_model::wsl_diff_staged(&repo, &file_path, &options)?;
-                enrich_file_diffs(&mut diffs);
-                Ok(diffs)
-            }
-        }
+        let backend = backend_for_repo(&path, &state_map, &descriptor_map)?;
+        diff_staged_with_backend(backend.as_ref(), &path, &file_path, &state_map, &options)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -567,10 +617,8 @@ pub async fn list_commit_files(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => list_commit_files_inner(&path, &oid, &state_map),
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_list_commit_files(&repo, &oid),
-        }
+        let backend = backend_for_repo(&path, &state_map, &descriptor_map)?;
+        list_commit_files_with_backend(backend.as_ref(), &path, &oid, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -588,17 +636,15 @@ pub async fn diff_commit_file(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                diff_commit_file_inner(&path, &oid, &file_path, &state_map, &options)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                let mut diffs =
-                    read_model::wsl_diff_commit(&repo, &oid, Some(&file_path), &options)?;
-                enrich_file_diffs(&mut diffs);
-                Ok(diffs)
-            }
-        }
+        let backend = backend_for_repo(&path, &state_map, &descriptor_map)?;
+        diff_commit_file_with_backend(
+            backend.as_ref(),
+            &path,
+            &oid,
+            &file_path,
+            &state_map,
+            &options,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -614,10 +660,8 @@ pub async fn get_commit_detail(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => get_commit_detail_inner(&path, &oid, &state_map),
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_detail(&repo, &oid),
-        }
+        let backend = backend_for_repo(&path, &state_map, &descriptor_map)?;
+        get_commit_detail_with_backend(backend.as_ref(), &path, &oid, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -627,6 +671,7 @@ pub async fn get_commit_detail(
 #[cfg(test)]
 mod word_span_tests {
     use super::*;
+    use std::sync::Mutex;
 
     fn emphasized(content: &str, spans: &[WordSpan]) -> Vec<String> {
         spans
@@ -645,6 +690,64 @@ mod word_span_tests {
 
         assert_eq!(emphasized(old, &del), vec!["64"]);
         assert_eq!(emphasized(new, &add), vec!["63"]);
+    }
+
+    struct RecordingBackend {
+        call: Mutex<Option<(String, String, u32)>>,
+    }
+
+    impl RecordingBackend {
+        fn new() -> Self {
+            Self {
+                call: Mutex::new(None),
+            }
+        }
+    }
+
+    impl GitBackend for RecordingBackend {
+        fn diff_unstaged(
+            &self,
+            repo_id: &str,
+            file_path: &str,
+            _state_map: &HashMap<String, PathBuf>,
+            options: &DiffRequestOptions,
+        ) -> Result<Vec<FileDiff>, TrunkError> {
+            *self.call.lock().unwrap() = Some((
+                repo_id.to_owned(),
+                file_path.to_owned(),
+                options.context_lines,
+            ));
+            Ok(vec![FileDiff {
+                path: file_path.to_owned(),
+                status: DiffStatus::Modified,
+                is_binary: false,
+                hunks: Vec::new(),
+            }])
+        }
+    }
+
+    #[test]
+    fn diff_dispatch_can_use_mock_backend_without_git() {
+        let backend = RecordingBackend::new();
+        let options = DiffRequestOptions {
+            context_lines: 7,
+            ..Default::default()
+        };
+
+        let result = diff_unstaged_with_backend(
+            &backend,
+            "repo-1",
+            "src/main.rs",
+            &HashMap::new(),
+            &options,
+        )
+        .unwrap();
+
+        assert_eq!(result[0].path, "src/main.rs");
+        assert_eq!(
+            *backend.call.lock().unwrap(),
+            Some(("repo-1".to_string(), "src/main.rs".to_string(), 7))
+        );
     }
 
     #[test]
