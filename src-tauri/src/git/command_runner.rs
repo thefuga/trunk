@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
@@ -81,6 +82,31 @@ pub fn git_output_owned(
 ) -> Result<Output, TrunkError> {
     let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
     git_output(repo, &borrowed, spawn_error_code)
+}
+
+pub fn git_output_with_stdin(
+    repo: &RepoDescriptor,
+    args: &[&str],
+    stdin: &[u8],
+    spawn_error_code: &str,
+) -> Result<Output, TrunkError> {
+    let mut command = GitCommandSpec::for_repo(repo, args).command();
+    command.stdin(Stdio::piped());
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))?;
+    let mut child_stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| TrunkError::new(spawn_error_code, "failed to open git subprocess stdin"))?;
+    child_stdin
+        .write_all(stdin)
+        .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))?;
+    drop(child_stdin);
+    child
+        .wait_with_output()
+        .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))
 }
 
 pub fn git_tokio_piped(repo: &RepoDescriptor, args: &[&str]) -> TokioCommand {
