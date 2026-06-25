@@ -91,9 +91,7 @@ pub fn start_wsl_poller_for_repo<R: Runtime>(
 }
 
 pub fn stop_watcher(repo_id: &str, state: &WatcherState) {
-    if let Some(handle) = state.0.lock().unwrap().remove(repo_id) {
-        if let WatchHandle::WslPoller(stop) = handle {
-            let _ = stop.send(());
-        }
+    if let Some(WatchHandle::WslPoller(stop)) = state.0.lock().unwrap().remove(repo_id) {
+        let _ = stop.send(());
     }
 }
