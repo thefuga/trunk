@@ -89,7 +89,19 @@ describe("WelcomeScreen", () => {
 
 		// openPath is async (calls safeInvoke then onopen)
 		await vi.waitFor(() => {
-			expect(onopen).toHaveBeenCalledWith("/Users/test/code/trunk", "trunk");
+			expect(onopen).toHaveBeenCalledWith(
+				expect.objectContaining({
+					name: "trunk",
+					path: "/Users/test/code/trunk",
+					repoId: "local:/Users/test/code/trunk",
+					repoDescriptor: expect.objectContaining({
+						id: "local:/Users/test/code/trunk",
+						display_name: "trunk",
+						display_path: "/Users/test/code/trunk",
+						locator: { backend: "Local", path: "/Users/test/code/trunk" },
+					}),
+				}),
+			);
 		});
 	});
 });

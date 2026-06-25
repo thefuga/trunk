@@ -38,6 +38,7 @@ const {
 	setDiffContentMode,
 	getDiffLayoutMode,
 	setDiffLayoutMode,
+	getOpenTabs,
 } = await import("./store.js");
 
 describe("tab types and helpers", () => {
@@ -100,7 +101,13 @@ describe("store", () => {
 		it("addRecentRepo adds a repo and getRecentRepos returns it", async () => {
 			await addRecentRepo({ name: "myrepo", path: "/path/to/repo" });
 			const repos = await getRecentRepos();
-			expect(repos).toEqual([{ name: "myrepo", path: "/path/to/repo" }]);
+			expect(repos).toEqual([
+				expect.objectContaining({
+					name: "myrepo",
+					path: "/path/to/repo",
+					repoId: "local:/path/to/repo",
+				}),
+			]);
 		});
 
 		it("addRecentRepo moves duplicate repo to front", async () => {
@@ -109,8 +116,8 @@ describe("store", () => {
 			await addRecentRepo({ name: "A", path: "/a" });
 			const repos = await getRecentRepos();
 			expect(repos).toEqual([
-				{ name: "A", path: "/a" },
-				{ name: "B", path: "/b" },
+				expect.objectContaining({ name: "A", path: "/a", repoId: "local:/a" }),
+				expect.objectContaining({ name: "B", path: "/b", repoId: "local:/b" }),
 			]);
 		});
 
@@ -121,11 +128,15 @@ describe("store", () => {
 			const repos = await getRecentRepos();
 			expect(repos).toHaveLength(25);
 			// Most recently added is at the front, very first add is still at the back.
-			expect(repos[0]).toEqual({ name: "repo24", path: "/path/24" });
-			expect(repos[repos.length - 1]).toEqual({
-				name: "repo0",
-				path: "/path/0",
-			});
+			expect(repos[0]).toEqual(
+				expect.objectContaining({ name: "repo24", path: "/path/24" }),
+			);
+			expect(repos[repos.length - 1]).toEqual(
+				expect.objectContaining({
+					name: "repo0",
+					path: "/path/0",
+				}),
+			);
 		});
 
 		it("removeRecentRepo removes matching path", async () => {
@@ -133,7 +144,53 @@ describe("store", () => {
 			await addRecentRepo({ name: "B", path: "/b" });
 			await removeRecentRepo("/a");
 			const repos = await getRecentRepos();
-			expect(repos).toEqual([{ name: "B", path: "/b" }]);
+			expect(repos).toEqual([
+				expect.objectContaining({ name: "B", path: "/b", repoId: "local:/b" }),
+			]);
+		});
+
+		it("getRecentRepos migrates legacy local-only records", async () => {
+			backingStore.set("recent_repos", [{ name: "A", path: "/a" }]);
+			const repos = await getRecentRepos();
+			expect(repos).toEqual([
+				expect.objectContaining({
+					name: "A",
+					path: "/a",
+					repoId: "local:/a",
+					repoDescriptor: expect.objectContaining({
+						id: "local:/a",
+						display_path: "/a",
+						locator: { backend: "Local", path: "/a" },
+					}),
+				}),
+			]);
+			expect(backingStore.get("recent_repos")).toEqual(repos);
+		});
+	});
+
+	describe("open tabs", () => {
+		it("getOpenTabs migrates legacy local-only persisted tabs", async () => {
+			backingStore.set("open_tabs", [
+				{ id: "tab-1", repoPath: "/repo", repoName: "repo" },
+			]);
+
+			const tabs = await getOpenTabs();
+
+			expect(tabs).toEqual([
+				expect.objectContaining({
+					id: "tab-1",
+					repoPath: "/repo",
+					repoName: "repo",
+					repoId: "local:/repo",
+					repoDescriptor: expect.objectContaining({
+						id: "local:/repo",
+						display_name: "repo",
+						display_path: "/repo",
+						locator: { backend: "Local", path: "/repo" },
+					}),
+				}),
+			]);
+			expect(backingStore.get("open_tabs")).toEqual(tabs);
 		});
 	});
 

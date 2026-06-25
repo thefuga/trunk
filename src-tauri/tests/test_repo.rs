@@ -23,10 +23,68 @@ fn open_valid_repo_succeeds() {
 }
 
 #[test]
+fn repo_locators_have_backend_aware_stable_ids() {
+    use trunk_lib::git::types::RepoLocator;
+
+    let local = RepoLocator::Local {
+        path: "/repo".to_string(),
+    };
+    let wsl = RepoLocator::Wsl {
+        distro: "Ubuntu".to_string(),
+        linux_path: "/repo".to_string(),
+    };
+
+    assert_eq!(local.stable_id(), "local:/repo");
+    assert_eq!(wsl.stable_id(), "wsl:Ubuntu:/repo");
+    assert_ne!(local.stable_id(), wsl.stable_id());
+}
+
+#[test]
+fn repo_locator_ids_normalize_trailing_slashes() {
+    use trunk_lib::git::types::{RepoDescriptor, RepoLocator};
+
+    let local = RepoLocator::Local {
+        path: "/repo/".to_string(),
+    };
+    let wsl = RepoLocator::Wsl {
+        distro: "Ubuntu".to_string(),
+        linux_path: "/repo/".to_string(),
+    };
+    let descriptor = RepoDescriptor::local("/repo/".to_string());
+
+    assert_eq!(local.stable_id(), "local:/repo");
+    assert_eq!(wsl.stable_id(), "wsl:Ubuntu:/repo");
+    assert_eq!(descriptor.id, "local:/repo");
+    assert_eq!(descriptor.display_path, "/repo/");
+}
+
+#[test]
+fn repo_locators_serialize_with_backend_tags() {
+    use serde_json::json;
+    use trunk_lib::git::types::RepoLocator;
+
+    let local = RepoLocator::Local {
+        path: "/repo".to_string(),
+    };
+    let wsl = RepoLocator::Wsl {
+        distro: "Ubuntu".to_string(),
+        linux_path: "/repo".to_string(),
+    };
+
+    assert_eq!(
+        serde_json::to_value(local).unwrap(),
+        json!({ "backend": "Local", "path": "/repo" })
+    );
+    assert_eq!(
+        serde_json::to_value(wsl).unwrap(),
+        json!({ "backend": "Wsl", "distro": "Ubuntu", "linux_path": "/repo" })
+    );
+}
+
+#[test]
 fn close_removes_state() {
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-    use std::sync::Mutex;
+    use trunk_lib::git::types::RepoDescriptor;
+    use trunk_lib::state::RepoState;
 
     let ctx = TestContext::builder()
         .with_file("README.md", "hello")
@@ -34,18 +92,28 @@ fn close_removes_state() {
         .build();
 
     let path = ctx.path().to_string();
-    let state = Mutex::new(HashMap::<String, PathBuf>::new());
+    let descriptor = RepoDescriptor::local(path.clone());
+    let state = RepoState::default();
 
     // Simulate open
     state
+        .0
         .lock()
         .unwrap()
         .insert(path.clone(), ctx.repo_path().to_path_buf());
-    assert!(state.lock().unwrap().contains_key(&path));
+    state
+        .1
+        .lock()
+        .unwrap()
+        .insert(path.clone(), descriptor.clone());
+    assert!(state.0.lock().unwrap().contains_key(&path));
+    assert_eq!(state.1.lock().unwrap().get(&path), Some(&descriptor));
 
     // Simulate close
-    state.lock().unwrap().remove(&path);
-    assert!(!state.lock().unwrap().contains_key(&path));
+    state.0.lock().unwrap().remove(&path);
+    state.1.lock().unwrap().remove(&path);
+    assert!(!state.0.lock().unwrap().contains_key(&path));
+    assert!(!state.1.lock().unwrap().contains_key(&path));
 }
 
 #[test]

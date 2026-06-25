@@ -47,4 +47,31 @@ describe("filterRecents", () => {
 		const result = filterRecents(sample, "beta");
 		expect(result).toEqual([{ name: "Beta", path: "/opt/projects/beta" }]);
 	});
+
+	it("matches descriptor display path when it differs from the execution path", () => {
+		const result = filterRecents(
+			[
+				{
+					name: "trunk",
+					path: "local:/mnt/internal/trunk",
+					repoId: "wsl:Ubuntu:/home/joao/code/trunk",
+					repoDescriptor: {
+						id: "wsl:Ubuntu:/home/joao/code/trunk",
+						display_name: "trunk",
+						display_path: "Ubuntu:/home/joao/code/trunk",
+						locator: {
+							backend: "Wsl",
+							distro: "Ubuntu",
+							linux_path: "/home/joao/code/trunk",
+						},
+					},
+				},
+			],
+			"ubuntu",
+		);
+
+		expect(result.map((r) => r.repoId)).toEqual([
+			"wsl:Ubuntu:/home/joao/code/trunk",
+		]);
+	});
 });

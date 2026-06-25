@@ -4,6 +4,58 @@ use serde::{Deserialize, Serialize};
 // NO git2 types (Commit<'repo>, Diff<'repo>, etc.) — those carry lifetimes and cannot be stored.
 // Every git2 access converts immediately: commit_to_dto(c: &Commit) -> GraphCommit
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(tag = "backend")]
+pub enum RepoLocator {
+    Local { path: String },
+    Wsl { distro: String, linux_path: String },
+}
+
+fn normalize_repo_path_for_id(path: &str) -> &str {
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() {
+        path
+    } else {
+        trimmed
+    }
+}
+
+impl RepoLocator {
+    pub fn stable_id(&self) -> String {
+        match self {
+            RepoLocator::Local { path } => format!("local:{}", normalize_repo_path_for_id(path)),
+            RepoLocator::Wsl { distro, linux_path } => {
+                format!("wsl:{}:{}", distro, normalize_repo_path_for_id(linux_path))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct RepoDescriptor {
+    pub id: String,
+    pub display_name: String,
+    pub display_path: String,
+    pub locator: RepoLocator,
+}
+
+impl RepoDescriptor {
+    pub fn local(path: String) -> Self {
+        let display_name = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&path)
+            .to_string();
+        let locator = RepoLocator::Local { path: path.clone() };
+        Self {
+            id: locator.stable_id(),
+            display_name,
+            display_path: path,
+            locator,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 pub enum EdgeType {
     Straight,
