@@ -51,6 +51,62 @@ fn parse_wsl_distros(list_text: &str, default_name: Option<&str>) -> Vec<WslDist
         .collect()
 }
 
+fn classify_wsl_repo_error(distro: &str, linux_path: &str, stderr: &str) -> TrunkError {
+    let trimmed = stderr.trim();
+    let lower = trimmed.to_lowercase();
+
+    if lower.contains("there is no distribution with the supplied name")
+        || lower.contains("specified distribution does not exist")
+        || lower.contains("distribution not found")
+        || lower.contains("no installed distributions")
+    {
+        return TrunkError::new(
+            "wsl_missing_distro",
+            format!(
+                "The WSL distro `{}` is not installed. Choose an installed distro or install it with `wsl --install -d <Distro>`.",
+                distro
+            ),
+        );
+    }
+
+    if lower.contains("execvpe(git) failed")
+        || lower.contains("git: command not found")
+        || lower.contains("git: not found")
+        || lower.contains("the command 'git' could not be found")
+    {
+        return TrunkError::new(
+            "wsl_missing_git",
+            format!(
+                "Git is not installed in the `{}` WSL distro. Install Linux Git inside that distro, then try again.",
+                distro
+            ),
+        );
+    }
+
+    if lower.contains("no such file or directory")
+        || lower.contains("cannot change to")
+        || lower.contains("not a git repository")
+        || lower.contains("not a git repo")
+    {
+        return TrunkError::new(
+            "wsl_repo_invalid",
+            format!(
+                "`{}` is not a valid Git repository path in the `{}` WSL distro. Use an absolute Linux path such as `/home/me/project`.",
+                linux_path, distro
+            ),
+        );
+    }
+
+    TrunkError::new(
+        "wsl_repo_invalid",
+        if trimmed.is_empty() {
+            format!("`{}` is not a Git repository in {}.", linux_path, distro)
+        } else {
+            trimmed.to_string()
+        },
+    )
+}
+
 pub fn unc_path(distro: &str, linux_path: &str) -> String {
     let path = linux_path.trim_start_matches('/').replace('/', "\\");
     if path.is_empty() {
@@ -193,14 +249,7 @@ pub fn validate_repo_inner(
 
     if !output.status.success() {
         let stderr = clean_wsl_output(&output.stderr);
-        return Err(TrunkError::new(
-            "wsl_repo_invalid",
-            if stderr.is_empty() {
-                format!("`{}` is not a Git repository in {}.", linux_path, distro)
-            } else {
-                stderr
-            },
-        ));
+        return Err(classify_wsl_repo_error(&distro, &linux_path, &stderr));
     }
 
     let repo_root = clean_wsl_output(&output.stdout);
@@ -264,7 +313,7 @@ pub async fn validate_wsl_repo(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_default_distro, parse_wsl_distros, unc_path};
+    use super::{classify_wsl_repo_error, parse_default_distro, parse_wsl_distros, unc_path};
 
     #[test]
     fn builds_unc_path_from_linux_path() {
@@ -291,5 +340,44 @@ mod tests {
         assert!(!distros[0].default);
         assert_eq!(distros[1].name, "Debian");
         assert!(distros[1].default);
+    }
+
+    #[test]
+    fn classifies_missing_wsl_distro() {
+        let error = classify_wsl_repo_error(
+            "Ubuntu",
+            "/home/me/trunk",
+            "There is no distribution with the supplied name.",
+        );
+
+        assert_eq!(error.code, "wsl_missing_distro");
+        assert!(error.message.contains("Ubuntu"));
+        assert!(error.message.contains("not installed"));
+    }
+
+    #[test]
+    fn classifies_missing_linux_git() {
+        let error = classify_wsl_repo_error(
+            "Debian",
+            "/home/me/trunk",
+            "execvpe(git) failed: No such file or directory",
+        );
+
+        assert_eq!(error.code, "wsl_missing_git");
+        assert!(error.message.contains("Git is not installed"));
+        assert!(error.message.contains("Debian"));
+    }
+
+    #[test]
+    fn classifies_invalid_wsl_repo_path() {
+        let error = classify_wsl_repo_error(
+            "Ubuntu",
+            "/home/me/missing",
+            "fatal: cannot change to '/home/me/missing': No such file or directory",
+        );
+
+        assert_eq!(error.code, "wsl_repo_invalid");
+        assert!(error.message.contains("/home/me/missing"));
+        assert!(error.message.contains("absolute Linux path"));
     }
 }
