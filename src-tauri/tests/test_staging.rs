@@ -268,16 +268,16 @@ fn discard_file_deletes_untracked_file_in_subdirectory() {
         .with_commit("Initial commit")
         .build();
 
-    let sub = ctx.repo_path().join(".claude");
+    let sub = ctx.repo_path().join("nested");
     std::fs::create_dir_all(&sub).unwrap();
-    std::fs::write(sub.join("settings.local.json"), "{}").unwrap();
+    std::fs::write(sub.join("new-file.txt"), "untracked").unwrap();
 
-    ctx.discard_file(".claude/settings.local.json")
+    ctx.discard_file("nested/new-file.txt")
         .expect("discard_file failed for nested untracked file");
 
     assert!(
-        !sub.join("settings.local.json").exists(),
-        "expected .claude/settings.local.json to be deleted after discard"
+        !sub.join("new-file.txt").exists(),
+        "expected nested/new-file.txt to be deleted after discard"
     );
 }
 
@@ -288,15 +288,15 @@ fn discard_all_deletes_nested_untracked_file() {
         .with_commit("Initial commit")
         .build();
 
-    let sub = ctx.repo_path().join(".claude");
+    let sub = ctx.repo_path().join("nested");
     std::fs::create_dir_all(&sub).unwrap();
-    std::fs::write(sub.join("settings.local.json"), "{}").unwrap();
+    std::fs::write(sub.join("new-file.txt"), "untracked").unwrap();
 
     ctx.discard_all().expect("discard_all failed");
 
     assert!(
-        !sub.join("settings.local.json").exists(),
-        "expected .claude/settings.local.json to be deleted after discard_all"
+        !sub.join("new-file.txt").exists(),
+        "expected nested/new-file.txt to be deleted after discard_all"
     );
 }
 

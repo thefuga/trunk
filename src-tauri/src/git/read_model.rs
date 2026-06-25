@@ -5,8 +5,9 @@ use crate::error::TrunkError;
 use crate::git::command_runner;
 use crate::git::types::{
     BranchInfo, CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus,
-    FileDiff, FileStatus, FileStatusType, GraphCommit, GraphResult, OperationInfo, OperationType,
-    RefLabel, RefType, RefsResponse, RepoDescriptor, RepoLocator, StashEntry, WorkingTreeStatus,
+    EdgeType, FileDiff, FileStatus, FileStatusType, GraphCommit, GraphEdge, GraphResult,
+    OperationInfo, OperationType, RefLabel, RefType, RefsResponse, RepoDescriptor, RepoLocator,
+    StashEntry, WorkingTreeStatus,
 };
 
 pub enum ReadBackend {
@@ -110,6 +111,85 @@ fn wsl_refs_by_oid(repo: &RepoDescriptor) -> Result<HashMap<String, Vec<RefLabel
     Ok(map)
 }
 
+fn find_free_column(active_lanes: &mut Vec<Option<String>>) -> usize {
+    if let Some(index) = active_lanes.iter().position(Option::is_none) {
+        index
+    } else {
+        active_lanes.push(None);
+        active_lanes.len() - 1
+    }
+}
+
+fn assign_graph_lanes(commits: &mut [GraphCommit]) -> usize {
+    let mut active_lanes: Vec<Option<String>> = Vec::new();
+    let mut pending_parents: HashMap<String, usize> = HashMap::new();
+    let mut max_columns = 0usize;
+
+    for commit in commits {
+        let column = pending_parents
+            .remove(&commit.oid)
+            .unwrap_or_else(|| find_free_column(&mut active_lanes));
+        if column >= active_lanes.len() {
+            active_lanes.resize(column + 1, None);
+        }
+        max_columns = max_columns.max(active_lanes.len());
+
+        let mut edges = Vec::new();
+        for (other_column, occupant) in active_lanes.iter().enumerate() {
+            if other_column != column && occupant.is_some() {
+                edges.push(GraphEdge {
+                    from_column: other_column,
+                    to_column: other_column,
+                    edge_type: EdgeType::Straight,
+                    color_index: other_column,
+                    dashed: false,
+                });
+            }
+        }
+
+        active_lanes[column] = None;
+        for (parent_index, parent_oid) in commit.parent_oids.iter().enumerate() {
+            let parent_column = if parent_index == 0 {
+                column
+            } else {
+                pending_parents
+                    .get(parent_oid)
+                    .copied()
+                    .unwrap_or_else(|| find_free_column(&mut active_lanes))
+            };
+            pending_parents
+                .entry(parent_oid.clone())
+                .or_insert(parent_column);
+            if parent_column >= active_lanes.len() {
+                active_lanes.resize(parent_column + 1, None);
+            }
+            active_lanes[parent_column] = Some(parent_oid.clone());
+            max_columns = max_columns.max(active_lanes.len());
+
+            let edge_type = if parent_column == column {
+                EdgeType::Straight
+            } else if parent_column < column {
+                EdgeType::MergeLeft
+            } else {
+                EdgeType::MergeRight
+            };
+            edges.push(GraphEdge {
+                from_column: column,
+                to_column: parent_column,
+                edge_type,
+                color_index: parent_column,
+                dashed: false,
+            });
+        }
+
+        commit.column = column;
+        commit.color_index = column;
+        commit.edges = edges;
+    }
+
+    max_columns.max(1)
+}
+
 pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError> {
     let refs_by_oid = wsl_refs_by_oid(repo)?;
     let head_oid = git_output(repo, &["rev-parse", "--verify", "HEAD"])
@@ -169,16 +249,17 @@ pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError
             author_email,
             author_timestamp,
             parent_oids,
-            column: idx.min(8),
-            color_index: idx.min(8),
+            column: idx,
+            color_index: idx,
             edges: Vec::new(),
             refs,
             is_stash: false,
         });
     }
+    let max_columns = assign_graph_lanes(&mut commits);
     Ok(GraphResult {
         commits,
-        max_columns: 1,
+        max_columns,
     })
 }
 
@@ -715,6 +796,27 @@ pub fn wsl_operation_state(repo: &RepoDescriptor) -> Result<OperationInfo, Trunk
 mod tests {
     use super::*;
 
+    fn graph_commit(oid: &str, parents: &[&str]) -> GraphCommit {
+        GraphCommit {
+            oid: oid.to_string(),
+            short_oid: short_oid(oid),
+            summary: String::new(),
+            body: None,
+            author_name: String::new(),
+            author_email: String::new(),
+            author_timestamp: 0,
+            parent_oids: parents.iter().map(|parent| parent.to_string()).collect(),
+            column: 0,
+            color_index: 0,
+            edges: Vec::new(),
+            refs: Vec::new(),
+            is_head: false,
+            is_merge: parents.len() >= 2,
+            is_branch_tip: false,
+            is_stash: false,
+        }
+    }
+
     #[test]
     fn parses_porcelain_status_into_existing_dto_buckets() {
         let status = parse_porcelain_status("M  staged.txt\0 M unstaged.txt\0?? new.txt\0UU conflict.txt\0R  old.txt\0renamed.txt\0");
@@ -761,5 +863,40 @@ index 1111111..2222222 100644
         assert_eq!(files[0].hunks[0].lines[1].old_lineno, Some(2));
         assert!(matches!(files[0].hunks[0].lines[2].origin, DiffOrigin::Add));
         assert_eq!(files[0].hunks[0].lines[2].new_lineno, Some(2));
+    }
+
+    #[test]
+    fn assigns_wsl_graph_edges_for_linear_history() {
+        let mut commits = vec![
+            graph_commit("bbbbbbb", &["aaaaaaa"]),
+            graph_commit("aaaaaaa", &[]),
+        ];
+
+        let max_columns = assign_graph_lanes(&mut commits);
+
+        assert_eq!(max_columns, 1);
+        assert_eq!(commits[0].column, 0);
+        assert_eq!(commits[1].column, 0);
+        assert_eq!(commits[0].edges.len(), 1);
+        assert!(matches!(commits[0].edges[0].edge_type, EdgeType::Straight));
+    }
+
+    #[test]
+    fn assigns_wsl_graph_edges_for_merge_history() {
+        let mut commits = vec![
+            graph_commit("merge01", &["main001", "topic01"]),
+            graph_commit("topic01", &["base001"]),
+            graph_commit("main001", &["base001"]),
+            graph_commit("base001", &[]),
+        ];
+
+        let max_columns = assign_graph_lanes(&mut commits);
+
+        assert!(max_columns >= 2);
+        assert_eq!(commits[0].edges.len(), 2);
+        assert!(commits[0]
+            .edges
+            .iter()
+            .any(|edge| matches!(edge.edge_type, EdgeType::MergeRight | EdgeType::MergeLeft)));
     }
 }
