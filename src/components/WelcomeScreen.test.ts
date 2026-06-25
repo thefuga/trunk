@@ -137,6 +137,36 @@ describe("WelcomeScreen", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows an actionable message when WSL has no installed distros", async () => {
+		const { safeInvoke } = await import("../lib/invoke.js");
+		vi.mocked(safeInvoke).mockImplementation((cmd: string) => {
+			if (cmd === "wsl_availability") {
+				return Promise.resolve({
+					available: true,
+					supported_platform: true,
+					message: null,
+				});
+			}
+			if (cmd === "list_wsl_distros") {
+				return Promise.resolve([]);
+			}
+			return Promise.resolve(undefined);
+		});
+
+		render(WelcomeScreen, {
+			props: { onopen: vi.fn() },
+		});
+
+		await vi.waitFor(() => {
+			expect(
+				screen.getByText(
+					"No WSL distros are installed. Install one with `wsl --install -d <Distro>`, then reopen Trunk.",
+				),
+			).toBeInTheDocument();
+		});
+		expect(screen.queryByLabelText("WSL distro")).not.toBeInTheDocument();
+	});
+
 	it("opens a validated WSL repository from distro and Linux path", async () => {
 		const { safeInvoke } = await import("../lib/invoke.js");
 		const storeModule = await import("../lib/store.js");
