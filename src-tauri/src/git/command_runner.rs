@@ -13,6 +13,7 @@ pub struct GitCommandSpec {
     pub program: String,
     pub args: Vec<String>,
     pub current_dir: Option<PathBuf>,
+    pub env: Vec<(String, String)>,
 }
 
 impl GitCommandSpec {
@@ -22,6 +23,7 @@ impl GitCommandSpec {
                 program: "git".to_string(),
                 args: git_args.iter().map(|arg| arg.to_string()).collect(),
                 current_dir: Some(PathBuf::from(path)),
+                env: Vec::new(),
             },
             RepoLocator::Wsl { distro, linux_path } => {
                 let mut args = vec![
@@ -36,9 +38,15 @@ impl GitCommandSpec {
                     program: "wsl.exe".to_string(),
                     args,
                     current_dir: None,
+                    env: Vec::new(),
                 }
             }
         }
+    }
+
+    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.push((key.into(), value.into()));
+        self
     }
 
     pub fn command(&self) -> Command {
@@ -46,6 +54,9 @@ impl GitCommandSpec {
         command
             .args(&self.args)
             .env("PATH", shell_env::system_path());
+        for (key, value) in &self.env {
+            command.env(key, value);
+        }
         if let Some(current_dir) = &self.current_dir {
             command.current_dir(current_dir);
         }
@@ -57,6 +68,9 @@ impl GitCommandSpec {
         command
             .args(&self.args)
             .env("PATH", shell_env::system_path());
+        for (key, value) in &self.env {
+            command.env(key, value);
+        }
         if let Some(current_dir) = &self.current_dir {
             command.current_dir(current_dir);
         }
@@ -143,6 +157,7 @@ mod tests {
         assert_eq!(spec.program, "git");
         assert_eq!(spec.args, vec!["fetch", "--all"]);
         assert_eq!(spec.current_dir, Some(PathBuf::from("/repo")));
+        assert_eq!(spec.env, Vec::<(String, String)>::new());
     }
 
     #[test]
@@ -163,5 +178,6 @@ mod tests {
             ]
         );
         assert_eq!(spec.current_dir, None);
+        assert_eq!(spec.env, Vec::<(String, String)>::new());
     }
 }

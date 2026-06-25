@@ -1,5 +1,9 @@
 use crate::error::TrunkError;
-use crate::git::{backend_fs::BackendTempDir, command_runner, read_model, types::RebaseTodoItem};
+use crate::git::{
+    backend_fs::BackendTempDir,
+    command_runner, read_model,
+    types::{RebaseTodoItem, RepoDescriptor, RepoLocator},
+};
 use crate::state::{CommitCache, RepoState};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -13,6 +17,22 @@ pub struct RebaseTodoAction {
     pub action: String, // "pick", "squash", "reword", "drop"
     pub summary: String,
     pub new_message: Option<String>,
+}
+
+fn interactive_rebase_command_spec(
+    repo: &RepoDescriptor,
+    base_oid: &str,
+    seq_editor_path: &str,
+    editor_script_path: &str,
+) -> command_runner::GitCommandSpec {
+    let spec = command_runner::GitCommandSpec::for_repo(repo, &["rebase", "-i", base_oid])
+        .with_env("GIT_SEQUENCE_EDITOR", seq_editor_path)
+        .with_env("GIT_EDITOR", editor_script_path);
+
+    match &repo.locator {
+        RepoLocator::Wsl { .. } => spec.with_env("WSLENV", "GIT_SEQUENCE_EDITOR:GIT_EDITOR"),
+        RepoLocator::Local { .. } => spec,
+    }
 }
 
 pub fn get_rebase_todo_inner(
@@ -217,14 +237,15 @@ exit 0
     session_dir.write_file("trunk-rebase-editor.sh", &editor_script, true)?;
 
     // 5. Run git rebase -i (blocking — waits for completion)
-    let mut command =
-        command_runner::GitCommandSpec::for_repo(&repo_descriptor, &["rebase", "-i", base_oid])
-            .command();
-    let output = command
-        .env("GIT_SEQUENCE_EDITOR", &seq_editor_path)
-        .env("GIT_EDITOR", &editor_script_path)
-        .output()
-        .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
+    let output = interactive_rebase_command_spec(
+        &repo_descriptor,
+        base_oid,
+        &seq_editor_path,
+        &editor_script_path,
+    )
+    .command()
+    .output()
+    .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
 
     // 6. Handle result
     if !output.status.success() {
@@ -312,4 +333,91 @@ pub async fn start_interactive_rebase(
     cache.0.lock().unwrap().insert(path.clone(), graph_result);
     let _ = app.emit("repo-changed", path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wsl_repo() -> RepoDescriptor {
+        let locator = RepoLocator::Wsl {
+            distro: "Ubuntu".to_string(),
+            linux_path: "/home/me/project".to_string(),
+        };
+        RepoDescriptor {
+            id: locator.stable_id(),
+            display_name: "project".to_string(),
+            display_path: r"\\wsl.localhost\Ubuntu\home\me\project".to_string(),
+            locator,
+        }
+    }
+
+    #[test]
+    fn wsl_interactive_rebase_command_propagates_editor_env() {
+        let spec = interactive_rebase_command_spec(
+            &wsl_repo(),
+            "abc123",
+            "/tmp/trunk-rebase/trunk-seq-editor.sh",
+            "/tmp/trunk-rebase/trunk-rebase-editor.sh",
+        );
+
+        assert_eq!(spec.program, "wsl.exe");
+        assert_eq!(
+            spec.args,
+            vec![
+                "-d",
+                "Ubuntu",
+                "--cd",
+                "/home/me/project",
+                "git",
+                "rebase",
+                "-i",
+                "abc123",
+            ]
+        );
+        assert_eq!(
+            spec.env,
+            vec![
+                (
+                    "GIT_SEQUENCE_EDITOR".to_string(),
+                    "/tmp/trunk-rebase/trunk-seq-editor.sh".to_string(),
+                ),
+                (
+                    "GIT_EDITOR".to_string(),
+                    "/tmp/trunk-rebase/trunk-rebase-editor.sh".to_string(),
+                ),
+                (
+                    "WSLENV".to_string(),
+                    "GIT_SEQUENCE_EDITOR:GIT_EDITOR".to_string(),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn local_interactive_rebase_command_does_not_set_wslenv() {
+        let spec = interactive_rebase_command_spec(
+            &RepoDescriptor::local("/repo".to_string()),
+            "abc123",
+            "/tmp/trunk-rebase/trunk-seq-editor.sh",
+            "/tmp/trunk-rebase/trunk-rebase-editor.sh",
+        );
+
+        assert_eq!(spec.program, "git");
+        assert_eq!(spec.args, vec!["rebase", "-i", "abc123"]);
+        assert_eq!(spec.current_dir, Some(PathBuf::from("/repo")));
+        assert_eq!(
+            spec.env,
+            vec![
+                (
+                    "GIT_SEQUENCE_EDITOR".to_string(),
+                    "/tmp/trunk-rebase/trunk-seq-editor.sh".to_string(),
+                ),
+                (
+                    "GIT_EDITOR".to_string(),
+                    "/tmp/trunk-rebase/trunk-rebase-editor.sh".to_string(),
+                ),
+            ]
+        );
+    }
 }
