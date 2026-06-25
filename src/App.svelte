@@ -712,6 +712,7 @@ $effect(() => {
           {@const tabState = getOrCreateTabState(tab.id)}
           <RepoView
             repoPath={repoCommandKey(tab) ?? tab.repoPath}
+            repoDisplayPath={tab.repoPath}
             repoName={tab.repoName}
             remoteState={tabState.remoteState}
             undoRedo={tabState.undoRedo}
