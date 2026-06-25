@@ -54,6 +54,8 @@ Trunk build, distro name/version, `git --version`, and repository path.
 - [ ] Merge a branch and verify clean and conflicted merge states if practical.
 - [ ] Start, edit, continue, and abort an interactive rebase if the repo history
   supports it.
+- [ ] During WSL interactive rebase, verify Trunk's scripted editors are used
+  for reword, squash, reorder, and drop actions.
 - [ ] Create and pop a stash.
 - [ ] Fetch, pull, and push with the distro's configured remote credentials.
 - [ ] Trigger an authentication failure with an invalid remote or credential and
