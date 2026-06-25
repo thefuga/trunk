@@ -1,6 +1,5 @@
 use crate::error::TrunkError;
-use crate::git::{graph, types::RebaseTodoItem};
-use crate::shell_env;
+use crate::git::{command_runner, graph, types::RebaseTodoItem};
 use crate::state::{CommitCache, RepoState};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -74,17 +73,11 @@ pub fn get_fork_point_inner(
     path: &str,
     branch: &str,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
 ) -> Result<String, TrunkError> {
-    let path_buf = state_map
-        .get(path)
-        .ok_or_else(|| TrunkError::new("not_open", format!("Repository not open: {}", path)))?;
-
-    let output = std::process::Command::new("git")
-        .args(["merge-base", branch, "HEAD"])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
-        .output()
-        .map_err(|e| TrunkError::new("fork_point_error", e.to_string()))?;
+    let repo = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    let output =
+        command_runner::git_output(&repo, &["merge-base", branch, "HEAD"], "fork_point_error")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -101,6 +94,7 @@ pub fn start_interactive_rebase_blocking(
     todo_items: &[RebaseTodoAction],
     session_dir: &std::path::Path,
     state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
 ) -> Result<crate::git::types::GraphResult, TrunkError> {
     let path_buf = state_map
         .get(path)
@@ -177,10 +171,11 @@ exit 0
     }
 
     // 5. Run git rebase -i (blocking — waits for completion)
-    let output = std::process::Command::new("git")
-        .args(["rebase", "-i", base_oid])
-        .current_dir(path_buf)
-        .env("PATH", shell_env::system_path())
+    let repo_descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    let mut command =
+        command_runner::GitCommandSpec::for_repo(&repo_descriptor, &["rebase", "-i", base_oid])
+            .command();
+    let output = command
         .env("GIT_SEQUENCE_EDITOR", seq_editor_path.to_str().unwrap())
         .env("GIT_EDITOR", editor_script_path.to_str().unwrap())
         .output()
@@ -225,7 +220,10 @@ pub async fn get_fork_point(
     state: State<'_, RepoState>,
 ) -> Result<String, String> {
     let state_map = state.0.lock().unwrap().clone();
-    tauri::async_runtime::spawn_blocking(move || get_fork_point_inner(&path, &branch, &state_map))
+    let descriptor_map = state.1.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        get_fork_point_inner(&path, &branch, &state_map, &descriptor_map)
+    })
         .await
         .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
         .map_err(|e: TrunkError| e.to_json())
@@ -241,6 +239,7 @@ pub async fn start_interactive_rebase(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
 
     let session_dir = std::env::temp_dir().join(format!("trunk-rebase-{}", std::process::id()));
@@ -254,6 +253,7 @@ pub async fn start_interactive_rebase(
             &todo_items,
             &session_dir,
             &state_map,
+            &descriptor_map,
         )
     })
     .await
