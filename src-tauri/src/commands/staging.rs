@@ -743,7 +743,7 @@ fn wsl_unstage_lines(
     let patch = build_partial_patch_from_diff(file_path, &file_diff, &hunk, &line_indices, true);
     git_apply(
         repo,
-        &["apply", "--cached", "--reverse", "--"],
+        &["apply", "--cached", "--"],
         &patch,
         "line_apply_failed",
     )
@@ -764,12 +764,7 @@ fn wsl_discard_lines(
         &format!("No unstaged changes for: {}", file_path),
     )?;
     let patch = build_partial_patch_from_diff(file_path, &file_diff, &hunk, &line_indices, true);
-    git_apply(
-        repo,
-        &["apply", "--reverse", "--"],
-        &patch,
-        "line_apply_failed",
-    )
+    git_apply(repo, &["apply", "--"], &patch, "line_apply_failed")
 }
 
 pub fn stage_hunk_inner(
@@ -1678,6 +1673,44 @@ pub fn discard_lines_inner(
 #[cfg(test)]
 mod wsl_patch_tests {
     use super::*;
+    use std::process::Command;
+
+    fn run_git(dir: &std::path::Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git command should spawn");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    fn repo_with_committed_file() -> (tempfile::TempDir, RepoDescriptor) {
+        let dir = tempfile::TempDir::new().unwrap();
+        run_git(dir.path(), &["init", "-q"]);
+        std::fs::write(dir.path().join("file.txt"), "a\n").unwrap();
+        run_git(dir.path(), &["add", "file.txt"]);
+        run_git(
+            dir.path(),
+            &[
+                "-c",
+                "user.name=Trunk Test",
+                "-c",
+                "user.email=trunk@example.test",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+        );
+        let repo = RepoDescriptor::local(dir.path().to_string_lossy().into_owned());
+        (dir, repo)
+    }
 
     fn diff_line(origin: DiffOrigin, content: &str) -> DiffLine {
         DiffLine {
@@ -1738,5 +1771,32 @@ diff --git a/file.txt b/file.txt
         assert!(patch.contains(" keep old\n"));
         assert!(patch.contains("+stage new\n"));
         assert!(!patch.contains("-keep old\n"));
+    }
+
+    #[test]
+    fn wsl_unstage_lines_applies_reverse_partial_patch_to_index_once() {
+        let (dir, repo) = repo_with_committed_file();
+        std::fs::write(dir.path().join("file.txt"), "a\nb\nc\n").unwrap();
+        run_git(dir.path(), &["add", "file.txt"]);
+
+        wsl_unstage_lines(&repo, "file.txt", 0, vec![1]).unwrap();
+
+        let staged = run_git(dir.path(), &["diff", "--cached", "--", "file.txt"]);
+        let unstaged = run_git(dir.path(), &["diff", "--", "file.txt"]);
+        assert!(!staged.contains("+b\n"));
+        assert!(staged.contains("+c\n"));
+        assert!(unstaged.contains("+b\n"));
+        assert!(!unstaged.contains("+c\n"));
+    }
+
+    #[test]
+    fn wsl_discard_lines_applies_reverse_partial_patch_to_workdir_once() {
+        let (dir, repo) = repo_with_committed_file();
+        std::fs::write(dir.path().join("file.txt"), "a\nb\nc\n").unwrap();
+
+        wsl_discard_lines(&repo, "file.txt", 0, vec![1]).unwrap();
+
+        let content = std::fs::read_to_string(dir.path().join("file.txt")).unwrap();
+        assert_eq!(content, "a\nc\n");
     }
 }
