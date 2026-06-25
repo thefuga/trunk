@@ -4,7 +4,7 @@
 //! session file I/O and the security-relevant recovery behavior.
 //!
 //! - Writes are atomic via tmp-in-same-dir + `sync_all` + `rename` (D-10).
-//! - The on-disk filename is a build-stable FNV-1a hash of the canonical path
+//! - The on-disk filename is a build-stable FNV-1a hash of the stable repo id
 //!   (D-11) — also the path-traversal mitigation, since the hash can contain no
 //!   `..`, separators, or OS-specific verbatim prefixes.
 //! - `load_session` peeks `schema_version` before a full deserialize so it can
@@ -41,23 +41,22 @@ fn sessions_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("sessions")
 }
 
-/// Build-stable FNV-1a 64-bit hash of the canonical path → filename-safe token.
+/// Build-stable FNV-1a 64-bit hash of the stable repo id → filename-safe token.
 ///
 /// PRIVATE by design (encapsulation). NEVER `std::hash::DefaultHasher`: it is
 /// not stable across Rust versions, so a toolchain bump would orphan sessions.
-/// Hashing the canonical path is also the path-traversal mitigation (D-11).
-fn session_filename(canonical: &Path) -> String {
-    let s = canonical.to_string_lossy();
+/// Hashing the repo id is also the path-traversal mitigation (D-11).
+fn session_filename(repo_id: &str) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a 64-bit offset basis
-    for b in s.as_bytes() {
+    for b in repo_id.as_bytes() {
         hash ^= *b as u64;
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3); // FNV prime
     }
     format!("{:016x}.json", hash)
 }
 
-fn session_path(data_dir: &Path, canonical: &Path) -> PathBuf {
-    sessions_dir(data_dir).join(session_filename(canonical))
+fn session_path(data_dir: &Path, repo_id: &str) -> PathBuf {
+    sessions_dir(data_dir).join(session_filename(repo_id))
 }
 
 /// Atomic write: tmp-in-same-dir + `sync_all` + `rename` (D-10, Pitfall 5).
@@ -87,22 +86,22 @@ fn quarantine_corrupt(final_path: &Path) -> Result<(), TrunkError> {
     fs::rename(final_path, corrupt).map_err(|e| TrunkError::new("io", e.to_string()))
 }
 
-/// Persist a session atomically for the given canonical repo path.
+/// Persist a session atomically for the given stable repo id.
 pub fn save_session(
     data_dir: &Path,
-    canonical: &Path,
+    repo_id: &str,
     session: &ReviewSession,
 ) -> Result<(), TrunkError> {
     let json = serde_json::to_string_pretty(session)
         .map_err(|e| TrunkError::new("serialize", e.to_string()))?;
-    atomic_write_json(&session_path(data_dir, canonical), &json)
+    atomic_write_json(&session_path(data_dir, repo_id), &json)
 }
 
-/// Load the session for a canonical repo path, applying the recovery state
+/// Load the session for a stable repo id, applying the recovery state
 /// machine: missing → `None`; newer schema → `RefusedNewer` (file untouched,
 /// D-16); unparseable or wrong-shape → quarantine + `RecoveredCorrupt` (D-15).
-pub fn load_session(data_dir: &Path, canonical: &Path) -> Result<LoadOutcome, TrunkError> {
-    let final_path = session_path(data_dir, canonical);
+pub fn load_session(data_dir: &Path, repo_id: &str) -> Result<LoadOutcome, TrunkError> {
+    let final_path = session_path(data_dir, repo_id);
     let raw = match fs::read_to_string(&final_path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(LoadOutcome::None),
@@ -148,7 +147,7 @@ pub fn load_session(data_dir: &Path, canonical: &Path) -> Result<LoadOutcome, Tr
     }
     session.schema_version = CURRENT_SCHEMA_VERSION;
     if backfilled || version < CURRENT_SCHEMA_VERSION {
-        save_session(data_dir, canonical, &session)?;
+        save_session(data_dir, repo_id, &session)?;
     }
 
     Ok(LoadOutcome::Loaded(session))
@@ -156,18 +155,18 @@ pub fn load_session(data_dir: &Path, canonical: &Path) -> Result<LoadOutcome, Tr
 
 /// Hard-delete the per-repo session file (SESS-03 / D-13). NotFound is treated
 /// as idempotent success, so end-and-clear is safe to call repeatedly.
-pub fn delete_session(data_dir: &Path, canonical: &Path) -> Result<(), TrunkError> {
-    match fs::remove_file(session_path(data_dir, canonical)) {
+pub fn delete_session(data_dir: &Path, repo_id: &str) -> Result<(), TrunkError> {
+    match fs::remove_file(session_path(data_dir, repo_id)) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(TrunkError::new("io", e.to_string())),
     }
 }
 
-/// Whether a session file is present for the canonical repo path (drives D-14
+/// Whether a session file is present for the stable repo id (drives D-14
 /// resume detection).
-pub fn session_exists(data_dir: &Path, canonical: &Path) -> bool {
-    session_path(data_dir, canonical).is_file()
+pub fn session_exists(data_dir: &Path, repo_id: &str) -> bool {
+    session_path(data_dir, repo_id).is_file()
 }
 
 #[cfg(test)]
@@ -175,19 +174,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn same_canonical_path_same_file() {
-        let path = Path::new("/home/user/repos/trunk");
-        let other = Path::new("/home/user/repos/other");
+    fn same_repo_id_same_file() {
+        let repo_id = "local:/home/user/repos/trunk";
+        let other = "wsl:Ubuntu:/home/user/repos/trunk";
 
         assert_eq!(
-            session_filename(path),
-            session_filename(path),
-            "the same canonical path must map to the same filename (build-stable hash)",
+            session_filename(repo_id),
+            session_filename(repo_id),
+            "the same repo id must map to the same filename (build-stable hash)",
         );
         assert_ne!(
-            session_filename(path),
+            session_filename(repo_id),
             session_filename(other),
-            "different canonical paths must map to different filenames",
+            "different repo ids must map to different filenames",
         );
     }
 
@@ -195,20 +194,20 @@ mod tests {
 
     /// Write raw bytes to the session path a given canonical repo maps to,
     /// creating the sessions dir first (mirrors atomic_write_json's setup).
-    fn seed_session_file(data_dir: &Path, canonical: &Path, raw: &str) {
-        let path = session_path(data_dir, canonical);
+    fn seed_session_file(data_dir: &Path, repo_id: &str, raw: &str) {
+        let path = session_path(data_dir, repo_id);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, raw).unwrap();
     }
 
-    fn corrupt_sidecar_path(data_dir: &Path, canonical: &Path) -> PathBuf {
-        session_path(data_dir, canonical).with_extension("json.corrupt")
+    fn corrupt_sidecar_path(data_dir: &Path, repo_id: &str) -> PathBuf {
+        session_path(data_dir, repo_id).with_extension("json.corrupt")
     }
 
     #[test]
     fn v1_session_loads_and_backfills_ids_without_corrupting() {
         let dir = tempfile::tempdir().unwrap();
-        let canonical = Path::new("/repos/trunk");
+        let repo_id = "local:/repos/trunk";
         let v1 = r#"{
             "schema_version": 1,
             "commits": ["abc"],
@@ -218,9 +217,9 @@ mod tests {
             ],
             "draft_comment": null
         }"#;
-        seed_session_file(dir.path(), canonical, v1);
+        seed_session_file(dir.path(), repo_id, v1);
 
-        let outcome = load_session(dir.path(), canonical).unwrap();
+        let outcome = load_session(dir.path(), repo_id).unwrap();
 
         let session = match outcome {
             LoadOutcome::Loaded(s) => s,
@@ -231,7 +230,7 @@ mod tests {
             "every comment must have a non-empty backfilled id",
         );
         assert!(
-            !corrupt_sidecar_path(dir.path(), canonical).exists(),
+            !corrupt_sidecar_path(dir.path(), repo_id).exists(),
             "a valid v1 load must NOT create a .corrupt sidecar (D-15 false positive)",
         );
     }
@@ -239,7 +238,7 @@ mod tests {
     #[test]
     fn backfilled_ids_are_stable_across_reloads() {
         let dir = tempfile::tempdir().unwrap();
-        let canonical = Path::new("/repos/trunk");
+        let repo_id = "local:/repos/trunk";
         let v1 = r#"{
             "schema_version": 1,
             "commits": [],
@@ -248,13 +247,13 @@ mod tests {
             ],
             "draft_comment": null
         }"#;
-        seed_session_file(dir.path(), canonical, v1);
+        seed_session_file(dir.path(), repo_id, v1);
 
-        let first = match load_session(dir.path(), canonical).unwrap() {
+        let first = match load_session(dir.path(), repo_id).unwrap() {
             LoadOutcome::Loaded(s) => s,
             _ => panic!("first load must succeed"),
         };
-        let second = match load_session(dir.path(), canonical).unwrap() {
+        let second = match load_session(dir.path(), repo_id).unwrap() {
             LoadOutcome::Loaded(s) => s,
             _ => panic!("second load must succeed"),
         };
@@ -272,7 +271,7 @@ mod tests {
     #[test]
     fn v2_session_loads_unchanged() {
         let dir = tempfile::tempdir().unwrap();
-        let canonical = Path::new("/repos/trunk");
+        let repo_id = "local:/repos/trunk";
         let v2 = r#"{
             "schema_version": 2,
             "commits": [],
@@ -281,9 +280,9 @@ mod tests {
             ],
             "draft_comment": null
         }"#;
-        seed_session_file(dir.path(), canonical, v2);
+        seed_session_file(dir.path(), repo_id, v2);
 
-        let session = match load_session(dir.path(), canonical).unwrap() {
+        let session = match load_session(dir.path(), repo_id).unwrap() {
             LoadOutcome::Loaded(s) => s,
             _ => panic!("v2 file must load"),
         };
@@ -294,24 +293,24 @@ mod tests {
     #[test]
     fn newer_schema_refused_and_file_left_byte_unchanged() {
         let dir = tempfile::tempdir().unwrap();
-        let canonical = Path::new("/repos/trunk");
+        let repo_id = "local:/repos/trunk";
         let v3 = r#"{ "schema_version": 3, "commits": [], "comments": [], "draft_comment": null }"#;
-        seed_session_file(dir.path(), canonical, v3);
-        let before = fs::read(session_path(dir.path(), canonical)).unwrap();
+        seed_session_file(dir.path(), repo_id, v3);
+        let before = fs::read(session_path(dir.path(), repo_id)).unwrap();
 
-        let outcome = load_session(dir.path(), canonical).unwrap();
+        let outcome = load_session(dir.path(), repo_id).unwrap();
 
         assert!(
             matches!(outcome, LoadOutcome::RefusedNewer),
             "a schema_version > CURRENT must return RefusedNewer (D-16)",
         );
-        let after = fs::read(session_path(dir.path(), canonical)).unwrap();
+        let after = fs::read(session_path(dir.path(), repo_id)).unwrap();
         assert_eq!(
             before, after,
             "the newer file must be left byte-unchanged (D-16)"
         );
         assert!(
-            !corrupt_sidecar_path(dir.path(), canonical).exists(),
+            !corrupt_sidecar_path(dir.path(), repo_id).exists(),
             "a refused file must NOT be quarantined",
         );
     }
@@ -319,17 +318,17 @@ mod tests {
     #[test]
     fn garbage_json_quarantines_to_corrupt_sidecar() {
         let dir = tempfile::tempdir().unwrap();
-        let canonical = Path::new("/repos/trunk");
-        seed_session_file(dir.path(), canonical, "{ this is not valid json ]");
+        let repo_id = "local:/repos/trunk";
+        seed_session_file(dir.path(), repo_id, "{ this is not valid json ]");
 
-        let outcome = load_session(dir.path(), canonical).unwrap();
+        let outcome = load_session(dir.path(), repo_id).unwrap();
 
         assert!(
             matches!(outcome, LoadOutcome::RecoveredCorrupt),
             "malformed JSON must return RecoveredCorrupt (D-15)",
         );
         assert!(
-            corrupt_sidecar_path(dir.path(), canonical).exists(),
+            corrupt_sidecar_path(dir.path(), repo_id).exists(),
             "a .corrupt sidecar must be created (D-15)",
         );
     }

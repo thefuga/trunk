@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::graph;
-use crate::git::types::MergeSides;
+use crate::git::types::{MergeSides, RepoDescriptor, RepoLocator};
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -64,6 +64,32 @@ pub fn save_merge_result_inner(
     content: &str,
     state_map: &HashMap<String, PathBuf>,
 ) -> Result<(), TrunkError> {
+    save_merge_result_inner_with_descriptors(path, file_path, content, state_map, &HashMap::new())
+}
+
+fn save_merge_result_inner_with_descriptors(
+    path: &str,
+    file_path: &str,
+    content: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<(), TrunkError> {
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    if matches!(repo_descriptor.locator, RepoLocator::Wsl { .. }) {
+        crate::git::backend_fs::write_repo_file(&repo_descriptor, file_path, content)?;
+        let output = crate::git::command_runner::git_output(
+            &repo_descriptor,
+            &["add", "--", file_path],
+            "stage_error",
+        )?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(TrunkError::new("stage_error", stderr.to_string()));
+        }
+        return Ok(());
+    }
+
     let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let repo_path = repo
         .workdir()
@@ -109,10 +135,18 @@ pub async fn save_merge_result(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let state_map_clone = state_map.clone();
+    let descriptor_map_clone = descriptor_map.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        save_merge_result_inner(&path_clone, &file_path, &content, &state_map_clone)
+        save_merge_result_inner_with_descriptors(
+            &path_clone,
+            &file_path,
+            &content,
+            &state_map_clone,
+            &descriptor_map_clone,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

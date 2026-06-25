@@ -2,11 +2,16 @@ use notify_debouncer_mini::notify::RecommendedWatcher;
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Runtime};
 
-pub type WatcherMap = HashMap<String, Debouncer<RecommendedWatcher>>;
+pub enum WatchHandle {
+    Native(Debouncer<RecommendedWatcher>),
+    WslPoller(mpsc::Sender<()>),
+}
+
+pub type WatcherMap = HashMap<String, WatchHandle>;
 pub struct WatcherState(pub Mutex<WatcherMap>);
 
 impl Default for WatcherState {
@@ -42,9 +47,53 @@ pub fn start_watcher_for_repo<R: Runtime>(
         .watch(&path, RecursiveMode::Recursive)
         .expect("failed to watch path");
 
-    state.0.lock().unwrap().insert(repo_id, debouncer);
+    state
+        .0
+        .lock()
+        .unwrap()
+        .insert(repo_id, WatchHandle::Native(debouncer));
+}
+
+pub fn start_wsl_poller_for_repo<R: Runtime>(
+    repo: crate::git::types::RepoDescriptor,
+    app: AppHandle<R>,
+    state: &WatcherState,
+) {
+    let repo_id = repo.id.clone();
+    let event_repo_id = repo_id.clone();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut last = crate::git::backend_fs::wsl_poll_token(&repo)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        loop {
+            match rx.recv_timeout(Duration::from_secs(2)) {
+                Ok(_) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+            let Ok(Some(next)) = crate::git::backend_fs::wsl_poll_token(&repo) else {
+                continue;
+            };
+            if next != last {
+                last = next;
+                let _ = app.emit("repo-changed", event_repo_id.clone());
+            }
+        }
+    });
+
+    state
+        .0
+        .lock()
+        .unwrap()
+        .insert(repo_id, WatchHandle::WslPoller(tx));
 }
 
 pub fn stop_watcher(repo_id: &str, state: &WatcherState) {
-    state.0.lock().unwrap().remove(repo_id);
+    if let Some(handle) = state.0.lock().unwrap().remove(repo_id) {
+        if let WatchHandle::WslPoller(stop) = handle {
+            let _ = stop.send(());
+        }
+    }
 }
