@@ -25,8 +25,8 @@ fn interactive_rebase_command_spec(
     base_oid: &str,
     seq_editor_path: &str,
     editor_script_path: &str,
-) -> command_runner::GitCommandSpec {
-    command_runner::GitCommandSpec::for_repo(repo, &["rebase", "-i", base_oid])
+) -> Result<command_runner::GitCommandSpec, TrunkError> {
+    command_runner::GitCommandSpec::for_repo(repo, &["rebase", "-i", base_oid])?
         .with_interactive_rebase_editor_env(repo, seq_editor_path, editor_script_path)
 }
 
@@ -185,7 +185,7 @@ exit 0
         base_oid,
         &seq_editor_path,
         &editor_script_path,
-    )
+    )?
     .command()
     .output()
     .map_err(|e| TrunkError::new("rebase_error", e.to_string()))?;
@@ -304,7 +304,8 @@ mod tests {
             "abc123",
             "/tmp/trunk-rebase/trunk-seq-editor.sh",
             "/tmp/trunk-rebase/trunk-rebase-editor.sh",
-        );
+        )
+        .unwrap();
 
         assert_eq!(spec.program, "wsl.exe");
         assert_eq!(
@@ -346,7 +347,8 @@ mod tests {
             "abc123",
             "/tmp/trunk-rebase/trunk-seq-editor.sh",
             "/tmp/trunk-rebase/trunk-rebase-editor.sh",
-        );
+        )
+        .unwrap();
 
         assert_eq!(spec.program, "git");
         assert_eq!(spec.args, vec!["rebase", "-i", "abc123"]);

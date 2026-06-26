@@ -58,7 +58,7 @@ async fn run_git_remote(
         }
     }
 
-    let mut child = command_runner::git_tokio_piped(repo, args)
+    let mut child = command_runner::git_tokio_piped(repo, args)?
         .spawn()
         .map_err(|e| TrunkError::new("remote_error", e.to_string()))?;
 

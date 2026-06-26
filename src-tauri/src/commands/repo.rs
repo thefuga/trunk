@@ -65,7 +65,7 @@ pub async fn open_repo(
     if use_native_watcher {
         watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
     } else {
-        watcher::start_wsl_poller_for_repo(descriptor, app, &watcher_state);
+        backend::start_wsl_poller_for_repo(descriptor, app, &watcher_state);
     }
 
     Ok(())
