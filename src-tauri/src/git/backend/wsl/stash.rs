@@ -1,7 +1,6 @@
-use super::read_model;
 use crate::error::TrunkError;
 use crate::git::command_runner;
-use crate::git::types::{RepoDescriptor, StashEntry};
+use crate::git::types::RepoDescriptor;
 
 fn git_command_error(code: &str, output: std::process::Output) -> TrunkError {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -25,10 +24,6 @@ fn wsl_has_conflicts(repo: &RepoDescriptor) -> Result<bool, TrunkError> {
     } else {
         Err(git_command_error("git_error", output))
     }
-}
-
-fn wsl_list_stashes(repo: &RepoDescriptor) -> Result<Vec<StashEntry>, TrunkError> {
-    Ok(read_model::wsl_refs(repo)?.stashes)
 }
 
 pub(crate) fn wsl_stash_save(repo: &RepoDescriptor, message: &str) -> Result<(), TrunkError> {

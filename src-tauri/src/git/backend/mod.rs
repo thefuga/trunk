@@ -599,6 +599,7 @@ pub trait GitBackend: Send + Sync {
 mod tests {
     use super::*;
 
+    #[cfg(not(target_os = "windows"))]
     fn wsl_descriptor() -> RepoDescriptor {
         let locator = RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
