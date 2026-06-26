@@ -1,6 +1,7 @@
 use crate::error::TrunkError;
 use crate::git::read_model::{
     assign_graph_lanes, parse_porcelain_status, parse_ref_type, parse_unified_diff, short_oid,
+    PORCELAIN_STATUS_ARGS,
 };
 use crate::git::types::{
     BranchInfo, CommitDetail, DiffRequestOptions, DiffStatus, FileDiff, GraphCommit, GraphResult,
@@ -163,7 +164,7 @@ pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError
 }
 
 pub fn wsl_status(repo: &RepoDescriptor) -> Result<WorkingTreeStatus, TrunkError> {
-    let output = git_output(repo, &["status", "--porcelain=v1", "-z"])?;
+    let output = git_output(repo, PORCELAIN_STATUS_ARGS)?;
     Ok(parse_porcelain_status(&output))
 }
 
