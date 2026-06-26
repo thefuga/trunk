@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    command_runner, graph,
+    backend, command_runner, graph,
     types::{GraphResult, RepoDescriptor, UndoResult},
 };
 use crate::state::{CommitCache, RepoState};
@@ -445,78 +445,36 @@ pub fn undo_commit_inner(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<UndoResult, TrunkError> {
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.undo_commit(path, state_map, descriptor_map)
+}
+
+pub fn undo_commit_local_inner(
+    path: &str,
+    state_map: &HashMap<String, PathBuf>,
+    descriptor_map: &HashMap<String, RepoDescriptor>,
+) -> Result<UndoResult, TrunkError> {
     let repo_descriptor =
         crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    let (subject, body) = match &repo_descriptor.locator {
-        crate::git::types::RepoLocator::Local { .. } => {
-            let repo = crate::commands::open_repo_from_state(path, state_map)?;
-            let head = repo.head()?.peel_to_commit()?;
+    backend::ensure_backend_supported(&repo_descriptor)?;
+    let repo = crate::commands::open_repo_from_state(path, state_map)?;
+    let head = repo.head()?.peel_to_commit()?;
 
-            if head.parent_count() == 0 {
-                return Err(TrunkError::new(
-                    "nothing_to_undo",
-                    "Cannot undo the initial commit",
-                ));
-            }
-            if head.parent_count() > 1 {
-                return Err(TrunkError::new(
-                    "merge_commit",
-                    "Cannot undo a merge commit",
-                ));
-            }
+    if head.parent_count() == 0 {
+        return Err(TrunkError::new(
+            "nothing_to_undo",
+            "Cannot undo the initial commit",
+        ));
+    }
+    if head.parent_count() > 1 {
+        return Err(TrunkError::new(
+            "merge_commit",
+            "Cannot undo a merge commit",
+        ));
+    }
 
-            (
-                head.summary().unwrap_or("").to_owned(),
-                head.body().map(str::to_owned),
-            )
-        }
-        crate::git::types::RepoLocator::Wsl { .. } => {
-            let parents = command_runner::git_output(
-                &repo_descriptor,
-                &["rev-list", "--parents", "-n", "1", "HEAD"],
-                "undo_error",
-            )?;
-            if !parents.status.success() {
-                let stderr = String::from_utf8_lossy(&parents.stderr);
-                return Err(TrunkError::new("undo_error", stderr.to_string()));
-            }
-            let parent_count = String::from_utf8_lossy(&parents.stdout)
-                .split_whitespace()
-                .skip(1)
-                .count();
-            if parent_count == 0 {
-                return Err(TrunkError::new(
-                    "nothing_to_undo",
-                    "Cannot undo the initial commit",
-                ));
-            }
-            if parent_count > 1 {
-                return Err(TrunkError::new(
-                    "merge_commit",
-                    "Cannot undo a merge commit",
-                ));
-            }
-
-            let message = command_runner::git_output(
-                &repo_descriptor,
-                &["log", "-1", "--format=%s%x00%b"],
-                "undo_error",
-            )?;
-            if !message.status.success() {
-                let stderr = String::from_utf8_lossy(&message.stderr);
-                return Err(TrunkError::new("undo_error", stderr.to_string()));
-            }
-            let message = String::from_utf8_lossy(&message.stdout);
-            let mut parts = message.splitn(2, '\0');
-            let subject = parts.next().unwrap_or("").trim_end().to_string();
-            let body = parts
-                .next()
-                .map(str::trim_end)
-                .filter(|body| !body.is_empty())
-                .map(str::to_owned);
-            (subject, body)
-        }
-    };
+    let subject = head.summary().unwrap_or("").to_owned();
+    let body = head.body().map(str::to_owned);
 
     let output = run_git_action(
         path,
@@ -550,30 +508,14 @@ pub fn redo_commit_inner_with_descriptors(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<(), TrunkError> {
-    let repo_descriptor =
-        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    match repo_descriptor.locator {
-        crate::git::types::RepoLocator::Local { .. } => {
-            redo_commit_inner(path, subject, body, state_map)
-        }
-        crate::git::types::RepoLocator::Wsl { .. } => {
-            let message = match body {
-                Some(body) if !body.trim().is_empty() => format!("{subject}\n\n{body}"),
-                _ => subject.to_owned(),
-            };
-            let output = command_runner::git_output(
-                &repo_descriptor,
-                &["commit", "-m", &message],
-                "commit_error",
-            )?;
-            if output.status.success() {
-                Ok(())
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(TrunkError::new("commit_error", stderr.to_string()))
-            }
-        }
-    }
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.redo_commit(
+        path,
+        subject,
+        body,
+        state_map,
+        descriptor_map,
+    )
 }
 
 pub fn check_undo_available_inner(
@@ -597,26 +539,8 @@ pub fn check_undo_available_inner_with_descriptors(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<bool, TrunkError> {
-    let repo_descriptor =
-        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    match repo_descriptor.locator {
-        crate::git::types::RepoLocator::Local { .. } => check_undo_available_inner(path, state_map),
-        crate::git::types::RepoLocator::Wsl { .. } => {
-            let output = command_runner::git_output(
-                &repo_descriptor,
-                &["rev-list", "--parents", "-n", "1", "HEAD"],
-                "undo_error",
-            )?;
-            if !output.status.success() {
-                return Ok(false);
-            }
-            Ok(String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .skip(1)
-                .count()
-                == 1)
-        }
-    }
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.check_undo_available(path, state_map, descriptor_map)
 }
 
 #[tauri::command]

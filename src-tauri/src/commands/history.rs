@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    graph, read_model,
+    backend,
     types::{GraphCommit, GraphResult, MatchType, SearchResult},
 };
 use crate::state::{CommitCache, RepoState};
@@ -45,13 +45,9 @@ pub async fn refresh_commit_graph(
     let path_clone = path.clone();
 
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(path_buf) => {
-                let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
-                graph::walk_commits(&mut repo, 0, usize::MAX)
-            }
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.commit_graph(&path_clone, &state_map, &descriptor_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

@@ -1,27 +1,6 @@
+use super::{unc_path, WslAvailability, WslDistro, WslRepoValidation};
 use crate::error::TrunkError;
 use crate::git::types::{RepoDescriptor, RepoLocator};
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct WslAvailability {
-    pub available: bool,
-    pub supported_platform: bool,
-    pub message: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WslDistro {
-    pub name: String,
-    pub default: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WslRepoValidation {
-    pub distro: String,
-    pub linux_path: String,
-    pub repo_root: String,
-    pub descriptor: RepoDescriptor,
-}
 
 fn clean_wsl_output(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes)
@@ -116,17 +95,8 @@ pub fn unc_path(distro: &str, linux_path: &str) -> String {
     }
 }
 
-#[cfg(target_os = "windows")]
 fn wsl_command(args: &[&str]) -> std::io::Result<std::process::Output> {
     std::process::Command::new("wsl.exe").args(args).output()
-}
-
-#[cfg(not(target_os = "windows"))]
-fn wsl_command(_args: &[&str]) -> std::io::Result<std::process::Output> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "WSL is only available on Windows",
-    ))
 }
 
 pub fn availability_inner() -> WslAvailability {
@@ -139,7 +109,6 @@ pub fn availability_inner() -> WslAvailability {
         }
     }
 
-    #[cfg(target_os = "windows")]
     match wsl_command(&["--status"]) {
         Ok(output) if output.status.success() => WslAvailability {
             available: true,
@@ -287,53 +256,29 @@ pub fn validate_repo_inner(
     })
 }
 
-#[tauri::command]
-pub async fn wsl_availability() -> Result<WslAvailability, String> {
-    Ok(availability_inner())
-}
-
-#[tauri::command]
-pub async fn list_wsl_distros() -> Result<Vec<WslDistro>, String> {
-    tauri::async_runtime::spawn_blocking(list_distros_inner)
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
-}
-
-#[tauri::command]
-pub async fn validate_wsl_repo(
-    distro: String,
-    linux_path: String,
-) -> Result<WslRepoValidation, String> {
-    tauri::async_runtime::spawn_blocking(move || validate_repo_inner(distro, linux_path))
-        .await
-        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
-        .map_err(|e| e.to_json())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{classify_wsl_repo_error, parse_default_distro, parse_wsl_distros, unc_path};
-
-    #[test]
-    fn builds_unc_path_from_linux_path() {
-        assert_eq!(
-            unc_path("Ubuntu", "/home/me/trunk"),
-            r"\\wsl.localhost\Ubuntu\home\me\trunk"
-        );
-    }
+    use super::{classify_wsl_repo_error, parse_default_distro, parse_wsl_distros};
 
     #[test]
     fn parses_default_distro_from_status_output() {
         assert_eq!(
-            parse_default_distro("Default Distribution: Ubuntu\nDefault Version: 2"),
+            parse_default_distro(
+                "Default Distribution: Ubuntu
+Default Version: 2"
+            ),
             Some("Ubuntu".to_string())
         );
     }
 
     #[test]
     fn parses_wsl_distros_and_marks_default() {
-        let distros = parse_wsl_distros("Ubuntu\nDebian\n", Some("Debian"));
+        let distros = parse_wsl_distros(
+            "Ubuntu
+Debian
+",
+            Some("Debian"),
+        );
 
         assert_eq!(distros.len(), 2);
         assert_eq!(distros[0].name, "Ubuntu");
@@ -372,12 +317,11 @@ mod tests {
     fn classifies_invalid_wsl_repo_path() {
         let error = classify_wsl_repo_error(
             "Ubuntu",
-            "/home/me/missing",
-            "fatal: cannot change to '/home/me/missing': No such file or directory",
+            "/missing",
+            "fatal: cannot change to '/missing': No such file or directory",
         );
 
         assert_eq!(error.code, "wsl_repo_invalid");
-        assert!(error.message.contains("/home/me/missing"));
-        assert!(error.message.contains("absolute Linux path"));
+        assert!(error.message.contains("/missing"));
     }
 }

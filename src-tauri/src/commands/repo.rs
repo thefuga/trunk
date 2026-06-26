@@ -1,10 +1,8 @@
 use crate::error::TrunkError;
-use crate::git::{
-    graph, read_model, repository,
-    types::{RepoDescriptor, RepoLocator},
-};
+use crate::git::{backend, repository, types::RepoDescriptor};
 use crate::state::{kill_process, CommitCache, RepoState, ReviewSessionsState, RunningOp};
 use crate::watcher::{self, WatcherState};
+use std::collections::HashMap;
 use tauri::{AppHandle, State};
 
 /// Drop ONLY the in-memory session entry for `repo_id`. The file on disk is left
@@ -24,33 +22,28 @@ pub async fn open_repo(
 ) -> Result<(), String> {
     let mut descriptor = repo.unwrap_or_else(|| RepoDescriptor::local(path.clone()));
     descriptor.id = descriptor.locator.stable_id();
-    let execution_path = match &descriptor.locator {
-        RepoLocator::Local { path } => path.clone(),
-        RepoLocator::Wsl { distro, linux_path } => {
-            let validation =
-                crate::commands::wsl::validate_repo_inner(distro.clone(), linux_path.clone())
-                    .map_err(|e| e.to_json())?;
-            descriptor = validation.descriptor;
-            descriptor.id = descriptor.locator.stable_id();
-            crate::commands::wsl::unc_path(&validation.distro, &validation.repo_root)
-        }
-    };
+    let prepared = backend::resolve_backend(descriptor.clone())
+        .and_then(|backend| backend.prepare_open_repo(descriptor))
+        .map_err(|e| e.to_json())?;
+    descriptor = prepared.descriptor;
+    let execution_path = prepared.execution_path;
+    let use_native_watcher = prepared.use_native_watcher;
     let repo_key = descriptor.id.clone();
-    let is_local_repo = matches!(descriptor.locator, RepoLocator::Local { .. });
     let descriptor_for_graph = descriptor.clone();
     let path_clone = execution_path.clone();
+    let validate_native_path = use_native_watcher;
 
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<crate::git::types::GraphResult, TrunkError> {
-            match descriptor_for_graph.locator {
-                RepoLocator::Local { .. } => {
-                    let path_buf = std::path::PathBuf::from(&path_clone);
-                    repository::validate_and_open(&path_buf)?;
-                    let mut repo = git2::Repository::open(&path_buf)?;
-                    graph::walk_commits(&mut repo, 0, usize::MAX)
-                }
-                RepoLocator::Wsl { .. } => read_model::wsl_commit_graph(&descriptor_for_graph),
+            if validate_native_path {
+                let path_buf = std::path::PathBuf::from(&path_clone);
+                repository::validate_and_open(&path_buf)?;
             }
+            backend::resolve_backend(descriptor_for_graph)?.commit_graph(
+                &path_clone,
+                &HashMap::from([(path_clone.clone(), std::path::PathBuf::from(&path_clone))]),
+                &HashMap::new(),
+            )
         },
     )
     .await
@@ -69,10 +62,10 @@ pub async fn open_repo(
         .unwrap()
         .insert(repo_key.clone(), descriptor.clone());
     cache.0.lock().unwrap().insert(repo_key.clone(), result);
-    if is_local_repo {
+    if use_native_watcher {
         watcher::start_watcher_for_repo(path_buf, repo_key, app, &watcher_state);
     } else {
-        watcher::start_wsl_poller_for_repo(descriptor, app, &watcher_state);
+        backend::start_wsl_poller_for_repo(descriptor, app, &watcher_state);
     }
 
     Ok(())

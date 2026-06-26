@@ -5,7 +5,7 @@ use std::process::{Command, Output, Stdio};
 use tokio::process::Command as TokioCommand;
 
 use crate::error::TrunkError;
-use crate::git::types::{RepoDescriptor, RepoLocator};
+use crate::git::types::RepoDescriptor;
 use crate::shell_env;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,36 +17,26 @@ pub struct GitCommandSpec {
 }
 
 impl GitCommandSpec {
-    pub fn for_repo(repo: &RepoDescriptor, git_args: &[&str]) -> Self {
-        match &repo.locator {
-            RepoLocator::Local { path } => Self {
-                program: "git".to_string(),
-                args: git_args.iter().map(|arg| arg.to_string()).collect(),
-                current_dir: Some(PathBuf::from(path)),
-                env: Vec::new(),
-            },
-            RepoLocator::Wsl { distro, linux_path } => {
-                let mut args = vec![
-                    "-d".to_string(),
-                    distro.clone(),
-                    "--cd".to_string(),
-                    linux_path.clone(),
-                    "git".to_string(),
-                ];
-                args.extend(git_args.iter().map(|arg| arg.to_string()));
-                Self {
-                    program: "wsl.exe".to_string(),
-                    args,
-                    current_dir: None,
-                    env: Vec::new(),
-                }
-            }
-        }
+    pub fn for_repo(repo: &RepoDescriptor, git_args: &[&str]) -> Result<Self, TrunkError> {
+        crate::git::backend::resolve_backend(repo.clone())?.command_spec(repo, git_args)
     }
 
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.push((key.into(), value.into()));
         self
+    }
+
+    pub fn with_interactive_rebase_editor_env(
+        self,
+        repo: &RepoDescriptor,
+        seq_editor_path: &str,
+        editor_script_path: &str,
+    ) -> Result<Self, TrunkError> {
+        let spec = self
+            .with_env("GIT_SEQUENCE_EDITOR", seq_editor_path)
+            .with_env("GIT_EDITOR", editor_script_path);
+        Ok(crate::git::backend::resolve_backend(repo.clone())?
+            .with_interactive_rebase_editor_env(spec, repo))
     }
 
     pub fn command(&self) -> Command {
@@ -83,7 +73,7 @@ pub fn git_output(
     args: &[&str],
     spawn_error_code: &str,
 ) -> Result<Output, TrunkError> {
-    GitCommandSpec::for_repo(repo, args)
+    GitCommandSpec::for_repo(repo, args)?
         .command()
         .output()
         .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))
@@ -104,7 +94,7 @@ pub fn git_output_with_stdin(
     stdin: &[u8],
     spawn_error_code: &str,
 ) -> Result<Output, TrunkError> {
-    let mut command = GitCommandSpec::for_repo(repo, args).command();
+    let mut command = GitCommandSpec::for_repo(repo, args)?.command();
     command.stdin(Stdio::piped());
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = command
@@ -123,10 +113,10 @@ pub fn git_output_with_stdin(
         .map_err(|e| TrunkError::new(spawn_error_code, e.to_string()))
 }
 
-pub fn git_tokio_piped(repo: &RepoDescriptor, args: &[&str]) -> TokioCommand {
-    let mut command = GitCommandSpec::for_repo(repo, args).tokio_command();
+pub fn git_tokio_piped(repo: &RepoDescriptor, args: &[&str]) -> Result<TokioCommand, TrunkError> {
+    let mut command = GitCommandSpec::for_repo(repo, args)?.tokio_command();
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    command
+    Ok(command)
 }
 
 #[cfg(test)]
@@ -137,7 +127,10 @@ mod tests {
         RepoDescriptor::local(path.to_string())
     }
 
+    #[cfg(target_os = "windows")]
     fn wsl_repo() -> RepoDescriptor {
+        use crate::git::types::RepoLocator;
+
         let locator = RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
             linux_path: "/home/me/project".to_string(),
@@ -152,7 +145,7 @@ mod tests {
 
     #[test]
     fn local_command_uses_host_git_and_current_dir() {
-        let spec = GitCommandSpec::for_repo(&local_repo("/repo"), &["fetch", "--all"]);
+        let spec = GitCommandSpec::for_repo(&local_repo("/repo"), &["fetch", "--all"]).unwrap();
 
         assert_eq!(spec.program, "git");
         assert_eq!(spec.args, vec!["fetch", "--all"]);
@@ -160,9 +153,10 @@ mod tests {
         assert_eq!(spec.env, Vec::<(String, String)>::new());
     }
 
+    #[cfg(target_os = "windows")]
     #[test]
     fn wsl_command_routes_through_selected_distro_and_linux_path() {
-        let spec = GitCommandSpec::for_repo(&wsl_repo(), &["status", "--short"]);
+        let spec = GitCommandSpec::for_repo(&wsl_repo(), &["status", "--short"]).unwrap();
 
         assert_eq!(spec.program, "wsl.exe");
         assert_eq!(

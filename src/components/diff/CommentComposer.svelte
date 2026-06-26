@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { buildDiffAnchor } from "../../lib/diff-anchor.js";
 import { safeInvoke, type TrunkError } from "../../lib/invoke.js";
 import { showToast } from "../../lib/toast.svelte.js";
@@ -78,6 +79,13 @@ function scheduleDraftSave() {
 		void persistDraft();
 	}, DRAFT_DEBOUNCE_MS);
 }
+
+onDestroy(() => {
+	if (draftTimer !== null) {
+		clearTimeout(draftTimer);
+		draftTimer = null;
+	}
+});
 
 async function persistDraft() {
 	try {

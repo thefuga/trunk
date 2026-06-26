@@ -1,5 +1,5 @@
 use crate::error::TrunkError;
-use crate::git::{graph, read_model, types::GraphResult, types::RepoDescriptor};
+use crate::git::{backend, types::GraphResult, types::RepoDescriptor};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -38,13 +38,8 @@ pub(crate) fn refresh_graph_from_state(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<GraphResult, TrunkError> {
-    match read_model::backend_from_state(path, state_map, descriptor_map)? {
-        read_model::ReadBackend::Local(path_buf) => {
-            let mut repo = git2::Repository::open(path_buf)?;
-            graph::walk_commits(&mut repo, 0, usize::MAX)
-        }
-        read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
-    }
+    let descriptor = repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.commit_graph(path, state_map, descriptor_map)
 }
 
 pub mod branches;

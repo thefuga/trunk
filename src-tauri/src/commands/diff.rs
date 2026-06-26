@@ -1,11 +1,11 @@
 // Diff commands — Phase 6 implementation
 
 use crate::error::TrunkError;
-use crate::git::backend::{GitBackend, LocalBackend, WslBackend};
+use crate::git::backend::{self, GitBackend};
 use crate::git::syntax;
 use crate::git::types::{
     CommitDetail, DiffHunk, DiffLine, DiffOrigin, DiffRequestOptions, DiffStatus, FileDiff,
-    RepoDescriptor, RepoLocator, WordSpan,
+    RepoDescriptor, WordSpan,
 };
 use crate::state::RepoState;
 use similar::{ChangeTag, TextDiff};
@@ -13,20 +13,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::State;
 
-fn backend_for_descriptor(descriptor: RepoDescriptor) -> Box<dyn GitBackend> {
-    match descriptor.locator {
-        RepoLocator::Local { .. } => Box::new(LocalBackend),
-        RepoLocator::Wsl { .. } => Box::new(WslBackend::new(descriptor)),
-    }
-}
-
 fn backend_for_repo(
     path: &str,
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<Box<dyn GitBackend>, TrunkError> {
     let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    Ok(backend_for_descriptor(descriptor))
+    backend::resolve_backend(descriptor)
 }
 
 fn is_head_unborn(repo: &git2::Repository) -> bool {
