@@ -743,7 +743,7 @@ impl GitBackend for WslBackend {
         _state_map: &HashMap<String, PathBuf>,
     ) -> Result<DirtyCounts, TrunkError> {
         let (staged, unstaged, conflicted) =
-            read_model::status_dirty_counts(read_model::wsl_status(&self.repo)?);
+            crate::git::read_model::status_dirty_counts(read_model::wsl_status(&self.repo)?);
         Ok(DirtyCounts {
             staged,
             unstaged,
