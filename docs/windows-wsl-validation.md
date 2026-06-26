@@ -43,8 +43,12 @@ Trunk build, distro name/version, `git --version`, and repository path.
 - [ ] Confirm both local and WSL repos can remain open in the same app session.
 - [ ] Confirm the WSL repo commit graph, branch labels, tags, and stash labels
   load.
+- [ ] In a history where a topic branch forks from an older main commit, confirm
+  the WSL commit graph renders a fork edge from the parent row to the topic lane.
 - [ ] Modify a tracked file in the WSL repo from the distro shell and confirm
   Trunk refreshes the working tree.
+- [ ] Create multiple untracked files inside a new nested directory and confirm
+  Trunk lists each untracked file instead of only the directory.
 - [ ] View unstaged and staged diffs for the WSL repo.
 - [ ] Stage, unstage, stage selected lines or hunks, and discard a selected
   change.

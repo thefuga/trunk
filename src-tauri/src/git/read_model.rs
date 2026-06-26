@@ -14,6 +14,8 @@ pub(crate) fn short_oid(oid: &str) -> String {
     oid.chars().take(7).collect()
 }
 
+pub(crate) const PORCELAIN_STATUS_ARGS: &[&str] = &["status", "--porcelain=v1", "-z", "-uall"];
+
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) fn parse_ref_type(full_name: &str) -> Option<(RefType, String)> {
     if let Some(short) = full_name.strip_prefix("refs/heads/") {
@@ -55,16 +57,38 @@ pub(crate) fn assign_graph_lanes(commits: &mut [GraphCommit]) -> usize {
         max_columns = max_columns.max(active_lanes.len());
 
         let mut edges = Vec::new();
+        let mut fork_in_columns = Vec::new();
         for (other_column, occupant) in active_lanes.iter().enumerate() {
-            if other_column != column && occupant.is_some() {
-                edges.push(GraphEdge {
-                    from_column: other_column,
-                    to_column: other_column,
-                    edge_type: EdgeType::Straight,
-                    color_index: other_column,
-                    dashed: false,
-                });
+            if other_column == column {
+                continue;
             }
+            if let Some(occupant_oid) = occupant {
+                if occupant_oid == &commit.oid {
+                    fork_in_columns.push(other_column);
+                    edges.push(GraphEdge {
+                        from_column: column,
+                        to_column: other_column,
+                        edge_type: if other_column < column {
+                            EdgeType::ForkLeft
+                        } else {
+                            EdgeType::ForkRight
+                        },
+                        color_index: other_column,
+                        dashed: false,
+                    });
+                } else {
+                    edges.push(GraphEdge {
+                        from_column: other_column,
+                        to_column: other_column,
+                        edge_type: EdgeType::Straight,
+                        color_index: other_column,
+                        dashed: false,
+                    });
+                }
+            }
+        }
+        for fork_column in fork_in_columns {
+            active_lanes[fork_column] = None;
         }
 
         active_lanes[column] = None;
@@ -349,6 +373,34 @@ mod tests {
     }
 
     #[test]
+    fn porcelain_status_args_request_all_untracked_files() {
+        assert_eq!(
+            PORCELAIN_STATUS_ARGS,
+            &["status", "--porcelain=v1", "-z", "-uall"]
+        );
+    }
+
+    #[test]
+    fn parses_porcelain_status_untracked_files_inside_new_directories() {
+        let status =
+            parse_porcelain_status("?? new-dir/a.txt\0?? new-dir/nested/b.txt\0?? root.txt\0");
+        let paths: Vec<&str> = status
+            .unstaged
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec!["new-dir/a.txt", "new-dir/nested/b.txt", "root.txt"]
+        );
+        assert!(status
+            .unstaged
+            .iter()
+            .all(|file| matches!(file.status, FileStatusType::New)));
+    }
+
+    #[test]
     fn parses_unified_diff_hunks_into_file_diff_dtos() {
         let diff = "\
 diff --git a/src/main.rs b/src/main.rs
@@ -413,5 +465,47 @@ index 1111111..2222222 100644
             .edges
             .iter()
             .any(|edge| matches!(edge.edge_type, EdgeType::MergeRight | EdgeType::MergeLeft)));
+    }
+
+    #[test]
+    fn assigns_fork_edge_on_parent_row_for_branch_fork() {
+        let mut commits = vec![
+            graph_commit("head002", &["base001"]),
+            graph_commit("topic01", &["base001"]),
+            graph_commit("base001", &["root001"]),
+            graph_commit("root001", &[]),
+        ];
+
+        let max_columns = assign_graph_lanes(&mut commits);
+        let topic_column = commits[1].column;
+        let base_column = commits[2].column;
+
+        assert!(max_columns >= 2);
+        assert!(
+            topic_column > base_column,
+            "topic should get a side lane, commits: {:?}",
+            commits
+                .iter()
+                .map(|commit| (&commit.oid, commit.column))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            !commits[1]
+                .edges
+                .iter()
+                .any(|edge| matches!(edge.edge_type, EdgeType::ForkLeft | EdgeType::ForkRight)),
+            "fork edges belong on the parent row, not the child row: {:?}",
+            commits[1].edges
+        );
+        assert!(
+            commits[2].edges.iter().any(|edge| {
+                matches!(edge.edge_type, EdgeType::ForkRight)
+                    && edge.from_column == base_column
+                    && edge.to_column == topic_column
+            }),
+            "base should fork out to topic column {}, edges: {:?}",
+            topic_column,
+            commits[2].edges
+        );
     }
 }
