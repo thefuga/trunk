@@ -73,6 +73,17 @@ just check
 just build
 ```
 
+To typecheck the Windows-only WSL backend without installing a WSL distro, use a
+Linux or macOS runner with the Windows MSVC Rust target and `cargo-xwin`
+installed:
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+cargo xwin check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --no-default-features --features wsl
+cargo xwin clippy --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --no-default-features --features wsl --all-targets -- -D warnings
+```
+
 If full Windows validation is not feasible from the current runner, run the
 closest available subset and record the gap in the issue or PR handoff. Linux or
 macOS CI can still validate formatting, TypeScript, Svelte, Rust linting, Rust

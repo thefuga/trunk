@@ -127,7 +127,7 @@ mod tests {
         RepoDescriptor::local(path.to_string())
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "wsl"))]
     fn wsl_repo() -> RepoDescriptor {
         use crate::git::types::RepoLocator;
 
@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(spec.env, Vec::<(String, String)>::new());
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "wsl"))]
     #[test]
     fn wsl_command_routes_through_selected_distro_and_linux_path() {
         let spec = GitCommandSpec::for_repo(&wsl_repo(), &["status", "--short"]).unwrap();

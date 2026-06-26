@@ -13,8 +13,8 @@ use crate::git::types::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[cfg(not(target_os = "windows"))]
-compile_error!("git::backend::wsl must not compile off Windows");
+#[cfg(not(all(target_os = "windows", feature = "wsl")))]
+compile_error!("git::backend::wsl requires Windows and the `wsl` feature");
 
 pub(crate) mod command;
 mod commit;
