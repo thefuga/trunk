@@ -282,7 +282,7 @@ pub async fn start_interactive_rebase(
 mod tests {
     use super::*;
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "wsl"))]
     fn wsl_repo() -> RepoDescriptor {
         let locator = crate::git::types::RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
@@ -296,7 +296,7 @@ mod tests {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "wsl"))]
     #[test]
     fn wsl_interactive_rebase_command_propagates_editor_env() {
         let spec = interactive_rebase_command_spec(

@@ -1,4 +1,4 @@
-use super::{unc_path, WslAvailability, WslDistro, WslRepoValidation};
+use super::{WslAvailability, WslDistro, WslRepoValidation};
 use crate::error::TrunkError;
 use crate::git::types::{RepoDescriptor, RepoLocator};
 
@@ -84,15 +84,6 @@ fn classify_wsl_repo_error(distro: &str, linux_path: &str, stderr: &str) -> Trun
             trimmed.to_string()
         },
     )
-}
-
-pub fn unc_path(distro: &str, linux_path: &str) -> String {
-    let path = linux_path.trim_start_matches('/').replace('/', "\\");
-    if path.is_empty() {
-        format!(r"\\wsl.localhost\{}", distro)
-    } else {
-        format!(r"\\wsl.localhost\{}\{}", distro, path)
-    }
 }
 
 fn wsl_command(args: &[&str]) -> std::io::Result<std::process::Output> {

@@ -99,7 +99,7 @@ pub fn delete_repo_file(repo: &RepoDescriptor, relative_path: &str) -> Result<()
 
 pub enum BackendTempDir {
     Local(PathBuf),
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "wsl"))]
     Wsl(crate::git::backend::wsl::fs::WslTempDir),
 }
 
@@ -112,7 +112,7 @@ impl BackendTempDir {
     pub fn join_display(&self, child: &str) -> String {
         match self {
             Self::Local(path) => path.join(child).display().to_string(),
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "wsl"))]
             Self::Wsl(temp_dir) => temp_dir.join_display(child),
         }
     }
@@ -120,7 +120,7 @@ impl BackendTempDir {
     pub fn local_path(&self) -> Option<&Path> {
         match self {
             Self::Local(path) => Some(path),
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "wsl"))]
             Self::Wsl(_) => None,
         }
     }
@@ -146,7 +146,7 @@ impl BackendTempDir {
                 }
                 Ok(())
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "wsl"))]
             Self::Wsl(temp_dir) => temp_dir.write_file(child, content, executable),
         }
     }
@@ -155,7 +155,7 @@ impl BackendTempDir {
         match self {
             Self::Local(path) => std::fs::create_dir_all(path.join(child))
                 .map_err(|e| TrunkError::new("io_error", e.to_string())),
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "wsl"))]
             Self::Wsl(temp_dir) => temp_dir.create_dir_all(child),
         }
     }
@@ -165,7 +165,7 @@ impl BackendTempDir {
             Self::Local(path) => {
                 let _ = std::fs::remove_dir_all(path);
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "wsl"))]
             Self::Wsl(temp_dir) => temp_dir.cleanup(),
         }
     }

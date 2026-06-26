@@ -44,27 +44,6 @@ pub(crate) fn git_stdout(
     }
 }
 
-#[cfg(target_os = "windows")]
-fn refresh_graph_for_backend(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
-) -> Result<GraphResult, TrunkError> {
-    crate::commands::refresh_graph_from_state(path, state_map, descriptor_map)
-}
-
-#[cfg(target_os = "windows")]
-fn refresh_cache_for_backend(
-    path: &str,
-    state_map: &HashMap<String, PathBuf>,
-    descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
-    cache_map: &mut HashMap<String, GraphResult>,
-) -> Result<(), TrunkError> {
-    let graph_result = refresh_graph_for_backend(path, state_map, descriptor_map)?;
-    cache_map.insert(path.to_owned(), graph_result);
-    Ok(())
-}
-
 /// Inner implementation of list_refs — separated for testability without Tauri state.
 pub fn list_refs_inner(
     path: &str,

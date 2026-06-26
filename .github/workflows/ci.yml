@@ -71,6 +71,37 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: just clippy
 
+  cargo-wsl-windows:
+    name: WSL Windows Typecheck
+    needs: [biome, cargo-fmt, svelte-check]
+    runs-on: ubuntu-latest
+    env:
+      XWIN_ARCH: x86_64
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Install cross toolchain dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            lld \
+            llvm \
+            ninja-build
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - run: rustup target add x86_64-pc-windows-msvc
+      - run: rustup component add clippy
+      - uses: taiki-e/install-action@50570a4fd0cb7e583e6a512c02bffb9ade28d868 # v2
+        with:
+          tool: cargo-xwin
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: "src-tauri -> target"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check WSL backend for Windows target
+        run: cargo xwin check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --no-default-features --features wsl
+      - name: Clippy WSL backend for Windows target
+        run: cargo xwin clippy --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --no-default-features --features wsl --all-targets -- -D warnings
+
   cargo-test:
     name: Rust Tests
     needs: [biome, cargo-fmt, svelte-check]

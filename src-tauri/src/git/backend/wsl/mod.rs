@@ -13,8 +13,8 @@ use crate::git::types::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[cfg(not(target_os = "windows"))]
-compile_error!("git::backend::wsl must not compile off Windows");
+#[cfg(not(all(target_os = "windows", feature = "wsl")))]
+compile_error!("git::backend::wsl requires Windows and the `wsl` feature");
 
 pub(crate) mod command;
 mod commit;
@@ -743,7 +743,7 @@ impl GitBackend for WslBackend {
         _state_map: &HashMap<String, PathBuf>,
     ) -> Result<DirtyCounts, TrunkError> {
         let (staged, unstaged, conflicted) =
-            read_model::status_dirty_counts(read_model::wsl_status(&self.repo)?);
+            crate::git::read_model::status_dirty_counts(read_model::wsl_status(&self.repo)?);
         Ok(DirtyCounts {
             staged,
             unstaged,

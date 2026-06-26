@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 mod local;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "wsl"))]
 pub(crate) mod wsl;
 
 pub use local::LocalBackend;
@@ -38,7 +38,7 @@ pub fn ensure_backend_supported(descriptor: &RepoDescriptor) -> Result<(), Trunk
     resolve_backend(descriptor.clone()).map(|_| ())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "wsl"))]
 pub fn start_wsl_poller_for_repo<R: tauri::Runtime>(
     repo: RepoDescriptor,
     app: tauri::AppHandle<R>,
@@ -47,7 +47,7 @@ pub fn start_wsl_poller_for_repo<R: tauri::Runtime>(
     wsl::poller::start_for_repo(repo, app, state);
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(all(target_os = "windows", feature = "wsl")))]
 pub fn start_wsl_poller_for_repo<R: tauri::Runtime>(
     _repo: RepoDescriptor,
     _app: tauri::AppHandle<R>,
@@ -62,12 +62,12 @@ pub fn resolve_backend(descriptor: RepoDescriptor) -> Result<Box<dyn GitBackend>
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "wsl"))]
 fn resolve_wsl_backend(descriptor: RepoDescriptor) -> Result<Box<dyn GitBackend>, TrunkError> {
     Ok(Box::new(wsl::WslBackend::new(descriptor)))
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(all(target_os = "windows", feature = "wsl")))]
 fn resolve_wsl_backend(_descriptor: RepoDescriptor) -> Result<Box<dyn GitBackend>, TrunkError> {
     Err(wsl_unsupported_platform())
 }
@@ -595,7 +595,7 @@ pub trait GitBackend: Send + Sync {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests {
     use super::*;
 
@@ -612,7 +612,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn resolver_rejects_wsl_descriptors_off_windows() {
         let error = match resolve_backend(wsl_descriptor()) {
