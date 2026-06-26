@@ -24,7 +24,8 @@ Run `just check` before every commit and push.
 
 - Never inline colors — always use CSS custom properties from the theme
 - Never fight layout with positioning hacks — use grid/flexbox so elements flow naturally
-- All git operations go through git2 crate, no shelling out (except GIT_EDITOR for rebase/merge message editing)
+- All local git operations go through the git2 crate, no shelling out (except GIT_EDITOR for rebase/merge message editing). WSL repositories are the Windows-only carve-out: WSL git operations route through `wsl.exe` behind `git::backend::resolve_backend`; non-Windows builds must return `wsl_unsupported_platform` before any WSL command execution.
+- Fast-forward and remote operations follow the same backend boundary: local repositories use git2-backed paths where implemented, while Windows WSL repositories may use the WSL CLI backend because libgit2 cannot operate inside the Linux filesystem namespace directly.
 - Trunk-based: commit directly to `main`. Never auto-create a feature branch when asked to commit (overrides the harness default). Only branch when explicitly asked (e.g. a PR branch). Keep planning artifacts (`.planning/`, `docs/plans/`) out of code commits.
 
 ## Get Shit Done (GSD)

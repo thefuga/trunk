@@ -1,5 +1,7 @@
 use crate::error::TrunkError;
-use crate::git::{command_runner, graph, read_model, types::HeadCommitMessage};
+#[cfg(target_os = "windows")]
+use crate::git::command_runner;
+use crate::git::{backend, types::HeadCommitMessage};
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,13 +12,7 @@ fn refresh_commit_cache(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
 ) -> Result<crate::git::types::GraphResult, TrunkError> {
-    match read_model::backend_from_state(path, state_map, descriptor_map)? {
-        read_model::ReadBackend::Local(path_buf) => {
-            let mut repo = git2::Repository::open(path_buf).map_err(TrunkError::from)?;
-            graph::walk_commits(&mut repo, 0, usize::MAX)
-        }
-        read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
-    }
+    crate::commands::refresh_graph_from_state(path, state_map, descriptor_map)
 }
 
 fn build_message(subject: &str, body: Option<&str>) -> String {
@@ -87,6 +83,7 @@ pub fn get_head_commit_message_inner(
     })
 }
 
+#[cfg(target_os = "windows")]
 fn git_write(
     repo: &crate::git::types::RepoDescriptor,
     args: &[String],
@@ -107,7 +104,8 @@ fn git_write(
     ))
 }
 
-fn wsl_create_commit_inner(
+#[cfg(target_os = "windows")]
+pub(crate) fn wsl_create_commit_inner(
     repo: &crate::git::types::RepoDescriptor,
     subject: &str,
     body: Option<&str>,
@@ -120,7 +118,8 @@ fn wsl_create_commit_inner(
     git_write(repo, &args, "commit_error")
 }
 
-fn wsl_amend_commit_inner(
+#[cfg(target_os = "windows")]
+pub(crate) fn wsl_amend_commit_inner(
     repo: &crate::git::types::RepoDescriptor,
     subject: &str,
     body: Option<&str>,
@@ -138,7 +137,8 @@ fn wsl_amend_commit_inner(
     git_write(repo, &args, "commit_error")
 }
 
-fn wsl_get_head_commit_message_inner(
+#[cfg(target_os = "windows")]
+pub(crate) fn wsl_get_head_commit_message_inner(
     repo: &crate::git::types::RepoDescriptor,
 ) -> Result<HeadCommitMessage, TrunkError> {
     let output = command_runner::git_output(
@@ -182,14 +182,14 @@ pub async fn create_commit(
     let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                create_commit_inner(&path_clone, &subject, body.as_deref(), &state_map)?;
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_create_commit_inner(&repo, &subject, body.as_deref())?;
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.create_commit(
+            &path_clone,
+            &subject,
+            body.as_deref(),
+            &state_map,
+        )?;
         refresh_commit_cache(&path_clone, &state_map, &descriptor_map)
     })
     .await
@@ -214,14 +214,14 @@ pub async fn amend_commit(
     let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path_clone, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                amend_commit_inner(&path_clone, &subject, body.as_deref(), &state_map)?;
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_amend_commit_inner(&repo, &subject, body.as_deref())?;
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.amend_commit(
+            &path_clone,
+            &subject,
+            body.as_deref(),
+            &state_map,
+        )?;
         refresh_commit_cache(&path_clone, &state_map, &descriptor_map)
     })
     .await
@@ -241,10 +241,9 @@ pub async fn get_head_commit_message(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => get_head_commit_message_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => wsl_get_head_commit_message_inner(&repo),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.head_commit_message(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

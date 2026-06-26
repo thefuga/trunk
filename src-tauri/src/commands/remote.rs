@@ -7,7 +7,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::error::TrunkError;
 use crate::git::{
-    command_runner, graph, read_model,
+    backend, command_runner,
     types::{GraphResult, OperationType},
 };
 use crate::state::{kill_process, CommitCache, RepoState, RunningOp};
@@ -127,14 +127,16 @@ async fn refresh_graph(
     let state_map = state_map.clone();
     let descriptor_map = descriptor_map.clone();
     let graph_result: GraphResult = tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path_for_refresh, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(path_buf) => {
-                let mut repo = git2::Repository::open(&path_buf)
-                    .map_err(|e| TrunkError::new("git_error", e.to_string()))?;
-                graph::walk_commits(&mut repo, 0, usize::MAX)
-            }
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_commit_graph(&repo),
-        }
+        let descriptor = crate::commands::repo_descriptor_from_state(
+            &path_for_refresh,
+            &state_map,
+            &descriptor_map,
+        )?;
+        backend::resolve_backend(descriptor)?.commit_graph(
+            &path_for_refresh,
+            &state_map,
+            &descriptor_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -193,30 +195,24 @@ pub async fn git_fetch_background(
         return Ok(());
     };
 
-    let repo_for_state = repo.clone();
     let path_for_state = path.clone();
     let state_map_for_state = state_map.clone();
     let descriptor_map_for_state = descriptor_map.clone();
-    let is_clean =
-        tauri::async_runtime::spawn_blocking(move || {
-            match read_model::backend_from_state(
-                &path_for_state,
-                &state_map_for_state,
-                &descriptor_map_for_state,
-            ) {
-                Ok(read_model::ReadBackend::Local(path_buf)) => git2::Repository::open(&path_buf)
-                    .map(|r| r.state() == git2::RepositoryState::Clean)
-                    .unwrap_or(false),
-                Ok(read_model::ReadBackend::Wsl(_)) => {
-                    read_model::wsl_operation_state(&repo_for_state)
-                        .map(|info| matches!(info.op_type, OperationType::None))
-                        .unwrap_or(false)
-                }
-                Err(_) => false,
-            }
-        })
-        .await
-        .unwrap_or(false);
+    let is_clean = tauri::async_runtime::spawn_blocking(move || {
+        let Ok(descriptor) = crate::commands::repo_descriptor_from_state(
+            &path_for_state,
+            &state_map_for_state,
+            &descriptor_map_for_state,
+        ) else {
+            return false;
+        };
+        backend::resolve_backend(descriptor)
+            .and_then(|backend| backend.operation_state(&path_for_state, &state_map_for_state))
+            .map(|info| matches!(info.op_type, OperationType::None))
+            .unwrap_or(false)
+    })
+    .await
+    .unwrap_or(false);
     if !is_clean {
         return Ok(());
     }

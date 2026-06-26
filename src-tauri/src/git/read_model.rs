@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(any(target_os = "windows", test)),
+    allow(dead_code, unused_imports)
+)]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -29,7 +34,15 @@ pub fn backend_from_state(
             })?;
             Ok(ReadBackend::Local(path.clone()))
         }
-        RepoLocator::Wsl { .. } => Ok(ReadBackend::Wsl(descriptor)),
+        RepoLocator::Wsl { .. } => {
+            crate::git::backend::ensure_backend_supported(&descriptor)?;
+            #[cfg(not(any(target_os = "windows", test)))]
+            {
+                Err(crate::git::backend::wsl_unsupported_platform())
+            }
+            #[cfg(any(target_os = "windows", test))]
+            Ok(ReadBackend::Wsl(descriptor))
+        }
     }
 }
 
@@ -75,6 +88,7 @@ fn parse_ref_type(full_name: &str) -> Option<(RefType, String)> {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn wsl_refs_by_oid(repo: &RepoDescriptor) -> Result<HashMap<String, Vec<RefLabel>>, TrunkError> {
     let head_name = git_output(repo, &["symbolic-ref", "-q", "HEAD"]).unwrap_or_default();
     let head_name = head_name.trim();
@@ -208,6 +222,7 @@ fn assign_graph_lanes(commits: &mut [GraphCommit]) -> usize {
     max_columns.max(1)
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_commit_graph(repo: &RepoDescriptor) -> Result<GraphResult, TrunkError> {
     let refs_by_oid = wsl_refs_by_oid(repo)?;
     let head_oid = git_output(repo, &["rev-parse", "--verify", "HEAD"])
@@ -296,6 +311,7 @@ fn parse_status_type(code: char) -> Option<FileStatusType> {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_status(repo: &RepoDescriptor) -> Result<WorkingTreeStatus, TrunkError> {
     let output = git_output(repo, &["status", "--porcelain=v1", "-z"])?;
     Ok(parse_porcelain_status(&output))
@@ -508,6 +524,7 @@ fn diff_args(base: &[&str], file_path: Option<&str>, options: &DiffRequestOption
     args
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_diff_unstaged(
     repo: &RepoDescriptor,
     file_path: &str,
@@ -543,6 +560,7 @@ pub fn wsl_diff_unstaged(
     Ok(diffs)
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_diff_staged(
     repo: &RepoDescriptor,
     file_path: &str,
@@ -552,6 +570,7 @@ pub fn wsl_diff_staged(
     Ok(parse_unified_diff(&git_output_owned(repo, &args)?))
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_diff_commit(
     repo: &RepoDescriptor,
     oid: &str,
@@ -563,6 +582,7 @@ pub fn wsl_diff_commit(
     Ok(parse_unified_diff(&git_output_owned(repo, &args)?))
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_list_commit_files(
     repo: &RepoDescriptor,
     oid: &str,
@@ -604,6 +624,7 @@ pub fn wsl_list_commit_files(
     Ok(files)
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_commit_detail(repo: &RepoDescriptor, oid: &str) -> Result<CommitDetail, TrunkError> {
     let output = git_output(
         repo,
@@ -649,6 +670,7 @@ pub fn wsl_commit_detail(repo: &RepoDescriptor, oid: &str) -> Result<CommitDetai
     })
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_refs(repo: &RepoDescriptor) -> Result<RefsResponse, TrunkError> {
     let head = git_output(repo, &["branch", "--show-current"]).unwrap_or_default();
     let head = head.trim();
@@ -777,6 +799,7 @@ fn git_verify_ref(repo: &RepoDescriptor, name: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn read_wsl_git_file(repo: &RepoDescriptor, path: &str) -> Option<String> {
     backend_fs::read_git_file(repo, path)
         .ok()
@@ -784,6 +807,7 @@ fn read_wsl_git_file(repo: &RepoDescriptor, path: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn wsl_rebase_dir(repo: &RepoDescriptor) -> Option<&'static str> {
     if read_wsl_git_file(repo, "rebase-merge/head-name").is_some()
         || read_wsl_git_file(repo, "rebase-merge/msgnum").is_some()
@@ -798,6 +822,7 @@ fn wsl_rebase_dir(repo: &RepoDescriptor) -> Option<&'static str> {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn resolve_wsl_oid_to_branch(repo: &RepoDescriptor, oid: &str) -> Option<String> {
     let refs = git_output(
         repo,
@@ -819,6 +844,7 @@ fn resolve_wsl_oid_to_branch(repo: &RepoDescriptor, oid: &str) -> Option<String>
     Some(short_oid(oid))
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn wsl_operation_state(repo: &RepoDescriptor) -> Result<OperationInfo, TrunkError> {
     let files = git_output(repo, &["ls-files", "-u"]).unwrap_or_default();
     let has_conflicts = !files.trim().is_empty();

@@ -1,5 +1,7 @@
 use crate::error::TrunkError;
-use crate::git::types::{RepoDescriptor, RepoLocator};
+use crate::git::types::RepoDescriptor;
+#[cfg(target_os = "windows")]
+use crate::git::types::RepoLocator;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -23,6 +25,8 @@ pub struct WslRepoValidation {
     pub descriptor: RepoDescriptor,
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(any(target_os = "windows", test))]
 fn clean_wsl_output(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes)
         .replace(['\0', '\r'], "")
@@ -30,6 +34,7 @@ fn clean_wsl_output(bytes: &[u8]) -> String {
         .to_string()
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn parse_default_distro(status_text: &str) -> Option<String> {
     status_text.lines().find_map(|line| {
         line.strip_prefix("Default Distribution:")
@@ -39,6 +44,7 @@ fn parse_default_distro(status_text: &str) -> Option<String> {
     })
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn parse_wsl_distros(list_text: &str, default_name: Option<&str>) -> Vec<WslDistro> {
     list_text
         .lines()
@@ -51,6 +57,7 @@ fn parse_wsl_distros(list_text: &str, default_name: Option<&str>) -> Vec<WslDist
         .collect()
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn classify_wsl_repo_error(distro: &str, linux_path: &str, stderr: &str) -> TrunkError {
     let trimmed = stderr.trim();
     let lower = trimmed.to_lowercase();
@@ -121,14 +128,6 @@ fn wsl_command(args: &[&str]) -> std::io::Result<std::process::Output> {
     std::process::Command::new("wsl.exe").args(args).output()
 }
 
-#[cfg(not(target_os = "windows"))]
-fn wsl_command(_args: &[&str]) -> std::io::Result<std::process::Output> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "WSL is only available on Windows",
-    ))
-}
-
 pub fn availability_inner() -> WslAvailability {
     #[cfg(not(target_os = "windows"))]
     {
@@ -161,10 +160,12 @@ pub fn availability_inner() -> WslAvailability {
     }
 }
 
+#[cfg(target_os = "windows")]
 trait IfEmpty {
     fn if_empty(self, fallback: &str) -> String;
 }
 
+#[cfg(target_os = "windows")]
 impl IfEmpty for String {
     fn if_empty(self, fallback: &str) -> String {
         if self.trim().is_empty() {
@@ -175,6 +176,7 @@ impl IfEmpty for String {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn ensure_available() -> Result<(), TrunkError> {
     let availability = availability_inner();
     if availability.available {
@@ -189,6 +191,7 @@ fn ensure_available() -> Result<(), TrunkError> {
     }
 }
 
+#[cfg(target_os = "windows")]
 pub fn list_distros_inner() -> Result<Vec<WslDistro>, TrunkError> {
     ensure_available()?;
     let output = wsl_command(&["--list", "--quiet"]).map_err(|e| {
@@ -215,6 +218,7 @@ pub fn list_distros_inner() -> Result<Vec<WslDistro>, TrunkError> {
     Ok(distros)
 }
 
+#[cfg(target_os = "windows")]
 pub fn validate_repo_inner(
     distro: String,
     linux_path: String,
@@ -285,6 +289,19 @@ pub fn validate_repo_inner(
         repo_root,
         descriptor,
     })
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn list_distros_inner() -> Result<Vec<WslDistro>, TrunkError> {
+    Err(crate::git::backend::wsl_unsupported_platform())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn validate_repo_inner(
+    _distro: String,
+    _linux_path: String,
+) -> Result<WslRepoValidation, TrunkError> {
+    Err(crate::git::backend::wsl_unsupported_platform())
 }
 
 #[tauri::command]

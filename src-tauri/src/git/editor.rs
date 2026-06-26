@@ -1,5 +1,8 @@
 //! Single-shot temp-editor helper for `GIT_EDITOR` plumbing.
 //!
+//! The `prepare`/`EditorHandle` API is intentionally kept but currently unused;
+//! active merge/rebase flows still use `shell_single_quote` from this module.
+//!
 //! Builds a shell script + message file pair under `std::env::temp_dir()` so
 //! Phase 76 callers (`merge --continue`, `merge <branch>`, `revert <oid>`) can
 //! hand git a pre-filled commit message via `GIT_EDITOR=<script>`. The

@@ -1971,7 +1971,7 @@ mod tests {
 
     #[test]
     fn read_snapshots_returns_nulls_when_no_session() {
-        let data_dir = TempDir::new().unwrap();
+        let _data_dir = TempDir::new().unwrap();
         let absent = "local:/absent".to_string();
         let sessions: Mutex<HashMap<String, ReviewSession>> = Mutex::new(HashMap::new());
 

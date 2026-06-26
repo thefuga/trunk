@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
-use crate::git::read_model;
-use crate::git::types::{MergeSides, RepoDescriptor, RepoLocator};
+use crate::git::backend;
+use crate::git::types::{MergeSides, RepoDescriptor};
 use crate::state::{CommitCache, RepoState};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -64,37 +64,8 @@ fn get_merge_sides_inner_with_descriptors(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<MergeSides, TrunkError> {
-    match read_model::backend_from_state(path, state_map, descriptor_map)? {
-        read_model::ReadBackend::Local(_) => get_merge_sides_inner(path, file_path, state_map),
-        read_model::ReadBackend::Wsl(repo) => {
-            let read_stage = |stage: &str| -> Result<Option<String>, TrunkError> {
-                let spec = format!(":{stage}:{file_path}");
-                let output = crate::git::command_runner::git_output(
-                    &repo,
-                    &["show", &spec],
-                    "conflict_error",
-                )?;
-                if output.status.success() {
-                    Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
-                } else {
-                    Ok(None)
-                }
-            };
-            let ours = read_stage("2")?;
-            let theirs = read_stage("3")?;
-            if ours.is_none() && theirs.is_none() {
-                return Err(TrunkError::new(
-                    "not_conflicted",
-                    format!("File not in conflict: {}", file_path),
-                ));
-            }
-            Ok(MergeSides {
-                base: read_stage("1")?.unwrap_or_default(),
-                ours: ours.unwrap_or_default(),
-                theirs: theirs.unwrap_or_default(),
-            })
-        }
-    }
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.merge_sides(path, file_path, state_map)
 }
 
 pub fn save_merge_result_inner(
@@ -115,20 +86,16 @@ fn save_merge_result_inner_with_descriptors(
 ) -> Result<(), TrunkError> {
     let repo_descriptor =
         crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
-    if matches!(repo_descriptor.locator, RepoLocator::Wsl { .. }) {
-        crate::git::backend_fs::write_repo_file(&repo_descriptor, file_path, content)?;
-        let output = crate::git::command_runner::git_output(
-            &repo_descriptor,
-            &["add", "--", file_path],
-            "stage_error",
-        )?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(TrunkError::new("stage_error", stderr.to_string()));
-        }
-        return Ok(());
-    }
+    backend::resolve_backend(repo_descriptor)?
+        .save_merge_result(path, file_path, content, state_map)
+}
 
+pub fn save_merge_result_local_inner(
+    path: &str,
+    file_path: &str,
+    content: &str,
+    state_map: &HashMap<String, PathBuf>,
+) -> Result<(), TrunkError> {
     let repo = crate::commands::open_repo_from_state(path, state_map)?;
     let repo_path = repo
         .workdir()

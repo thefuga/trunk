@@ -25,20 +25,39 @@ impl GitCommandSpec {
                 current_dir: Some(PathBuf::from(path)),
                 env: Vec::new(),
             },
-            RepoLocator::Wsl { distro, linux_path } => {
-                let mut args = vec![
-                    "-d".to_string(),
-                    distro.clone(),
-                    "--cd".to_string(),
-                    linux_path.clone(),
-                    "git".to_string(),
-                ];
-                args.extend(git_args.iter().map(|arg| arg.to_string()));
-                Self {
-                    program: "wsl.exe".to_string(),
-                    args,
-                    current_dir: None,
-                    env: Vec::new(),
+            RepoLocator::Wsl {
+                #[cfg(target_os = "windows")]
+                distro,
+                #[cfg(target_os = "windows")]
+                linux_path,
+                ..
+            } => {
+                #[cfg(not(target_os = "windows"))]
+                {
+                    Self {
+                        program: "wsl_unsupported_platform".to_string(),
+                        args: git_args.iter().map(|arg| arg.to_string()).collect(),
+                        current_dir: None,
+                        env: Vec::new(),
+                    }
+                }
+
+                #[cfg(target_os = "windows")]
+                {
+                    let mut args = vec![
+                        "-d".to_string(),
+                        distro.clone(),
+                        "--cd".to_string(),
+                        linux_path.clone(),
+                        "git".to_string(),
+                    ];
+                    args.extend(git_args.iter().map(|arg| arg.to_string()));
+                    Self {
+                        program: "wsl.exe".to_string(),
+                        args,
+                        current_dir: None,
+                        env: Vec::new(),
+                    }
                 }
             }
         }
@@ -47,6 +66,22 @@ impl GitCommandSpec {
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.push((key.into(), value.into()));
         self
+    }
+
+    pub fn with_interactive_rebase_editor_env(
+        self,
+        repo: &RepoDescriptor,
+        seq_editor_path: &str,
+        editor_script_path: &str,
+    ) -> Self {
+        let spec = self
+            .with_env("GIT_SEQUENCE_EDITOR", seq_editor_path)
+            .with_env("GIT_EDITOR", editor_script_path);
+        match repo.locator {
+            #[cfg(target_os = "windows")]
+            RepoLocator::Wsl { .. } => spec.with_env("WSLENV", "GIT_SEQUENCE_EDITOR:GIT_EDITOR"),
+            _ => spec,
+        }
     }
 
     pub fn command(&self) -> Command {
@@ -83,6 +118,7 @@ pub fn git_output(
     args: &[&str],
     spawn_error_code: &str,
 ) -> Result<Output, TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     GitCommandSpec::for_repo(repo, args)
         .command()
         .output()
@@ -104,6 +140,7 @@ pub fn git_output_with_stdin(
     stdin: &[u8],
     spawn_error_code: &str,
 ) -> Result<Output, TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     let mut command = GitCommandSpec::for_repo(repo, args).command();
     command.stdin(Stdio::piped());
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -124,6 +161,7 @@ pub fn git_output_with_stdin(
 }
 
 pub fn git_tokio_piped(repo: &RepoDescriptor, args: &[&str]) -> TokioCommand {
+    let _ = crate::git::backend::ensure_backend_supported(repo);
     let mut command = GitCommandSpec::for_repo(repo, args).tokio_command();
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     command
@@ -137,6 +175,7 @@ mod tests {
         RepoDescriptor::local(path.to_string())
     }
 
+    #[cfg(target_os = "windows")]
     fn wsl_repo() -> RepoDescriptor {
         let locator = RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
@@ -160,6 +199,7 @@ mod tests {
         assert_eq!(spec.env, Vec::<(String, String)>::new());
     }
 
+    #[cfg(target_os = "windows")]
     #[test]
     fn wsl_command_routes_through_selected_distro_and_linux_path() {
         let spec = GitCommandSpec::for_repo(&wsl_repo(), &["status", "--short"]);

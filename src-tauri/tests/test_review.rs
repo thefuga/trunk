@@ -9,7 +9,7 @@ use trunk_lib::commands::review::{
     start_review_session_inner, SessionState,
 };
 use trunk_lib::git::review_store::{load_session, save_session, LoadOutcome};
-use trunk_lib::git::types::ReviewSession;
+use trunk_lib::git::types::{RepoDescriptor, ReviewSession};
 
 fn empty_session() -> ReviewSession {
     ReviewSession {
@@ -33,14 +33,18 @@ fn the_session_file(data_dir: &Path) -> PathBuf {
     entries.into_iter().next().unwrap()
 }
 
+fn repo_id(ctx: &TestContext) -> String {
+    RepoDescriptor::local(ctx.repo_path().to_string_lossy().into_owned()).id
+}
+
 #[test]
 fn session_round_trips() {
     let ctx = TestContext::new_empty();
-    let canonical = ctx.repo_path().canonicalize().unwrap();
+    let repo_id = repo_id(&ctx);
     let session = empty_session();
 
-    save_session(ctx.data_dir(), &canonical, &session).unwrap();
-    let outcome = load_session(ctx.data_dir(), &canonical).unwrap();
+    save_session(ctx.data_dir(), &repo_id, &session).unwrap();
+    let outcome = load_session(ctx.data_dir(), &repo_id).unwrap();
 
     let LoadOutcome::Loaded(loaded) = outcome else {
         panic!("expected Loaded, got a different outcome");
@@ -54,14 +58,14 @@ fn session_round_trips() {
 #[test]
 fn first_write_creates_dir() {
     let ctx = TestContext::new_empty();
-    let canonical = ctx.repo_path().canonicalize().unwrap();
+    let repo_id = repo_id(&ctx);
 
     assert!(
         !ctx.data_dir().join("sessions").exists(),
         "sessions dir must not exist before the first save",
     );
 
-    save_session(ctx.data_dir(), &canonical, &empty_session()).unwrap();
+    save_session(ctx.data_dir(), &repo_id, &empty_session()).unwrap();
 
     assert!(
         ctx.data_dir().join("sessions").is_dir(),
@@ -72,9 +76,9 @@ fn first_write_creates_dir() {
 #[test]
 fn atomic_write_clean() {
     let ctx = TestContext::new_empty();
-    let canonical = ctx.repo_path().canonicalize().unwrap();
+    let repo_id = repo_id(&ctx);
 
-    save_session(ctx.data_dir(), &canonical, &empty_session()).unwrap();
+    save_session(ctx.data_dir(), &repo_id, &empty_session()).unwrap();
 
     let session_file = the_session_file(ctx.data_dir());
     let raw = fs::read_to_string(&session_file).unwrap();
@@ -92,13 +96,13 @@ fn atomic_write_clean() {
 #[test]
 fn corrupt_quarantined() {
     let ctx = TestContext::new_empty();
-    let canonical = ctx.repo_path().canonicalize().unwrap();
+    let repo_id = repo_id(&ctx);
 
-    save_session(ctx.data_dir(), &canonical, &empty_session()).unwrap();
+    save_session(ctx.data_dir(), &repo_id, &empty_session()).unwrap();
     let session_file = the_session_file(ctx.data_dir());
     fs::write(&session_file, b"}}}not valid json{{{").unwrap();
 
-    let outcome = load_session(ctx.data_dir(), &canonical).unwrap();
+    let outcome = load_session(ctx.data_dir(), &repo_id).unwrap();
 
     assert!(matches!(outcome, LoadOutcome::RecoveredCorrupt));
     let corrupt_sidecar = session_file.with_extension("json.corrupt");
@@ -115,9 +119,9 @@ fn corrupt_quarantined() {
 #[test]
 fn newer_version_refused() {
     let ctx = TestContext::new_empty();
-    let canonical = ctx.repo_path().canonicalize().unwrap();
+    let repo_id = repo_id(&ctx);
 
-    save_session(ctx.data_dir(), &canonical, &empty_session()).unwrap();
+    save_session(ctx.data_dir(), &repo_id, &empty_session()).unwrap();
     let session_file = the_session_file(ctx.data_dir());
     fs::write(
         &session_file,
@@ -126,7 +130,7 @@ fn newer_version_refused() {
     .unwrap();
     let before = fs::read(&session_file).unwrap();
 
-    let outcome = load_session(ctx.data_dir(), &canonical).unwrap();
+    let outcome = load_session(ctx.data_dir(), &repo_id).unwrap();
 
     assert!(matches!(outcome, LoadOutcome::RefusedNewer));
     let after = fs::read(&session_file).unwrap();
@@ -146,15 +150,20 @@ fn newer_version_refused() {
 fn start_creates_session() {
     let ctx = TestContext::new_empty();
 
-    let (canonical, session) =
-        start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    let (repo_id, session) = start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
     assert_eq!(session.schema_version, 2);
     assert!(session.commits.is_empty());
     assert!(session.comments.is_empty());
     assert!(session.draft_comment.is_none());
     assert!(
-        load_matches_loaded(ctx.data_dir(), &canonical),
+        load_matches_loaded(ctx.data_dir(), &repo_id),
         "the session file should now exist on disk after start"
     );
 }
@@ -164,7 +173,8 @@ fn start_rejects_closed_repo() {
     let ctx = TestContext::new_empty();
     let empty: HashMap<String, PathBuf> = HashMap::new();
 
-    let err = start_review_session_inner(ctx.data_dir(), ctx.path(), &empty).unwrap_err();
+    let err = start_review_session_inner(ctx.data_dir(), ctx.path(), &empty, ctx.descriptor_map())
+        .unwrap_err();
 
     assert_eq!(err.code, "not_open");
 }
@@ -172,9 +182,21 @@ fn start_rejects_closed_repo() {
 #[test]
 fn start_rejects_when_session_exists() {
     let ctx = TestContext::new_empty();
-    start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
-    let err = start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap_err();
+    let err = start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap_err();
 
     assert_eq!(err.code, "session_exists");
 }
@@ -182,11 +204,22 @@ fn start_rejects_when_session_exists() {
 #[test]
 fn resume_after_restart() {
     let ctx = TestContext::new_empty();
-    start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
     // A fresh process has no in-memory state — resume loads from disk.
-    let (_canonical, outcome) =
-        resume_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    let (_repo_id, outcome) = resume_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
     assert!(
         matches!(outcome, LoadOutcome::Loaded(_)),
@@ -200,7 +233,13 @@ fn symlink_resumes_same_session() {
     use std::os::unix::fs::symlink;
 
     let ctx = TestContext::new_empty();
-    start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
     // Create a symlink pointing at the real repo dir and open via that path.
     let link_dir = tempfile::tempdir().unwrap();
@@ -209,14 +248,20 @@ fn symlink_resumes_same_session() {
     let link_str = link_path.display().to_string();
     let mut alias_map: HashMap<String, PathBuf> = HashMap::new();
     alias_map.insert(link_str.clone(), link_path.clone());
+    let mut descriptor_map = HashMap::new();
+    descriptor_map.insert(
+        link_str.clone(),
+        RepoDescriptor::local(ctx.repo_path().to_string_lossy().into_owned()),
+    );
 
-    let (alias_canonical, outcome) =
-        resume_review_session_inner(ctx.data_dir(), &link_str, &alias_map).unwrap();
+    let (alias_repo_id, outcome) =
+        resume_review_session_inner(ctx.data_dir(), &link_str, &alias_map, &descriptor_map)
+            .unwrap();
 
-    let real_canonical = ctx.repo_path().canonicalize().unwrap();
+    let real_repo_id = repo_id(&ctx);
     assert_eq!(
-        alias_canonical, real_canonical,
-        "the symlink path must canonicalize to the real repo path"
+        alias_repo_id, real_repo_id,
+        "the symlink path must resolve to the open repository stable id"
     );
     assert!(
         matches!(outcome, LoadOutcome::Loaded(_)),
@@ -227,12 +272,29 @@ fn symlink_resumes_same_session() {
 #[test]
 fn end_clears_session() {
     let ctx = TestContext::new_empty();
-    start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
-    end_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    end_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
-    let status =
-        get_review_session_status_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    let status = get_review_session_status_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
     assert!(!status.file_exists, "the file must be gone after end");
     assert_eq!(
         status.state,
@@ -244,20 +306,28 @@ fn end_clears_session() {
 #[test]
 fn status_inner_never_reports_active() {
     let ctx = TestContext::new_empty();
-    start_review_session_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    start_review_session_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
 
     // _inner sees only disk: a present file is ResumeAvailable, never Active.
     // Promotion to Active is the thin command's job after locking the in-memory map.
-    let status =
-        get_review_session_status_inner(ctx.data_dir(), ctx.path(), ctx.state_map()).unwrap();
+    let status = get_review_session_status_inner(
+        ctx.data_dir(),
+        ctx.path(),
+        ctx.state_map(),
+        ctx.descriptor_map(),
+    )
+    .unwrap();
     assert!(status.file_exists);
     assert_eq!(status.state, SessionState::ResumeAvailable);
 }
 
 /// True when a session round-trips back as `Loaded` for the canonical path.
-fn load_matches_loaded(data_dir: &Path, canonical: &Path) -> bool {
-    matches!(
-        load_session(data_dir, canonical),
-        Ok(LoadOutcome::Loaded(_))
-    )
+fn load_matches_loaded(data_dir: &Path, repo_id: &str) -> bool {
+    matches!(load_session(data_dir, repo_id), Ok(LoadOutcome::Loaded(_)))
 }

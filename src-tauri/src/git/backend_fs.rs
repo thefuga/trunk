@@ -1,14 +1,18 @@
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use uuid::Uuid;
 
 use crate::error::TrunkError;
 use crate::git::command_runner;
+#[cfg(target_os = "windows")]
 use crate::git::editor::shell_single_quote;
 use crate::git::types::{RepoDescriptor, RepoLocator};
+#[cfg(target_os = "windows")]
 use crate::shell_env;
+#[cfg(target_os = "windows")]
+use std::io::Write;
+#[cfg(target_os = "windows")]
+use std::process::{Command, Stdio};
 
 fn validate_repo_relative(path: &str) -> Result<(), TrunkError> {
     let rel = Path::new(path);
@@ -32,6 +36,7 @@ fn validate_repo_relative(path: &str) -> Result<(), TrunkError> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn wsl_sh(distro: &str, cd: &str, script: &str) -> Command {
     let mut command = Command::new("wsl.exe");
     command
@@ -40,6 +45,7 @@ fn wsl_sh(distro: &str, cd: &str, script: &str) -> Command {
     command
 }
 
+#[cfg(target_os = "windows")]
 fn wsl_output(
     distro: &str,
     cd: &str,
@@ -85,15 +91,19 @@ pub fn repo_identity(repo: &RepoDescriptor) -> String {
 }
 
 pub fn read_repo_file(repo: &RepoDescriptor, relative_path: &str) -> Result<String, TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     validate_repo_relative(relative_path)?;
     match &repo.locator {
         RepoLocator::Local { path } => std::fs::read_to_string(Path::new(path).join(relative_path))
             .map_err(|e| TrunkError::new("io_error", e.to_string())),
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let rel = shell_single_quote(relative_path);
             let bytes = wsl_output(distro, linux_path, &format!("cat -- {rel}"), None)?;
             String::from_utf8(bytes).map_err(|e| TrunkError::new("utf8_error", e.to_string()))
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 
@@ -102,10 +112,12 @@ pub fn write_repo_file(
     relative_path: &str,
     content: &str,
 ) -> Result<(), TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     validate_repo_relative(relative_path)?;
     match &repo.locator {
         RepoLocator::Local { path } => std::fs::write(Path::new(path).join(relative_path), content)
             .map_err(|e| TrunkError::new("write_error", e.to_string())),
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let rel = shell_single_quote(relative_path);
             wsl_output(
@@ -116,6 +128,8 @@ pub fn write_repo_file(
             )?;
             Ok(())
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 
@@ -146,15 +160,19 @@ fn resolve_git_path(repo: &RepoDescriptor, git_relative_path: &str) -> Result<St
 }
 
 pub fn read_git_file(repo: &RepoDescriptor, git_relative_path: &str) -> Result<String, TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     let git_path = resolve_git_path(repo, git_relative_path)?;
     match &repo.locator {
         RepoLocator::Local { .. } => std::fs::read_to_string(&git_path)
             .map_err(|e| TrunkError::new("io_error", e.to_string())),
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let path = shell_single_quote(&git_path);
             let bytes = wsl_output(distro, linux_path, &format!("cat -- {path}"), None)?;
             String::from_utf8(bytes).map_err(|e| TrunkError::new("utf8_error", e.to_string()))
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 
@@ -163,6 +181,7 @@ pub fn write_git_file(
     git_relative_path: &str,
     content: &str,
 ) -> Result<(), TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     let git_path = resolve_git_path(repo, git_relative_path)?;
     match &repo.locator {
         RepoLocator::Local { .. } => {
@@ -170,6 +189,7 @@ pub fn write_git_file(
                 .map_err(|e| TrunkError::new("write_error", e.to_string()))?;
             Ok(())
         }
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let path = shell_single_quote(&git_path);
             wsl_output(
@@ -180,10 +200,13 @@ pub fn write_git_file(
             )?;
             Ok(())
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 
 pub fn delete_repo_file(repo: &RepoDescriptor, relative_path: &str) -> Result<(), TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     validate_repo_relative(relative_path)?;
     match &repo.locator {
         RepoLocator::Local { path } => {
@@ -193,16 +216,20 @@ pub fn delete_repo_file(repo: &RepoDescriptor, relative_path: &str) -> Result<()
                 Err(e) => Err(TrunkError::new("io_error", e.to_string())),
             }
         }
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let rel = shell_single_quote(relative_path);
             wsl_output(distro, linux_path, &format!("rm -f -- {rel}"), None)?;
             Ok(())
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 
 pub enum BackendTempDir {
     Local(PathBuf),
+    #[cfg(target_os = "windows")]
     Wsl {
         distro: String,
         repo_path: String,
@@ -212,6 +239,7 @@ pub enum BackendTempDir {
 
 impl BackendTempDir {
     pub fn create(repo: &RepoDescriptor, prefix: &str) -> Result<Self, TrunkError> {
+        crate::git::backend::ensure_backend_supported(repo)?;
         let name = format!("{prefix}-{}-{}", std::process::id(), Uuid::new_v4());
         match &repo.locator {
             RepoLocator::Local { .. } => {
@@ -220,6 +248,7 @@ impl BackendTempDir {
                     .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
                 Ok(Self::Local(path))
             }
+            #[cfg(target_os = "windows")]
             RepoLocator::Wsl { distro, linux_path } => {
                 let dir = format!("/tmp/{name}");
                 let quoted = shell_single_quote(&dir);
@@ -230,12 +259,15 @@ impl BackendTempDir {
                     linux_path: dir,
                 })
             }
+            #[cfg(not(target_os = "windows"))]
+            RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
         }
     }
 
     pub fn join_display(&self, child: &str) -> String {
         match self {
             Self::Local(path) => path.join(child).display().to_string(),
+            #[cfg(target_os = "windows")]
             Self::Wsl { linux_path, .. } => format!("{linux_path}/{child}"),
         }
     }
@@ -243,6 +275,7 @@ impl BackendTempDir {
     pub fn local_path(&self) -> Option<&Path> {
         match self {
             Self::Local(path) => Some(path),
+            #[cfg(target_os = "windows")]
             Self::Wsl { .. } => None,
         }
     }
@@ -268,6 +301,7 @@ impl BackendTempDir {
                 }
                 Ok(())
             }
+            #[cfg(target_os = "windows")]
             Self::Wsl {
                 distro,
                 repo_path,
@@ -294,6 +328,7 @@ impl BackendTempDir {
         match self {
             Self::Local(path) => std::fs::create_dir_all(path.join(child))
                 .map_err(|e| TrunkError::new("io_error", e.to_string())),
+            #[cfg(target_os = "windows")]
             Self::Wsl {
                 distro,
                 repo_path,
@@ -311,6 +346,7 @@ impl BackendTempDir {
             Self::Local(path) => {
                 let _ = std::fs::remove_dir_all(path);
             }
+            #[cfg(target_os = "windows")]
             Self::Wsl {
                 distro,
                 repo_path,
@@ -324,14 +360,18 @@ impl BackendTempDir {
 }
 
 pub fn wsl_poll_token(repo: &RepoDescriptor) -> Result<Option<String>, TrunkError> {
+    crate::git::backend::ensure_backend_supported(repo)?;
     match &repo.locator {
         RepoLocator::Local { .. } => Ok(None),
+        #[cfg(target_os = "windows")]
         RepoLocator::Wsl { distro, linux_path } => {
             let script =
                 "git status --porcelain=v1 -uall && git rev-parse HEAD 2>/dev/null || true";
             let bytes = wsl_output(distro, linux_path, script, None)?;
             Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
         }
+        #[cfg(not(target_os = "windows"))]
+        RepoLocator::Wsl { .. } => Err(crate::git::backend::wsl_unsupported_platform()),
     }
 }
 

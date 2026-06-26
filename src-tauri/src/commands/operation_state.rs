@@ -1,6 +1,6 @@
 use crate::error::TrunkError;
 use crate::git::{
-    backend_fs, command_runner, read_model,
+    backend, backend_fs, command_runner,
     types::{GraphResult, OperationInfo, OperationType, RepoDescriptor},
 };
 use crate::state::{CommitCache, RepoState};
@@ -225,30 +225,10 @@ pub fn rebase_continue_inner(
 
     // Write edited message to Git's rebase message file before continuing.
     if let Some(msg) = message {
-        match read_model::backend_from_state(path, state_map, descriptor_map)? {
-            read_model::ReadBackend::Local(path_buf) => {
-                let repo = git2::Repository::open(path_buf)?;
-                let git_dir = repo.path();
-                let rebase_dir = if git_dir.join("rebase-merge").exists() {
-                    git_dir.join("rebase-merge")
-                } else {
-                    git_dir.join("rebase-apply")
-                };
-                let msg_file = rebase_dir.join("message");
-                if msg_file.exists() {
-                    std::fs::write(&msg_file, msg)
-                        .map_err(|e| TrunkError::new("io_error", e.to_string()))?;
-                }
-            }
-            read_model::ReadBackend::Wsl(_) => {
-                if backend_fs::read_git_file(&repo_descriptor, "rebase-merge/message").is_ok() {
-                    backend_fs::write_git_file(&repo_descriptor, "rebase-merge/message", msg)?;
-                } else if backend_fs::read_git_file(&repo_descriptor, "rebase-apply/message")
-                    .is_ok()
-                {
-                    backend_fs::write_git_file(&repo_descriptor, "rebase-apply/message", msg)?;
-                }
-            }
+        if backend_fs::read_git_file(&repo_descriptor, "rebase-merge/message").is_ok() {
+            backend_fs::write_git_file(&repo_descriptor, "rebase-merge/message", msg)?;
+        } else if backend_fs::read_git_file(&repo_descriptor, "rebase-apply/message").is_ok() {
+            backend_fs::write_git_file(&repo_descriptor, "rebase-apply/message", msg)?;
         }
     }
 
@@ -326,12 +306,11 @@ pub fn get_merge_message_inner_with_descriptors(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, RepoDescriptor>,
 ) -> Result<Option<String>, TrunkError> {
-    match read_model::backend_from_state(path, state_map, descriptor_map)? {
-        read_model::ReadBackend::Local(_) => get_merge_message_inner(path, state_map),
-        read_model::ReadBackend::Wsl(repo) => match backend_fs::read_git_file(&repo, "MERGE_MSG") {
-            Ok(message) => Ok(Some(message)),
-            Err(_) => Ok(None),
-        },
+    let repo_descriptor =
+        crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    match backend_fs::read_git_file(&repo_descriptor, "MERGE_MSG") {
+        Ok(message) => Ok(Some(message)),
+        Err(_) => Ok(None),
     }
 }
 
@@ -424,10 +403,9 @@ pub async fn get_operation_state(
     let descriptor_map = state.1.lock().unwrap().clone();
     let graph_cache = cache.0.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut info = match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => get_operation_state_inner(&path, &state_map)?,
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_operation_state(&repo)?,
-        };
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        let mut info = backend::resolve_backend(descriptor)?.operation_state(&path, &state_map)?;
         // Look up branch color indexes from the cached graph
         if let Some(graph) = graph_cache.get(&path) {
             if let Some(ref src) = info.source_branch {

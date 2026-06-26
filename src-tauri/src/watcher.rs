@@ -2,12 +2,15 @@ use notify_debouncer_mini::notify::RecommendedWatcher;
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{mpsc, Mutex};
+#[cfg(target_os = "windows")]
+use std::sync::mpsc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Runtime};
 
 pub enum WatchHandle {
     Native(Debouncer<RecommendedWatcher>),
+    #[cfg(target_os = "windows")]
     WslPoller(mpsc::Sender<()>),
 }
 
@@ -54,6 +57,7 @@ pub fn start_watcher_for_repo<R: Runtime>(
         .insert(repo_id, WatchHandle::Native(debouncer));
 }
 
+#[cfg(target_os = "windows")]
 pub fn start_wsl_poller_for_repo<R: Runtime>(
     repo: crate::git::types::RepoDescriptor,
     app: AppHandle<R>,
@@ -90,8 +94,19 @@ pub fn start_wsl_poller_for_repo<R: Runtime>(
         .insert(repo_id, WatchHandle::WslPoller(tx));
 }
 
+#[cfg(not(target_os = "windows"))]
+pub fn start_wsl_poller_for_repo<R: Runtime>(
+    _repo: crate::git::types::RepoDescriptor,
+    _app: AppHandle<R>,
+    _state: &WatcherState,
+) {
+}
+
 pub fn stop_watcher(repo_id: &str, state: &WatcherState) {
+    #[cfg(target_os = "windows")]
     if let Some(WatchHandle::WslPoller(stop)) = state.0.lock().unwrap().remove(repo_id) {
         let _ = stop.send(());
+        return;
     }
+    let _ = state.0.lock().unwrap().remove(repo_id);
 }

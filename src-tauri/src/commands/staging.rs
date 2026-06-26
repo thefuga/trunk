@@ -1,10 +1,14 @@
+#![cfg_attr(not(target_os = "windows"), allow(dead_code))]
+
 use crate::error::TrunkError;
+use crate::git::backend;
+#[cfg(any(target_os = "windows", test))]
 use crate::git::command_runner;
+#[cfg(any(target_os = "windows", test))]
 use crate::git::read_model;
-use crate::git::types::{
-    DiffHunk, DiffLine, DiffOrigin, DiffStatus, FileDiff, FileStatus, FileStatusType,
-    RepoDescriptor, WorkingTreeStatus,
-};
+#[cfg(any(target_os = "windows", test))]
+use crate::git::types::{DiffHunk, DiffLine, DiffOrigin, DiffStatus, FileDiff, RepoDescriptor};
+use crate::git::types::{FileStatus, FileStatusType, WorkingTreeStatus};
 use crate::state::RepoState;
 use git2::{Status, StatusOptions};
 use std::collections::{HashMap, HashSet};
@@ -341,7 +345,12 @@ pub fn stage_all_inner(path: &str, state_map: &HashMap<String, PathBuf>) -> Resu
     Ok(())
 }
 
-fn git_write(repo: &RepoDescriptor, args: &[&str], code: &str) -> Result<(), TrunkError> {
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn git_write(
+    repo: &RepoDescriptor,
+    args: &[&str],
+    code: &str,
+) -> Result<(), TrunkError> {
     let output = command_runner::git_output(repo, args, code)?;
     if output.status.success() {
         return Ok(());
@@ -357,6 +366,7 @@ fn git_write(repo: &RepoDescriptor, args: &[&str], code: &str) -> Result<(), Tru
     ))
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn git_apply(
     repo: &RepoDescriptor,
     args: &[&str],
@@ -378,6 +388,7 @@ fn git_apply(
     ))
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn git_output_text(repo: &RepoDescriptor, args: &[&str], code: &str) -> Result<String, TrunkError> {
     let output = command_runner::git_output(repo, args, code)?;
     if output.status.success() {
@@ -394,12 +405,14 @@ fn git_output_text(repo: &RepoDescriptor, args: &[&str], code: &str) -> Result<S
     ))
 }
 
-fn wsl_head_exists(repo: &RepoDescriptor) -> bool {
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_head_exists(repo: &RepoDescriptor) -> bool {
     command_runner::git_output(repo, &["rev-parse", "--verify", "HEAD"], "git_write_error")
         .map(|output| output.status.success())
         .unwrap_or(false)
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn select_hunk_patch(
     raw: &str,
     hunk_index: u32,
@@ -445,6 +458,7 @@ fn select_hunk_patch(
     Ok(format!("{}{}", header.join(""), selected.join("")))
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn wsl_unstaged_diff_text(repo: &RepoDescriptor, file_path: &str) -> Result<String, TrunkError> {
     let output = command_runner::git_output(
         repo,
@@ -478,6 +492,7 @@ fn wsl_unstaged_diff_text(repo: &RepoDescriptor, file_path: &str) -> Result<Stri
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn wsl_staged_diff_text(repo: &RepoDescriptor, file_path: &str) -> Result<String, TrunkError> {
     git_output_text(
         repo,
@@ -493,7 +508,11 @@ fn wsl_staged_diff_text(repo: &RepoDescriptor, file_path: &str) -> Result<String
     )
 }
 
-fn wsl_stage_files(repo: &RepoDescriptor, file_paths: &[String]) -> Result<(), TrunkError> {
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_stage_files(
+    repo: &RepoDescriptor,
+    file_paths: &[String],
+) -> Result<(), TrunkError> {
     if file_paths.is_empty() {
         return Ok(());
     }
@@ -502,7 +521,11 @@ fn wsl_stage_files(repo: &RepoDescriptor, file_paths: &[String]) -> Result<(), T
     git_write(repo, &args, "stage_error")
 }
 
-fn wsl_unstage_files(repo: &RepoDescriptor, file_paths: &[String]) -> Result<(), TrunkError> {
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_unstage_files(
+    repo: &RepoDescriptor,
+    file_paths: &[String],
+) -> Result<(), TrunkError> {
     if file_paths.is_empty() {
         return Ok(());
     }
@@ -517,7 +540,8 @@ fn wsl_unstage_files(repo: &RepoDescriptor, file_paths: &[String]) -> Result<(),
     }
 }
 
-fn wsl_stage_hunk(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_stage_hunk(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -532,7 +556,8 @@ fn wsl_stage_hunk(
     )
 }
 
-fn wsl_unstage_hunk(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_unstage_hunk(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -547,7 +572,8 @@ fn wsl_unstage_hunk(
     )
 }
 
-fn wsl_discard_hunk(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_discard_hunk(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -562,6 +588,7 @@ fn wsl_discard_hunk(
     )
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn build_partial_patch_from_diff(
     file_path: &str,
     file_diff: &FileDiff,
@@ -662,6 +689,7 @@ fn build_partial_patch_from_diff(
     )
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn line_content(line: &DiffLine) -> String {
     if line.content.ends_with('\n') {
         line.content.clone()
@@ -670,6 +698,7 @@ fn line_content(line: &DiffLine) -> String {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn single_wsl_diff(
     diffs: Vec<FileDiff>,
     file_path: &str,
@@ -703,7 +732,8 @@ fn single_wsl_diff(
     Ok((file_diff, hunk))
 }
 
-fn wsl_stage_lines(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_stage_lines(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -726,7 +756,8 @@ fn wsl_stage_lines(
     )
 }
 
-fn wsl_unstage_lines(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_unstage_lines(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -749,7 +780,8 @@ fn wsl_unstage_lines(
     )
 }
 
-fn wsl_discard_lines(
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn wsl_discard_lines(
     repo: &RepoDescriptor,
     file_path: &str,
     hunk_index: u32,
@@ -1018,27 +1050,9 @@ pub async fn discard_file(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => discard_file_inner(&path, &file_path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                let status = read_model::wsl_status(&repo)?;
-                let file_status = status
-                    .unstaged
-                    .iter()
-                    .find(|entry| entry.path == file_path)
-                    .ok_or_else(|| {
-                        TrunkError::new(
-                            "file_not_found",
-                            format!("File not in working tree changes: {}", file_path),
-                        )
-                    })?;
-                if matches!(file_status.status, FileStatusType::New) {
-                    git_write(&repo, &["clean", "-f", "--", &file_path], "io_error")
-                } else {
-                    git_write(&repo, &["checkout", "--", &file_path], "discard_error")
-                }
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.discard_file(&path, &file_path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1050,13 +1064,9 @@ pub async fn discard_all(path: String, state: State<'_, RepoState>) -> Result<()
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => discard_all_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                git_write(&repo, &["checkout", "--", "."], "discard_error")?;
-                git_write(&repo, &["clean", "-fd"], "discard_error")
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.discard_all(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1071,18 +1081,9 @@ pub async fn get_dirty_counts(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => get_dirty_counts_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                let (staged, unstaged, conflicted) =
-                    read_model::status_dirty_counts(read_model::wsl_status(&repo)?);
-                Ok(DirtyCounts {
-                    staged,
-                    unstaged,
-                    conflicted,
-                })
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.dirty_counts(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1097,10 +1098,9 @@ pub async fn get_status(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => get_status_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => read_model::wsl_status(&repo),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.status(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1116,12 +1116,13 @@ pub async fn stage_file(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => stage_file_inner(&path, &file_path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_stage_files(&repo, std::slice::from_ref(&file_path))
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.stage_files(
+            &path,
+            std::slice::from_ref(&file_path),
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1137,12 +1138,13 @@ pub async fn unstage_file(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => unstage_file_inner(&path, &file_path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_unstage_files(&repo, std::slice::from_ref(&file_path))
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.unstage_files(
+            &path,
+            std::slice::from_ref(&file_path),
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1158,10 +1160,9 @@ pub async fn stage_files(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => stage_files_inner(&path, &file_paths, &state_map),
-            read_model::ReadBackend::Wsl(repo) => wsl_stage_files(&repo, &file_paths),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.stage_files(&path, &file_paths, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1177,12 +1178,9 @@ pub async fn unstage_files(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                unstage_files_inner(&path, &file_paths, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => wsl_unstage_files(&repo, &file_paths),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.unstage_files(&path, &file_paths, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1194,10 +1192,9 @@ pub async fn stage_all(path: String, state: State<'_, RepoState>) -> Result<(), 
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => stage_all_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => git_write(&repo, &["add", "-A"], "stage_error"),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.stage_all(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1209,20 +1206,9 @@ pub async fn unstage_all(path: String, state: State<'_, RepoState>) -> Result<()
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => unstage_all_inner(&path, &state_map),
-            read_model::ReadBackend::Wsl(repo) => {
-                if wsl_head_exists(&repo) {
-                    git_write(&repo, &["restore", "--staged", "."], "unstage_error")
-                } else {
-                    git_write(
-                        &repo,
-                        &["rm", "--cached", "-r", "--ignore-unmatch", "."],
-                        "unstage_error",
-                    )
-                }
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.unstage_all(&path, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1239,12 +1225,9 @@ pub async fn stage_hunk(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                stage_hunk_inner(&path, &file_path, hunk_index, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => wsl_stage_hunk(&repo, &file_path, hunk_index),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.stage_hunk(&path, &file_path, hunk_index, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1261,12 +1244,10 @@ pub async fn unstage_hunk(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                unstage_hunk_inner(&path, &file_path, hunk_index, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => wsl_unstage_hunk(&repo, &file_path, hunk_index),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?
+            .unstage_hunk(&path, &file_path, hunk_index, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1283,12 +1264,10 @@ pub async fn discard_hunk(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                discard_hunk_inner(&path, &file_path, hunk_index, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => wsl_discard_hunk(&repo, &file_path, hunk_index),
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?
+            .discard_hunk(&path, &file_path, hunk_index, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1306,14 +1285,15 @@ pub async fn stage_lines(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                stage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_stage_lines(&repo, &file_path, hunk_index, line_indices)
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.stage_lines(
+            &path,
+            &file_path,
+            hunk_index,
+            line_indices,
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1331,14 +1311,15 @@ pub async fn unstage_lines(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                unstage_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_unstage_lines(&repo, &file_path, hunk_index, line_indices)
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.unstage_lines(
+            &path,
+            &file_path,
+            hunk_index,
+            line_indices,
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -1356,14 +1337,15 @@ pub async fn discard_lines(
     let state_map = state.0.lock().unwrap().clone();
     let descriptor_map = state.1.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        match read_model::backend_from_state(&path, &state_map, &descriptor_map)? {
-            read_model::ReadBackend::Local(_) => {
-                discard_lines_inner(&path, &file_path, hunk_index, line_indices, &state_map)
-            }
-            read_model::ReadBackend::Wsl(repo) => {
-                wsl_discard_lines(&repo, &file_path, hunk_index, line_indices)
-            }
-        }
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.discard_lines(
+            &path,
+            &file_path,
+            hunk_index,
+            line_indices,
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?

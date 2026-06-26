@@ -1,8 +1,9 @@
 use crate::error::TrunkError;
 use crate::git::{
+    backend,
     backend_fs::BackendTempDir,
-    command_runner, read_model,
-    types::{RebaseTodoItem, RepoDescriptor, RepoLocator},
+    command_runner,
+    types::{RebaseTodoItem, RepoDescriptor},
 };
 use crate::state::{CommitCache, RepoState};
 use serde::Deserialize;
@@ -25,14 +26,8 @@ fn interactive_rebase_command_spec(
     seq_editor_path: &str,
     editor_script_path: &str,
 ) -> command_runner::GitCommandSpec {
-    let spec = command_runner::GitCommandSpec::for_repo(repo, &["rebase", "-i", base_oid])
-        .with_env("GIT_SEQUENCE_EDITOR", seq_editor_path)
-        .with_env("GIT_EDITOR", editor_script_path);
-
-    match &repo.locator {
-        RepoLocator::Wsl { .. } => spec.with_env("WSLENV", "GIT_SEQUENCE_EDITOR:GIT_EDITOR"),
-        RepoLocator::Local { .. } => spec,
-    }
+    command_runner::GitCommandSpec::for_repo(repo, &["rebase", "-i", base_oid])
+        .with_interactive_rebase_editor_env(repo, seq_editor_path, editor_script_path)
 }
 
 pub fn get_rebase_todo_inner(
@@ -96,61 +91,8 @@ pub fn get_rebase_todo_inner_with_descriptors(
     state_map: &HashMap<String, PathBuf>,
     descriptor_map: &HashMap<String, crate::git::types::RepoDescriptor>,
 ) -> Result<Vec<RebaseTodoItem>, TrunkError> {
-    match read_model::backend_from_state(path, state_map, descriptor_map)? {
-        read_model::ReadBackend::Local(_) => {
-            get_rebase_todo_inner(path, base_oid, inclusive, state_map)
-        }
-        read_model::ReadBackend::Wsl(repo) => {
-            let range = if inclusive {
-                let parent = command_runner::git_output(
-                    &repo,
-                    &["rev-parse", &format!("{base_oid}^")],
-                    "rebase_error",
-                )?;
-                if parent.status.success() {
-                    format!("{}..HEAD", String::from_utf8_lossy(&parent.stdout).trim())
-                } else {
-                    "HEAD".to_owned()
-                }
-            } else {
-                format!("{base_oid}..HEAD")
-            };
-            let output = command_runner::git_output(
-                &repo,
-                &[
-                    "log",
-                    "--reverse",
-                    "--format=%H%x00%s%x00%an%x00%at",
-                    &range,
-                ],
-                "rebase_error",
-            )?;
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(TrunkError::new("rebase_error", stderr.to_string()));
-            }
-            Ok(String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter_map(|line| {
-                    let mut fields = line.splitn(4, '\0');
-                    let oid = fields.next()?.to_string();
-                    let summary = fields.next().unwrap_or("").to_string();
-                    let author_name = fields.next().unwrap_or("").to_string();
-                    let author_timestamp = fields
-                        .next()
-                        .and_then(|value| value.parse::<i64>().ok())
-                        .unwrap_or(0);
-                    Some(RebaseTodoItem {
-                        short_oid: oid.chars().take(7).collect(),
-                        oid,
-                        summary,
-                        author_name,
-                        author_timestamp,
-                    })
-                })
-                .collect())
-        }
-    }
+    let descriptor = crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::resolve_backend(descriptor)?.rebase_todo(path, base_oid, inclusive, state_map)
 }
 
 pub fn get_fork_point_inner(
@@ -182,6 +124,7 @@ pub fn start_interactive_rebase_blocking(
 ) -> Result<crate::git::types::GraphResult, TrunkError> {
     let repo_descriptor =
         crate::commands::repo_descriptor_from_state(path, state_map, descriptor_map)?;
+    backend::ensure_backend_supported(&repo_descriptor)?;
 
     // 1. Write todo file (drop = omit from list, not the 'drop' keyword)
     let todo_path = session_dir.join_display("trunk-rebase-todo");
@@ -339,8 +282,9 @@ pub async fn start_interactive_rebase(
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "windows")]
     fn wsl_repo() -> RepoDescriptor {
-        let locator = RepoLocator::Wsl {
+        let locator = crate::git::types::RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
             linux_path: "/home/me/project".to_string(),
         };
@@ -352,6 +296,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "windows")]
     #[test]
     fn wsl_interactive_rebase_command_propagates_editor_env() {
         let spec = interactive_rebase_command_spec(
