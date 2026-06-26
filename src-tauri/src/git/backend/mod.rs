@@ -595,11 +595,10 @@ pub trait GitBackend: Send + Sync {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests {
     use super::*;
 
-    #[cfg(not(target_os = "windows"))]
     fn wsl_descriptor() -> RepoDescriptor {
         let locator = RepoLocator::Wsl {
             distro: "Ubuntu".to_string(),
@@ -613,7 +612,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn resolver_rejects_wsl_descriptors_off_windows() {
         let error = match resolve_backend(wsl_descriptor()) {
