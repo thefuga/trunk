@@ -64,6 +64,13 @@ Trunk build, distro name/version, `git --version`, and repository path.
 - [ ] Commit from Trunk and confirm `git log -1` inside WSL shows the new
   commit.
 - [ ] Create and checkout a branch.
+- [ ] Checkout an older commit and confirm `git status` inside WSL reports a
+  detached HEAD; return to the branch before continuing.
+- [ ] Create a lightweight tag and an annotated tag, then confirm both appear in
+  Trunk and `git tag` inside WSL. For the annotated tag, confirm the tagger
+  identity matches the distro's Git configuration.
+- [ ] Delete both tags and confirm they disappear from Trunk and `git tag`
+  inside WSL.
 - [ ] Merge a branch and verify clean and conflicted merge states if practical.
 - [ ] Start, edit, continue, and abort an interactive rebase if the repo history
   supports it.

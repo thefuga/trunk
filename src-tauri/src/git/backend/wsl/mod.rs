@@ -33,6 +33,39 @@ impl WslBackend {
     pub fn new(repo: RepoDescriptor) -> Self {
         Self { repo }
     }
+
+    fn run_graph_action(
+        &self,
+        repo_id: &str,
+        args: &[&str],
+        error_code: &str,
+        state_map: &HashMap<String, PathBuf>,
+    ) -> Result<GraphResult, TrunkError> {
+        let output = command_runner::git_output(&self.repo, args, error_code)?;
+        if !output.status.success() {
+            return Err(TrunkError::new(
+                error_code,
+                String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+            ));
+        }
+        self.commit_graph(repo_id, state_map, &HashMap::new())
+    }
+}
+
+fn checkout_commit_args(oid: &str) -> Vec<&str> {
+    vec!["checkout", "--detach", oid]
+}
+
+fn create_tag_args<'a>(oid: &'a str, tag_name: &'a str, message: &'a str) -> Vec<&'a str> {
+    if message.trim().is_empty() {
+        vec!["tag", tag_name, oid]
+    } else {
+        vec!["tag", "-a", "-m", message, tag_name, oid]
+    }
+}
+
+fn delete_tag_args(tag_name: &str) -> Vec<&str> {
+    vec!["tag", "-d", tag_name]
 }
 
 impl GitBackend for WslBackend {
@@ -528,6 +561,99 @@ impl GitBackend for WslBackend {
         self.commit_graph(repo_id, state_map, &HashMap::new())
     }
 
+    fn checkout_commit(
+        &self,
+        repo_id: &str,
+        oid: &str,
+        state_map: &HashMap<String, PathBuf>,
+    ) -> Result<GraphResult, TrunkError> {
+        let dirty = command_runner::git_output(
+            &self.repo,
+            &["diff-index", "--quiet", "HEAD", "--"],
+            "git_error",
+        )?;
+        if !dirty.status.success() {
+            return Err(TrunkError::new(
+                "dirty_workdir",
+                "Working tree has uncommitted changes",
+            ));
+        }
+        self.run_graph_action(
+            repo_id,
+            &checkout_commit_args(oid),
+            "checkout_error",
+            state_map,
+        )
+    }
+
+    fn create_tag(
+        &self,
+        repo_id: &str,
+        oid: &str,
+        tag_name: &str,
+        message: &str,
+        state_map: &HashMap<String, PathBuf>,
+    ) -> Result<GraphResult, TrunkError> {
+        self.run_graph_action(
+            repo_id,
+            &create_tag_args(oid, tag_name, message),
+            "tag_error",
+            state_map,
+        )
+    }
+
+    fn delete_tag(
+        &self,
+        repo_id: &str,
+        tag_name: &str,
+        state_map: &HashMap<String, PathBuf>,
+    ) -> Result<GraphResult, TrunkError> {
+        self.run_graph_action(repo_id, &delete_tag_args(tag_name), "tag_error", state_map)
+    }
+
+    fn cherry_pick(
+        &self,
+        repo_id: &str,
+        oid: &str,
+        state_map: &HashMap<String, PathBuf>,
+    ) -> Result<GraphResult, TrunkError> {
+        let output =
+            command_runner::git_output(&self.repo, &["cherry-pick", oid], "cherry_pick_error")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let code = if stderr.to_lowercase().contains("conflict") {
+                "conflict_state"
+            } else {
+                "cherry_pick_error"
+            };
+            return Err(TrunkError::new(code, stderr.trim().to_owned()));
+        }
+        self.commit_graph(repo_id, state_map, &HashMap::new())
+    }
+
+    fn reset_to_commit(
+        &self,
+        repo_id: &str,
+        oid: &str,
+        mode: &str,
+        state_map: &HashMap<String, PathBuf>,
+        _descriptor_map: &HashMap<String, RepoDescriptor>,
+    ) -> Result<GraphResult, TrunkError> {
+        if !["soft", "mixed", "hard"].contains(&mode) {
+            return Err(TrunkError::new(
+                "invalid_mode",
+                format!("Invalid reset mode: {mode}"),
+            ));
+        }
+        let reset_mode = format!("--{mode}");
+        self.run_graph_action(
+            repo_id,
+            &["reset", &reset_mode, oid],
+            "reset_error",
+            state_map,
+        )
+    }
+
     fn undo_commit(
         &self,
         _repo_id: &str,
@@ -749,5 +875,107 @@ impl GitBackend for WslBackend {
             unstaged,
             conflicted,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{checkout_commit_args, command, create_tag_args, delete_tag_args};
+    use crate::git::types::{RepoDescriptor, RepoLocator};
+
+    fn wsl_repo() -> RepoDescriptor {
+        let locator = RepoLocator::Wsl {
+            distro: "Ubuntu".to_string(),
+            linux_path: "/home/me/project".to_string(),
+        };
+        RepoDescriptor {
+            id: locator.stable_id(),
+            display_name: "project".to_string(),
+            display_path: r"\\wsl.localhost\Ubuntu\home\me\project".to_string(),
+            locator,
+        }
+    }
+
+    #[test]
+    fn checkout_commit_uses_detached_checkout() {
+        let args = checkout_commit_args("0123456");
+        let spec = command::spec_for_repo(&wsl_repo(), &args);
+        assert_eq!(
+            spec.args,
+            vec![
+                "-d",
+                "Ubuntu",
+                "--cd",
+                "/home/me/project",
+                "--exec",
+                "git",
+                "checkout",
+                "--detach",
+                "0123456"
+            ]
+        );
+    }
+
+    #[test]
+    fn create_tag_uses_lightweight_tag_when_message_is_empty() {
+        let args = create_tag_args("0123456", "v1.0.0", "  ");
+        let spec = command::spec_for_repo(&wsl_repo(), &args);
+        assert_eq!(
+            spec.args,
+            vec![
+                "-d",
+                "Ubuntu",
+                "--cd",
+                "/home/me/project",
+                "--exec",
+                "git",
+                "tag",
+                "v1.0.0",
+                "0123456"
+            ]
+        );
+    }
+
+    #[test]
+    fn create_tag_uses_annotated_tag_when_message_is_present() {
+        let args = create_tag_args("0123456", "v1.0.0", "Release 1.0");
+        let spec = command::spec_for_repo(&wsl_repo(), &args);
+        assert_eq!(
+            spec.args,
+            vec![
+                "-d",
+                "Ubuntu",
+                "--cd",
+                "/home/me/project",
+                "--exec",
+                "git",
+                "tag",
+                "-a",
+                "-m",
+                "Release 1.0",
+                "v1.0.0",
+                "0123456"
+            ]
+        );
+    }
+
+    #[test]
+    fn delete_tag_uses_git_tag_delete() {
+        let args = delete_tag_args("v1.0.0");
+        let spec = command::spec_for_repo(&wsl_repo(), &args);
+        assert_eq!(
+            spec.args,
+            vec![
+                "-d",
+                "Ubuntu",
+                "--cd",
+                "/home/me/project",
+                "--exec",
+                "git",
+                "tag",
+                "-d",
+                "v1.0.0"
+            ]
+        );
     }
 }
