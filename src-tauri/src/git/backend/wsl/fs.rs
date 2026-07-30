@@ -56,7 +56,9 @@ fn descriptor_parts(repo: &RepoDescriptor) -> Result<(&str, &str), TrunkError> {
 fn wsl_sh(distro: &str, cd: &str, script: &str) -> Command {
     let mut command = Command::new("wsl.exe");
     command
-        .args(["-d", distro, "--cd", cd, "sh", "-lc", script])
+        // --exec so the script reaches `sh` verbatim instead of being parsed
+        // first by the distro's default login shell.
+        .args(["-d", distro, "--cd", cd, "--exec", "sh", "-lc", script])
         .env("PATH", shell_env::system_path());
     command
 }

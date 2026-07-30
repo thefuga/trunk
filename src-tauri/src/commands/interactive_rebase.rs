@@ -315,6 +315,7 @@ mod tests {
                 "Ubuntu",
                 "--cd",
                 "/home/me/project",
+                "--exec",
                 "git",
                 "rebase",
                 "-i",

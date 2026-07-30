@@ -463,6 +463,11 @@ mod tests {
     fn repo_with_committed_file() -> (tempfile::TempDir, RepoDescriptor) {
         let dir = tempfile::TempDir::new().unwrap();
         run_git(dir.path(), &["init", "-q"]);
+        // Pin line endings so the test is hermetic regardless of the host's
+        // global git config. On a Windows host with core.autocrlf=true, the
+        // `git apply` inside wsl_discard_lines would otherwise rewrite the
+        // working tree as CRLF and break the exact-content assertion.
+        run_git(dir.path(), &["config", "core.autocrlf", "false"]);
         std::fs::write(dir.path().join("file.txt"), "a\n").unwrap();
         run_git(dir.path(), &["add", "file.txt"]);
         run_git(

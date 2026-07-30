@@ -195,10 +195,12 @@ pub fn validate_repo_inner(
         ));
     }
 
+    // `--exec` (not `--`) is required to bypass the distro's default login
+    // shell; `--` still routes the command through it.
     let output = wsl_command(&[
         "--distribution",
         &distro,
-        "--",
+        "--exec",
         "git",
         "-C",
         &linux_path,

@@ -15,8 +15,11 @@ repository stored inside WSL and operated with Linux Git.
 
 Trunk opens WSL repositories from the welcome screen with a distro selector and
 an absolute Linux path. After opening, Git operations run through
-`wsl.exe -d <Distro> --cd <repo> git ...`, so credentials, SSH keys, remotes,
-hooks, Git config, and Git version come from the selected distro.
+`wsl.exe -d <Distro> --cd <repo> --exec git ...`, so credentials, SSH keys,
+remotes, hooks, Git config, and Git version come from the selected distro.
+`--exec` bypasses the distro's default login shell — without it, shells like
+zsh re-parse the command line and choke on Git's `%(...)` ref formats, and
+user-provided text (commit messages, paths) would be shell-expanded.
 
 ## User-facing setup errors
 

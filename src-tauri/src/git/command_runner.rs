@@ -166,6 +166,7 @@ mod tests {
                 "Ubuntu",
                 "--cd",
                 "/home/me/project",
+                "--exec",
                 "git",
                 "status",
                 "--short"
