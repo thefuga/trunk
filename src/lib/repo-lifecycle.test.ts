@@ -21,14 +21,14 @@ describe("repository lifecycle failures", () => {
 		expect(remove).not.toHaveBeenCalled();
 	});
 
-	it.each(["wsl_repo_invalid", "wsl_missing_distro"])(
-		"removes a recent for definitive %s failures",
-		async (code) => {
-			const remove = vi.fn(async () => {});
-			await handleRecentOpenFailure({ code, message: "Gone" }, remove);
-			expect(remove).toHaveBeenCalledOnce();
-		},
-	);
+	it.each([
+		"wsl_repo_invalid",
+		"wsl_missing_distro",
+	])("removes a recent for definitive %s failures", async (code) => {
+		const remove = vi.fn(async () => {});
+		await handleRecentOpenFailure({ code, message: "Gone" }, remove);
+		expect(remove).toHaveBeenCalledOnce();
+	});
 
 	it("distinguishes transient WSL validation failures from absence", () => {
 		expect(
