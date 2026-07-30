@@ -263,7 +263,15 @@ pub async fn reset_to_commit(
     let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        reset_to_commit_inner(&path_clone, &oid, &mode, &state_map, &descriptor_map)
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.reset_to_commit(
+            &path_clone,
+            &oid,
+            &mode,
+            &state_map,
+            &descriptor_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -283,9 +291,12 @@ pub async fn checkout_commit(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        checkout_commit_inner(&path_clone, &oid, &state_map)
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.checkout_commit(&path_clone, &oid, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -307,9 +318,18 @@ pub async fn create_tag(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        create_tag_inner(&path_clone, &oid, &tag_name, &message, &state_map)
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.create_tag(
+            &path_clone,
+            &oid,
+            &tag_name,
+            &message,
+            &state_map,
+        )
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -329,9 +349,12 @@ pub async fn delete_tag(
     app: AppHandle,
 ) -> Result<(), String> {
     let state_map = state.0.lock().unwrap().clone();
+    let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        delete_tag_inner(&path_clone, &tag_name, &state_map)
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.delete_tag(&path_clone, &tag_name, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
@@ -354,7 +377,9 @@ pub async fn cherry_pick(
     let descriptor_map = state.1.lock().unwrap().clone();
     let path_clone = path.clone();
     let graph_result = tauri::async_runtime::spawn_blocking(move || {
-        cherry_pick_inner(&path_clone, &oid, &state_map, &descriptor_map)
+        let descriptor =
+            crate::commands::repo_descriptor_from_state(&path_clone, &state_map, &descriptor_map)?;
+        backend::resolve_backend(descriptor)?.cherry_pick(&path_clone, &oid, &state_map)
     })
     .await
     .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
