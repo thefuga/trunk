@@ -135,6 +135,7 @@ pub fn run() {
             commands::wsl::wsl_availability,
             commands::wsl::list_wsl_distros,
             commands::wsl::validate_wsl_repo,
+            commands::wsl::wsl_default_open_path,
             commands::history::get_commit_graph,
             commands::history::refresh_commit_graph,
             commands::history::search_commits,

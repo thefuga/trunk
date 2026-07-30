@@ -1,9 +1,10 @@
+// Shared Tauri mock (mocks invoke, dialog, plugin-store, etc.). Must be
+// imported before the component so the module mocks register first.
+import "../__tests__/helpers/tauri-mock";
+
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WelcomeScreen from "./WelcomeScreen.svelte";
-
-// Shared Tauri mock (mocks invoke, dialog, plugin-store, etc.)
-import "../__tests__/helpers/tauri-mock";
 
 // Explicitly mock @tauri-apps/api/path to prevent real homeDir call
 vi.mock("@tauri-apps/api/path", () => ({
@@ -17,16 +18,22 @@ vi.mock("../lib/store.js", () => ({
 	removeRecentRepo: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock invoke module — safeInvoke resolves so openPath succeeds
-vi.mock("../lib/invoke.js", () => ({
+// Mock invoke module — safeInvoke resolves so openPath succeeds. Keep the
+// real isTrunkError for OpenRepoButton's error handling.
+vi.mock("../lib/invoke.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../lib/invoke.js")>()),
 	safeInvoke: vi.fn().mockResolvedValue(undefined),
 }));
+
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 describe("WelcomeScreen", () => {
 	beforeEach(async () => {
 		const invokeModule = await import("../lib/invoke.js");
 		vi.mocked(invokeModule.safeInvoke).mockReset();
 		vi.mocked(invokeModule.safeInvoke).mockResolvedValue(undefined);
+		vi.mocked(openDialog).mockReset();
+		vi.mocked(openDialog).mockResolvedValue(null);
 	});
 
 	it("renders 'Open Repository' button", () => {
@@ -111,7 +118,7 @@ describe("WelcomeScreen", () => {
 		});
 	});
 
-	it("shows WSL unavailable message on supported Windows hosts", async () => {
+	it("opens the local dialog directly when WSL is unavailable", async () => {
 		const { safeInvoke } = await import("../lib/invoke.js");
 		vi.mocked(safeInvoke).mockImplementation((cmd: string) => {
 			if (cmd === "wsl_availability") {
@@ -128,46 +135,20 @@ describe("WelcomeScreen", () => {
 			props: { onopen: vi.fn() },
 		});
 
-		await vi.waitFor(() => {
-			expect(screen.getByText("Open from WSL")).toBeInTheDocument();
-		});
-		expect(screen.getByText("Unavailable")).toBeInTheDocument();
-		expect(
-			screen.getByText("WSL is not installed or `wsl.exe` is not on PATH."),
-		).toBeInTheDocument();
-	});
-
-	it("shows an actionable message when WSL has no installed distros", async () => {
-		const { safeInvoke } = await import("../lib/invoke.js");
-		vi.mocked(safeInvoke).mockImplementation((cmd: string) => {
-			if (cmd === "wsl_availability") {
-				return Promise.resolve({
-					available: true,
-					supported_platform: true,
-					message: null,
-				});
-			}
-			if (cmd === "list_wsl_distros") {
-				return Promise.resolve([]);
-			}
-			return Promise.resolve(undefined);
-		});
-
-		render(WelcomeScreen, {
-			props: { onopen: vi.fn() },
-		});
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Open Repository" }),
+		);
 
 		await vi.waitFor(() => {
-			expect(
-				screen.getByText(
-					"No WSL distros are installed. Install one with `wsl --install -d <Distro>`, then reopen Trunk.",
-				),
-			).toBeInTheDocument();
+			expect(vi.mocked(openDialog)).toHaveBeenCalledWith({
+				directory: true,
+				multiple: false,
+			});
 		});
-		expect(screen.queryByLabelText("WSL distro")).not.toBeInTheDocument();
+		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 	});
 
-	it("opens a validated WSL repository from distro and Linux path", async () => {
+	it("opens a WSL repository picked from the distro dropdown", async () => {
 		const { safeInvoke } = await import("../lib/invoke.js");
 		const storeModule = await import("../lib/store.js");
 		const descriptor = {
@@ -192,6 +173,10 @@ describe("WelcomeScreen", () => {
 				if (cmd === "list_wsl_distros") {
 					return Promise.resolve([{ name: "Ubuntu", default: true }]);
 				}
+				if (cmd === "wsl_default_open_path") {
+					expect(args).toEqual({ distro: "Ubuntu" });
+					return Promise.resolve("\\\\wsl.localhost\\Ubuntu\\home\\me");
+				}
 				if (cmd === "validate_wsl_repo") {
 					expect(args).toEqual({
 						distro: "Ubuntu",
@@ -214,6 +199,9 @@ describe("WelcomeScreen", () => {
 				return Promise.resolve(undefined);
 			},
 		);
+		vi.mocked(openDialog).mockResolvedValue(
+			"\\\\wsl.localhost\\Ubuntu\\home\\me\\trunk",
+		);
 		vi.mocked(storeModule.getRecentRepos).mockResolvedValue([]);
 		const onopen = vi.fn();
 
@@ -221,14 +209,23 @@ describe("WelcomeScreen", () => {
 			props: { onopen },
 		});
 
+		const button = screen.getByRole("button", { name: "Open Repository" });
 		await vi.waitFor(() => {
-			expect(screen.getByLabelText("WSL distro")).toBeInTheDocument();
+			expect(button).toHaveAttribute("aria-haspopup", "menu");
 		});
-		await fireEvent.input(screen.getByPlaceholderText("/home/me/project"), {
-			target: { value: "/home/me/trunk" },
-		});
-		await fireEvent.click(screen.getByRole("button", { name: "Open" }));
+		await fireEvent.click(button);
+		expect(screen.getByRole("menuitem", { name: "Local" })).toBeInTheDocument();
+		await fireEvent.click(
+			screen.getByRole("menuitem", { name: "Ubuntu (default)" }),
+		);
 
+		await vi.waitFor(() => {
+			expect(vi.mocked(openDialog)).toHaveBeenCalledWith({
+				directory: true,
+				multiple: false,
+				defaultPath: "\\\\wsl.localhost\\Ubuntu\\home\\me",
+			});
+		});
 		await vi.waitFor(() => {
 			expect(storeModule.addRecentRepo).toHaveBeenCalledWith({
 				name: "trunk",
@@ -244,6 +241,39 @@ describe("WelcomeScreen", () => {
 				repoId: descriptor.id,
 				repoDescriptor: descriptor,
 			});
+		});
+	});
+
+	it("surfaces open_repo failures in the error banner", async () => {
+		const { safeInvoke } = await import("../lib/invoke.js");
+		vi.mocked(safeInvoke).mockImplementation((cmd: string) => {
+			if (cmd === "wsl_availability") {
+				return Promise.resolve({
+					available: false,
+					supported_platform: false,
+					message: null,
+				});
+			}
+			if (cmd === "open_repo") {
+				return Promise.reject({
+					code: "repo_invalid",
+					message: "Not a git repository",
+				});
+			}
+			return Promise.resolve(undefined);
+		});
+		vi.mocked(openDialog).mockResolvedValue("/Users/test/code/broken");
+
+		render(WelcomeScreen, {
+			props: { onopen: vi.fn() },
+		});
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Open Repository" }),
+		);
+
+		await vi.waitFor(() => {
+			expect(screen.getByText("Not a git repository")).toBeInTheDocument();
 		});
 	});
 });

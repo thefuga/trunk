@@ -13,8 +13,12 @@ repository stored inside WSL and operated with Linux Git.
   `/home/me/projects/trunk`. Prefer the Linux filesystem over `/mnt/c/...` so
   Trunk exercises the WSL backend instead of a Windows path.
 
-Trunk opens WSL repositories from the welcome screen with a distro selector and
-an absolute Linux path. After opening, Git operations run through
+Trunk opens WSL repositories through the **Open Repository** button: on Windows
+with WSL available it drops down **Local** plus each installed distro. Picking a
+distro opens the native folder picker at that distro's default user's home
+directory (`\\wsl.localhost\<Distro>\...`); picking any WSL UNC folder — even
+via **Local** — routes the repository through the WSL backend. After opening,
+Git operations run through
 `wsl.exe -d <Distro> --cd <repo> --exec git ...`, so credentials, SSH keys,
 remotes, hooks, Git config, and Git version come from the selected distro.
 `--exec` bypasses the distro's default login shell — without it, shells like
@@ -29,8 +33,8 @@ Trunk should surface actionable errors for these cases:
 - Missing distro: choose an installed distro or install one with
   `wsl --install -d <Distro>`.
 - Missing Linux Git: install Git inside the selected distro.
-- Invalid repository path: enter an absolute Linux path that exists and contains
-  a Git worktree.
+- Invalid repository path: pick a WSL folder that exists and contains a Git
+  worktree.
 - Failed authentication: fix the distro's SSH keys, credential helper, host key,
   token, or remote access. Authentication errors are reported by Linux Git.
 
@@ -41,8 +45,10 @@ Trunk build, distro name/version, `git --version`, and repository path.
 
 - [ ] Install or build the Windows Trunk desktop app.
 - [ ] Launch Trunk on Windows.
-- [ ] Open a normal Windows-hosted repository with **Open Repository**.
-- [ ] Without restarting Trunk, open the WSL repository from **Open from WSL**.
+- [ ] Open a normal Windows-hosted repository with **Open Repository → Local**.
+- [ ] Without restarting Trunk, open the WSL repository with
+  **Open Repository → <Distro>** and confirm the folder picker starts in the
+  distro's default user's home directory.
 - [ ] Confirm both local and WSL repos can remain open in the same app session.
 - [ ] Confirm the WSL repo commit graph, branch labels, tags, and stash labels
   load.

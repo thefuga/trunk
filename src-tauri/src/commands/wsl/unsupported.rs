@@ -19,3 +19,7 @@ pub fn validate_repo_inner(
 ) -> Result<WslRepoValidation, TrunkError> {
     Err(crate::git::backend::wsl_unsupported_platform())
 }
+
+pub fn default_open_path_inner(_distro: String) -> Result<String, TrunkError> {
+    Err(crate::git::backend::wsl_unsupported_platform())
+}

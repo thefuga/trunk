@@ -1,5 +1,4 @@
 <script lang="ts">
-import { open } from "@tauri-apps/plugin-dialog";
 import { tick } from "svelte";
 import { safeInvoke } from "../lib/invoke.js";
 import { displayPath } from "../lib/path.js";
@@ -14,7 +13,7 @@ import {
 	type RecentRepo,
 	removeRecentRepo,
 } from "../lib/store.js";
-import { localRepoDescriptor } from "../lib/types.js";
+import OpenRepoButton from "./OpenRepoButton.svelte";
 
 interface Props {
 	open: boolean;
@@ -138,19 +137,6 @@ function handleKeydown(e: KeyboardEvent) {
 	}
 }
 
-async function handleOpenDialog() {
-	const selected = await open({ directory: true, multiple: false });
-	if (typeof selected !== "string") return;
-	const name = selected.split("/").at(-1) || selected;
-	const descriptor = localRepoDescriptor(selected, name);
-	onpick({
-		name,
-		path: selected,
-		repoId: descriptor.id,
-		repoDescriptor: descriptor,
-	});
-}
-
 function handleBackdropClick() {
 	onclose();
 }
@@ -185,13 +171,7 @@ function handleBackdropClick() {
       {:else if recents.length === 0}
         <div class="flex flex-col items-center gap-3 px-4 py-6">
           <p class="text-sm" style="color: var(--color-text-muted);">No recent repositories</p>
-          <button
-            onclick={handleOpenDialog}
-            class="rounded-md px-4 py-2 text-sm font-medium cursor-pointer"
-            style="background: var(--color-accent); color: var(--color-on-accent);"
-          >
-            Open Repository
-          </button>
+          <OpenRepoButton menuPlacement="inline" onpick={onpick} />
         </div>
       {:else if filtered.length === 0}
         <div class="px-4 py-6 text-sm text-center" style="color: var(--color-text-muted);">

@@ -12,7 +12,9 @@ use unsupported as platform;
 #[cfg(target_os = "windows")]
 use windows as platform;
 
-pub use platform::{availability_inner, list_distros_inner, validate_repo_inner};
+pub use platform::{
+    availability_inner, default_open_path_inner, list_distros_inner, validate_repo_inner,
+};
 
 #[derive(Debug, Serialize)]
 pub struct WslAvailability {
@@ -52,6 +54,16 @@ pub async fn wsl_availability() -> Result<WslAvailability, String> {
 #[tauri::command]
 pub async fn list_wsl_distros() -> Result<Vec<WslDistro>, String> {
     tauri::async_runtime::spawn_blocking(list_distros_inner)
+        .await
+        .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
+        .map_err(|e| e.to_json())
+}
+
+/// UNC path (`\\wsl.localhost\...`) of the distro's default start directory,
+/// used as the native folder picker's starting location.
+#[tauri::command]
+pub async fn wsl_default_open_path(distro: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || default_open_path_inner(distro))
         .await
         .map_err(|e| TrunkError::new("spawn_error", e.to_string()).to_json())?
         .map_err(|e| e.to_json())

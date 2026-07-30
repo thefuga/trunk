@@ -175,6 +175,46 @@ pub fn list_distros_inner() -> Result<Vec<WslDistro>, TrunkError> {
     Ok(distros)
 }
 
+pub fn default_open_path_inner(distro: String) -> Result<String, TrunkError> {
+    ensure_available()?;
+    let distro = distro.trim().to_string();
+    if distro.is_empty() {
+        return Err(TrunkError::new(
+            "wsl_missing_distro",
+            "Choose a WSL distro.",
+        ));
+    }
+
+    // `--cd ~` is resolved by the WSL launcher to the distro's default user's
+    // home directory (per Windows' per-distro configuration), which is the
+    // distro's default start directory.
+    let output = wsl_command(&["--distribution", &distro, "--cd", "~", "--exec", "pwd"])
+        .map_err(|e| TrunkError::new("wsl_unavailable", format!("Could not run WSL: {}", e)))?;
+    if !output.status.success() {
+        let stderr = clean_wsl_output(&output.stderr);
+        return Err(TrunkError::new(
+            "wsl_home_failed",
+            stderr.if_empty(&format!(
+                "Could not determine the home directory for `{}`.",
+                distro
+            )),
+        ));
+    }
+
+    home_unc_from_pwd(&distro, &clean_wsl_output(&output.stdout))
+}
+
+fn home_unc_from_pwd(distro: &str, pwd_stdout: &str) -> Result<String, TrunkError> {
+    let home = pwd_stdout.trim();
+    if !home.starts_with('/') {
+        return Err(TrunkError::new(
+            "wsl_home_failed",
+            format!("Unexpected home directory output for `{}`.", distro),
+        ));
+    }
+    Ok(super::unc_path(distro, home))
+}
+
 pub fn validate_repo_inner(
     distro: String,
     linux_path: String,
@@ -251,7 +291,9 @@ pub fn validate_repo_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_wsl_repo_error, parse_default_distro, parse_wsl_distros};
+    use super::{
+        classify_wsl_repo_error, home_unc_from_pwd, parse_default_distro, parse_wsl_distros,
+    };
 
     #[test]
     fn parses_default_distro_from_status_output() {
@@ -316,5 +358,25 @@ Debian
 
         assert_eq!(error.code, "wsl_repo_invalid");
         assert!(error.message.contains("/missing"));
+    }
+
+    #[test]
+    fn home_unc_maps_pwd_output_to_unc_path() {
+        assert_eq!(
+            home_unc_from_pwd("Arch", "/home/erickfuga\n").unwrap(),
+            r"\\wsl.localhost\Arch\home\erickfuga"
+        );
+    }
+
+    #[test]
+    fn home_unc_rejects_empty_pwd_output() {
+        let error = home_unc_from_pwd("Arch", "").unwrap_err();
+        assert_eq!(error.code, "wsl_home_failed");
+    }
+
+    #[test]
+    fn home_unc_rejects_relative_pwd_output() {
+        let error = home_unc_from_pwd("Arch", "not-a-path").unwrap_err();
+        assert_eq!(error.code, "wsl_home_failed");
     }
 }
