@@ -132,6 +132,7 @@ pub fn run() {
             commands::repo::close_repo,
             commands::repo::force_close_repo,
             commands::fs::validate_recent_path,
+            commands::fs::validate_recent_repo,
             commands::wsl::wsl_availability,
             commands::wsl::list_wsl_distros,
             commands::wsl::validate_wsl_repo,

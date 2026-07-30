@@ -7,6 +7,7 @@ export interface TabInfo {
 	repoPath: string | null;
 	repoName: string;
 	dirty: boolean;
+	restoreError?: string | null;
 }
 
 export interface PersistedTab {

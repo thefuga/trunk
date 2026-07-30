@@ -236,6 +236,29 @@ describe("store", () => {
 			]);
 			expect(backingStore.get("recent_repos")).toEqual(repos);
 		});
+
+		it("getRecentRepos reconstructs a missing WSL descriptor from repoId", async () => {
+			backingStore.set("recent_repos", [
+				{
+					name: "trunk",
+					path: "Ubuntu:/home/me/trunk",
+					repoId: "wsl:Ubuntu:/home/me/trunk",
+				},
+			]);
+
+			const [repo] = await getRecentRepos();
+
+			expect(repo.repoDescriptor).toEqual({
+				id: "wsl:Ubuntu:/home/me/trunk",
+				display_name: "trunk",
+				display_path: "Ubuntu:/home/me/trunk",
+				locator: {
+					backend: "Wsl",
+					distro: "Ubuntu",
+					linux_path: "/home/me/trunk",
+				},
+			});
+		});
 	});
 
 	describe("open tabs", () => {
@@ -335,6 +358,30 @@ describe("store", () => {
 				}),
 			]);
 			expect(backingStore.get("open_tabs")).toEqual(tabs);
+		});
+
+		it("getOpenTabs reconstructs a missing WSL descriptor from repoId", async () => {
+			backingStore.set("open_tabs", [
+				{
+					id: "tab-1",
+					repoPath: "Ubuntu:/home/me/trunk",
+					repoName: "trunk",
+					repoId: "wsl:Ubuntu:/home/me/trunk",
+				},
+			]);
+
+			const [tab] = await getOpenTabs();
+
+			expect(tab.repoDescriptor).toEqual({
+				id: "wsl:Ubuntu:/home/me/trunk",
+				display_name: "trunk",
+				display_path: "Ubuntu:/home/me/trunk",
+				locator: {
+					backend: "Wsl",
+					distro: "Ubuntu",
+					linux_path: "/home/me/trunk",
+				},
+			});
 		});
 	});
 

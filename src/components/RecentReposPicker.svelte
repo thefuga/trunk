@@ -52,11 +52,9 @@ $effect(() => {
 		const all = await getRecentRepos();
 		const validations = await Promise.all(
 			all.map((r) =>
-				r.repoDescriptor?.locator.backend === "Wsl"
-					? Promise.resolve(true)
-					: safeInvoke<boolean>("validate_recent_path", { path: r.path }).catch(
-							() => false,
-						),
+				safeInvoke<boolean>("validate_recent_repo", {
+					repo: r.repoDescriptor,
+				}).catch(() => true),
 			),
 		);
 		const kept: RecentRepo[] = [];
@@ -66,7 +64,7 @@ $effect(() => {
 			else dropped.push(repo);
 		});
 		if (dropped.length > 0) {
-			await Promise.all(dropped.map((r) => removeRecentRepo(r.path)));
+			await Promise.all(dropped.map((r) => removeRecentRepo(repoKey(r))));
 		}
 		recents = kept;
 		loading = false;
