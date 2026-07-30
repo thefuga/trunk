@@ -1,0 +1,1551 @@
+#!/usr/bin/env python3
+"""Collect normalized GitHub issue context for a Viber run.
+
+This script wraps `gh` so agents do not have to repeatedly hand-roll issue,
+comment, and Project item discovery.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+import re
+import subprocess
+import sys
+from typing import Any
+from urllib.parse import urlparse
+
+
+EXIT_RUNTIME_ERROR = 1
+EXIT_ISSUE_READ_FAILED = 2
+EXIT_PROJECT_CONTEXT_INCOMPLETE = 3
+EXIT_DEPENDENCY_CONTEXT_INCOMPLETE = 4
+
+MODE_ALIASES = {
+    "issue_comment": {"issue_comment", "issue comment", "rfc comment", "comment-only"},
+    "design_doc_pr": {"design_doc_pr", "design doc pr", "design-doc", "adr"},
+    "implementation_pr": {"implementation_pr", "implementation pr", "implementation"},
+    "review_followup": {"review_followup", "review followup", "needs changes"},
+}
+MODE_LABELS = {
+    "mode/issue-comment": "issue_comment",
+    "mode/design-doc": "design_doc_pr",
+    "mode/implementation-pr": "implementation_pr",
+    "mode/review-followup": "review_followup",
+}
+REVIEW_STATUS_ALIASES = {"needs changes", "changes requested"}
+ISSUE_COMMENT_TYPE_ALIASES = {"rfc"}
+ISSUE_COMMENT_LABELS = {"type/rfc", "kind/design"}
+ISSUE_COMMENT_TITLE_PREFIXES = ("rfc:",)
+EXPLORATORY_TYPE_ALIASES = {"spike", "poc", "proof of concept", "investigation", "investigate"}
+EXPLORATORY_LABELS = {
+    "kind/investigation",
+    "kind/poc",
+    "kind/spike",
+    "type/investigation",
+    "type/poc",
+    "type/spike",
+}
+EXPLORATORY_TITLE_PREFIXES = ("spike:", "poc:", "investigation:", "investigate:")
+DEFAULT_WORK_MODE = "implementation_pr"
+HANDOFF_MARKER = "<!-- viber:next-agent-handoff -->"
+TELEMETRY_MARKER = "<!-- viber:telemetry -->"
+DEFAULT_TERMINAL_STATUSES = ["Done"]
+DESIGN_DOC_ARTIFACT_PATTERNS = [
+    (r"^\s*adr\s*:", "ADR request"),
+    (r"\b(?:write|create|draft|produce|add|commit|author)\s+(?:an?\s+)?adr\b", "ADR request"),
+    (
+        r"\b(?:write|create|draft|produce|add|commit|author)\s+(?:an?\s+)?architecture decision record\b",
+        "architecture decision record request",
+    ),
+    (
+        r"\b(?:write|create|draft|produce|add|commit|author)\s+(?:a\s+)?design[- ]?(?:doc|document|record)\b",
+        "design document request",
+    ),
+    (r"\b(?:repo|repository) artifact\b", "repository artifact request"),
+    (r"\bcommitted (?:design|document|documentation|artifact)\b", "committed artifact request"),
+    (r"\bdurable (?:design|document|documentation|artifact)\b", "durable artifact request"),
+]
+FINDINGS_COMMENT_DELIVERABLE_PATTERNS = [
+    (r"\b(?:post|leave|add|write|share|provide)\s+(?:the\s+)?(?:findings|recommendation|answer|summary)\s+(?:as|in|on)\s+(?:an?\s+)?(?:issue\s+)?comment\b", "issue comment deliverable"),
+    (r"\b(?:comment|reply)\s+with\s+(?:the\s+)?(?:findings|recommendation|answer|summary)\b", "issue comment deliverable"),
+    (r"\b(?:findings|recommendation|answer|summary)\s+(?:comment|reply)\b", "issue comment deliverable"),
+    (r"\b(?:no|without)\s+(?:repo|repository|code|file|branch|commit|pr|pull request)\s+changes\b", "comment-only deliverable"),
+    (r"\bcomment[- ]only\b", "comment-only deliverable"),
+]
+IMPLEMENTATION_ARTIFACT_PATTERNS = [
+    (r"\breusable\s+(?:executable\s+)?(?:probe|prototype|poc|proof of concept)\b", "reusable executable probe request"),
+    (r"\bexecutable\s+(?:probe|prototype|poc|proof of concept)\b", "executable probe request"),
+    (r"\b(?:commit|add|create|build|implement)\s+(?:a\s+)?(?:probe|prototype|poc|proof of concept)\s+(?:in|to)\s+(?:the\s+)?(?:repo|repository|codebase)\b", "repository probe request"),
+    (r"\b(?:open|create)\s+(?:a\s+)?(?:pr|pull request)\s+(?:with|for)\s+(?:a\s+)?(?:probe|prototype|poc|proof of concept)\b", "probe pull request request"),
+]
+PR_JSON_FIELDS = ",".join([
+    "number",
+    "title",
+    "state",
+    "url",
+    "body",
+    "createdAt",
+    "updatedAt",
+    "closedAt",
+    "mergedAt",
+    "closingIssuesReferences",
+])
+
+
+class ViberContextError(RuntimeError):
+    """Error with a stable kind and process exit code."""
+
+    kind = "runtime_error"
+    exit_code = EXIT_RUNTIME_ERROR
+
+
+class UsageError(ViberContextError):
+    kind = "usage_error"
+
+
+class IssueReadError(ViberContextError):
+    kind = "issue_read_failed"
+    exit_code = EXIT_ISSUE_READ_FAILED
+
+
+class ProjectContextIncomplete(ViberContextError):
+    kind = "project_context_incomplete"
+    exit_code = EXIT_PROJECT_CONTEXT_INCOMPLETE
+
+
+class DependencyContextIncomplete(ViberContextError):
+    kind = "dependency_context_incomplete"
+    exit_code = EXIT_DEPENDENCY_CONTEXT_INCOMPLETE
+
+
+def run_gh(
+    args: list[str],
+    *,
+    clear_project_tokens: bool = False,
+    error_type: type[ViberContextError] = ViberContextError,
+) -> Any:
+    env = None
+    if clear_project_tokens:
+        env = os.environ.copy()
+        env.pop("GH_TOKEN", None)
+        env.pop("GITHUB_TOKEN", None)
+
+    proc = subprocess.run(
+        ["gh", *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    if proc.returncode != 0:
+        raise error_type(proc.stderr.strip() or f"gh {' '.join(args)} failed")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise error_type(f"gh returned non-JSON output: {exc}") from exc
+
+
+def write_error(exc: ViberContextError) -> None:
+    json.dump(
+        {
+            "error": {
+                "kind": exc.kind,
+                "message": str(exc),
+                "exit_code": exc.exit_code,
+            },
+        },
+        sys.stderr,
+        indent=2,
+        sort_keys=True,
+    )
+    sys.stderr.write("\n")
+
+
+def truncate_text(value: Any, max_chars: int) -> tuple[str, bool]:
+    text = "" if value is None else str(value)
+    if len(text) <= max_chars:
+        return text, False
+    return text[:max_chars], True
+
+
+def repo_parts(repo: str) -> tuple[str, str]:
+    parts = repo.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise UsageError("--repo must be in OWNER/REPO form")
+    return parts[0], parts[1]
+
+
+def normalized_token(value: Any) -> str:
+    return str(value).strip().lower().replace("_", " ").replace("-", " ")
+
+
+def first_field(fields: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = fields.get(key)
+        if value is not None:
+            return value
+    return ""
+
+
+def relation_nodes(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if not isinstance(value, dict):
+        return []
+    nodes = value.get("nodes")
+    if isinstance(nodes, list):
+        return [item for item in nodes if isinstance(item, dict)]
+    edges = value.get("edges")
+    if isinstance(edges, list):
+        return [edge.get("node") for edge in edges if isinstance(edge, dict) and isinstance(edge.get("node"), dict)]
+    return []
+
+
+def native_blocker_nodes(issue: dict[str, Any]) -> list[dict[str, Any]]:
+    if "blockedBy" not in issue:
+        raise DependencyContextIncomplete("gh issue view output missing blockedBy dependency relation")
+
+    value = issue.get("blockedBy")
+    if value is None:
+        return []
+    if not isinstance(value, (list, dict)):
+        raise DependencyContextIncomplete("gh issue view output has unexpected blockedBy dependency relation shape")
+    if isinstance(value, dict):
+        page_info = value.get("pageInfo") or value.get("page_info") or {}
+        if isinstance(page_info, dict) and page_info.get("hasNextPage") is True:
+            raise DependencyContextIncomplete("blockedBy dependency relation was truncated by GitHub pagination")
+
+    return relation_nodes(value)
+
+
+def github_reference(value: str) -> tuple[str, str, int | None]:
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "github.com":
+        return "", "", None
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 4:
+        return "", "", None
+    try:
+        number = int(parts[3])
+    except ValueError:
+        number = None
+    if number is not None and number <= 0:
+        number = None
+    return "/".join(parts[0:2]), parts[2], number
+
+
+def repository_name(value: dict[str, Any], fallback_repo: str) -> str:
+    repository = value.get("repository")
+    if isinstance(repository, dict):
+        name_with_owner = repository.get("nameWithOwner") or repository.get("name_with_owner")
+        if name_with_owner:
+            return str(name_with_owner)
+        owner = repository.get("owner")
+        owner_login = owner.get("login") if isinstance(owner, dict) else owner
+        name = repository.get("name")
+        if owner_login and name:
+            return f"{owner_login}/{name}"
+    repo_value = value.get("repo") or value.get("repositoryNameWithOwner")
+    if repo_value:
+        return str(repo_value)
+    url = str(value.get("url", ""))
+    repo_from_url, _, _ = github_reference(url)
+    return repo_from_url or fallback_repo
+
+
+def issue_url(repo: str, number: int) -> str:
+    return f"https://github.com/{repo}/issues/{number}"
+
+
+def pull_request_url(repo: str, number: int) -> str:
+    return f"https://github.com/{repo}/pull/{number}"
+
+
+def issue_number(value: dict[str, Any]) -> int | None:
+    number = value.get("number")
+    if isinstance(number, bool):
+        return None
+    if isinstance(number, int) and number > 0:
+        return number
+    try:
+        parsed = int(str(number))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def pull_request_number(value: dict[str, Any]) -> int | None:
+    number = issue_number(value)
+    if number is not None:
+        return number
+    _, kind, parsed = github_reference(str(value.get("url", "")))
+    if kind == "pull":
+        return parsed
+    return None
+
+
+def artifact_sort_key(value: dict[str, Any]) -> tuple[str, int, str]:
+    updated = str(value.get("updated_at") or value.get("updatedAt") or value.get("created_at") or value.get("createdAt") or "")
+    number = value.get("number")
+    if not isinstance(number, int):
+        number = 0
+    return updated, -number, str(value.get("source_url") or value.get("url") or "")
+
+
+def newest_first(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(values, key=artifact_sort_key, reverse=True)
+
+
+def limit_items(values: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any]], bool]:
+    if limit < 0:
+        return values, False
+    return values[:limit], len(values) > limit
+
+
+def item_body_truncated(item: dict[str, Any]) -> bool:
+    for key, value in item.items():
+        if key.endswith("_truncated") and value is True:
+            return True
+        if isinstance(value, dict) and item_body_truncated(value):
+            return True
+        if isinstance(value, list) and any(isinstance(entry, dict) and item_body_truncated(entry) for entry in value):
+            return True
+    return False
+
+
+def artifact_section(
+    items: list[dict[str, Any]],
+    *,
+    count_limit: int,
+    chars_per_item_limit: int,
+    count_truncated: bool = False,
+    scan_truncated: bool = False,
+    omitted: bool = False,
+) -> dict[str, Any]:
+    body_truncated = any(item_body_truncated(item) for item in items)
+    return {
+        "items": items,
+        "count": len(items),
+        "count_limit": count_limit,
+        "chars_per_item_limit": chars_per_item_limit,
+        "omitted": omitted,
+        "count_truncated": count_truncated,
+        "body_truncated": body_truncated,
+        "scan_truncated": scan_truncated,
+        "truncated": count_truncated or body_truncated or scan_truncated,
+    }
+
+
+def has_marker(comment: dict[str, Any], marker: str) -> bool:
+    return marker in str(comment.get("body", ""))
+
+
+def parse_handoff_body(body: str) -> dict[str, str]:
+    parsed = {
+        "source": "",
+        "intent": "",
+        "summary": "",
+        "context": "",
+        "action_requested": "",
+    }
+    current = ""
+    buffers = {"context": [], "action_requested": []}
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line or line == HANDOFF_MARKER:
+            continue
+        match = re.match(r"^(source|intent|summary|context|action requested):\s*(.*)$", line, flags=re.IGNORECASE)
+        if match:
+            field = match.group(1).lower().replace(" ", "_")
+            rest = match.group(2).strip()
+            current = field if field in buffers else ""
+            if field in buffers:
+                if rest:
+                    buffers[field].append(rest)
+            else:
+                parsed[field] = rest
+            continue
+        if current:
+            buffers[current].append(raw_line.rstrip())
+    for field, lines in buffers.items():
+        parsed[field] = "\n".join(lines).strip()
+    return parsed
+
+
+def mode_rules() -> dict[str, Any]:
+    return {
+        "canonical_modes": sorted(MODE_ALIASES),
+        "work_mode_aliases": {mode: sorted(values) for mode, values in MODE_ALIASES.items()},
+        "mode_label_aliases": MODE_LABELS,
+        "design_doc_artifact_patterns": [description for _, description in DESIGN_DOC_ARTIFACT_PATTERNS],
+        "findings_comment_deliverable_patterns": [description for _, description in FINDINGS_COMMENT_DELIVERABLE_PATTERNS],
+        "implementation_artifact_patterns": [description for _, description in IMPLEMENTATION_ARTIFACT_PATTERNS],
+        "exploratory_type_aliases": sorted(EXPLORATORY_TYPE_ALIASES),
+        "exploratory_label_aliases": sorted(EXPLORATORY_LABELS),
+        "exploratory_title_prefixes": list(EXPLORATORY_TITLE_PREFIXES),
+        "review_status_aliases": sorted(REVIEW_STATUS_ALIASES),
+        "issue_comment_type_aliases": sorted(ISSUE_COMMENT_TYPE_ALIASES),
+        "issue_comment_label_aliases": sorted(ISSUE_COMMENT_LABELS),
+        "issue_comment_title_prefixes": list(ISSUE_COMMENT_TITLE_PREFIXES),
+        "default": DEFAULT_WORK_MODE,
+    }
+
+
+def canonical_mode(value: Any) -> str:
+    normalized = normalized_token(value)
+    for mode, aliases in MODE_ALIASES.items():
+        if normalized in {normalized_token(alias) for alias in aliases}:
+            return mode
+    return ""
+
+
+def issue_text(issue: dict[str, Any]) -> str:
+    return "\n".join([
+        str(issue.get("title", "")),
+        str(issue.get("body", "")),
+    ]).lower()
+
+
+def issue_type_name(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("name") or value.get("title")
+    return str(value or "").strip()
+
+
+def explicit_design_doc_artifact_request(issue: dict[str, Any]) -> tuple[bool, str]:
+    text = issue_text(issue)
+    for pattern, description in DESIGN_DOC_ARTIFACT_PATTERNS:
+        if re.search(pattern, text):
+            return True, description
+    return False, ""
+
+
+def requested_deliverable(issue: dict[str, Any]) -> tuple[str, str]:
+    matches: list[tuple[str, str]] = []
+    design_artifact_requested, design_artifact_reason = explicit_design_doc_artifact_request(issue)
+    if design_artifact_requested:
+        matches.append(("design_doc_pr", design_artifact_reason))
+
+    text = issue_text(issue)
+    for pattern, description in FINDINGS_COMMENT_DELIVERABLE_PATTERNS:
+        if re.search(pattern, text):
+            matches.append(("issue_comment", description))
+            break
+    for pattern, description in IMPLEMENTATION_ARTIFACT_PATTERNS:
+        if re.search(pattern, text):
+            matches.append(("implementation_pr", description))
+            break
+    modes = sorted({mode for mode, _ in matches})
+    if len(modes) > 1:
+        reasons = ", ".join(f"{mode}: {reason}" for mode, reason in matches)
+        return "conflict", reasons
+    if matches:
+        return matches[0]
+    return "", ""
+
+
+def exploratory_signal(issue: dict[str, Any], fields: dict[str, Any]) -> tuple[bool, str]:
+    native_type = normalized_token(issue.get("native_type") or issue.get("type"))
+    if native_type in EXPLORATORY_TYPE_ALIASES:
+        return True, f"native issue type {native_type}"
+
+    project_type = normalized_token(first_field(fields, "type", "Type", "issue_type", "Issue Type"))
+    if project_type in EXPLORATORY_TYPE_ALIASES:
+        return True, f"project type {project_type}"
+
+    labels = {str(label).lower() for label in issue.get("labels", [])}
+    matching_labels = EXPLORATORY_LABELS & labels
+    if matching_labels:
+        return True, f"label {sorted(matching_labels)[0]}"
+
+    title = str(issue.get("title", "")).strip().lower()
+    if title.startswith(EXPLORATORY_TITLE_PREFIXES):
+        return True, "exploratory title prefix"
+    return False, ""
+
+
+def simplify_user(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "login": value.get("login", ""),
+        "name": value.get("name", ""),
+        "is_bot": value.get("is_bot", value.get("isBot", False)),
+    }
+
+
+def simplify_issue(
+    issue: dict[str, Any],
+    *,
+    direct_blocker_nodes: list[dict[str, Any]],
+    comments: list[dict[str, Any]],
+    comments_omitted: bool,
+    comments_truncated: bool,
+    comments_excluded: int,
+    max_body_chars: int,
+    max_comment_chars: int,
+) -> dict[str, Any]:
+    labels = issue.get("labels") or []
+    assignees = issue.get("assignees") or []
+    native_type = issue_type_name(issue.get("issueType") or issue.get("issue_type") or issue.get("type"))
+
+    body, body_truncated = truncate_text(issue.get("body", ""), max_body_chars)
+    simplified_comments = []
+    comment_bodies_truncated = False
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        comment_body, comment_body_truncated = truncate_text(comment.get("body", ""), max_comment_chars)
+        comment_bodies_truncated = comment_bodies_truncated or comment_body_truncated
+        simplified_comments.append({
+            "author": simplify_user(comment.get("author") or comment.get("user")),
+            "created_at": comment.get("createdAt", comment.get("created_at", "")),
+            "updated_at": comment.get("updatedAt", comment.get("updated_at", "")),
+            "url": comment.get("url", comment.get("html_url", "")),
+            "body": comment_body,
+            "body_truncated": comment_body_truncated,
+        })
+
+    return {
+        "number": issue.get("number"),
+        "title": issue.get("title", ""),
+        "type": native_type,
+        "native_type": native_type,
+        "state": issue.get("state", ""),
+        "state_reason": issue.get("stateReason", issue.get("state_reason", "")),
+        "url": issue.get("url", ""),
+        "created_at": issue.get("createdAt", issue.get("created_at", "")),
+        "updated_at": issue.get("updatedAt", issue.get("updated_at", "")),
+        "closed_at": issue.get("closedAt", issue.get("closed_at", "")),
+        "closed": issue.get("closed", False),
+        "body": body,
+        "body_truncated": body_truncated,
+        "author": simplify_user(issue.get("author")),
+        "labels": [label.get("name", "") for label in labels if isinstance(label, dict)],
+        "assignees": [simplify_user(user) for user in assignees if isinstance(user, dict)],
+        "milestone": issue.get("milestone") or {},
+        "comments": simplified_comments,
+        "comments_omitted": comments_omitted,
+        "comments_truncated": comments_truncated,
+        "comments_excluded": comments_excluded,
+        "comment_bodies_truncated": comment_bodies_truncated,
+        "blocked_by": [
+            {
+                "number": issue_number(blocker),
+                "title": blocker.get("title", ""),
+                "state": blocker.get("state", ""),
+                "url": blocker.get("url", ""),
+                "repository": repository_name(blocker, ""),
+            }
+            for blocker in direct_blocker_nodes
+        ],
+        "project_items_from_issue_view": issue.get("projectItems") or [],
+    }
+
+
+def issue_comments(repo: str, issue_number: int, max_comments: int) -> tuple[list[dict[str, Any]], bool]:
+    if max_comments == 0:
+        return [], False
+    owner, name = repo_parts(repo)
+    read_limit = min(max_comments + 1, 100)
+    data = run_gh(
+        [
+            "api",
+            f"repos/{owner}/{name}/issues/{issue_number}/comments?per_page={read_limit}",
+        ],
+        error_type=IssueReadError,
+    )
+    if not isinstance(data, list):
+        raise IssueReadError("gh returned non-list issue comments output")
+    comments = data[:max_comments]
+    return comments, len(data) > max_comments
+
+
+def read_project_items(owner: str, number: str, limit: int) -> list[dict[str, Any]]:
+    data = run_gh([
+        "project",
+        "item-list",
+        number,
+        "--owner",
+        owner,
+        "--format",
+        "json",
+        "--limit",
+        str(limit),
+    ], clear_project_tokens=True, error_type=ProjectContextIncomplete)
+    items = data.get("items", [])
+    if not isinstance(items, list):
+        raise ProjectContextIncomplete("gh returned non-list Project items output")
+    return [item for item in items if isinstance(item, dict)]
+
+
+def find_project_item(items: list[dict[str, Any]], repo: str, issue_number: int) -> dict[str, Any] | None:
+    issue_url = f"https://github.com/{repo}/issues/{issue_number}"
+    for item in items:
+        content = item.get("content") if isinstance(item, dict) else None
+        if not isinstance(content, dict):
+            continue
+        content_repo = content.get("repository") or item.get("repository")
+        if content.get("url") == issue_url:
+            return item
+        if content.get("number") == issue_number and content_repo == repo:
+            return item
+    return None
+
+
+def project_fields(item: dict[str, Any] | None) -> dict[str, Any]:
+    if not item:
+        return {}
+    ignored = {"id", "content", "title", "repository", "milestone"}
+    fields: dict[str, Any] = {}
+    for key, value in item.items():
+        if key in ignored:
+            continue
+        fields[key] = value
+    return fields
+
+
+def simplify_project_item(item: dict[str, Any] | None, max_body_chars: int) -> tuple[dict[str, Any], bool]:
+    if not item:
+        return {}, False
+    simplified = copy.deepcopy(item)
+    content = simplified.get("content")
+    if not isinstance(content, dict) or "body" not in content:
+        return simplified, False
+    body, truncated = truncate_text(content.get("body", ""), max_body_chars)
+    content["body"] = body
+    content["body_truncated"] = truncated
+    return simplified, truncated
+
+
+def linked_pull_requests(item: dict[str, Any] | None) -> list[Any]:
+    if not item:
+        return []
+    value = first_field(item, "linkedPullRequests", "linked_pull_requests", "linked pull requests")
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def project_status(item: dict[str, Any] | None) -> str:
+    if not item:
+        return ""
+    fields = project_fields(item)
+    return str(first_field(fields, "status", "Status", "project_status", "project status")).strip()
+
+
+def issue_closed(issue: dict[str, Any]) -> bool:
+    if issue.get("closed") is True:
+        return True
+    if issue.get("closedAt") or issue.get("closed_at"):
+        return True
+    return normalized_token(issue.get("state")) == "closed"
+
+
+def issue_terminal(issue: dict[str, Any], item: dict[str, Any] | None, terminal_statuses: list[str]) -> bool:
+    if issue_closed(issue):
+        return True
+    status = normalized_token(project_status(item))
+    return bool(status and status in {normalized_token(value) for value in terminal_statuses})
+
+
+def blocker_terminal_reason(issue: dict[str, Any], item: dict[str, Any] | None, terminal_statuses: list[str]) -> str:
+    if issue_closed(issue):
+        return "issue_closed"
+    status = project_status(item)
+    if status and normalized_token(status) in {normalized_token(value) for value in terminal_statuses}:
+        return "project_status_terminal"
+    if status:
+        return "project_status_non_terminal"
+    return "project_status_unresolved"
+
+
+def blocker_key(repo: str, number: int | None, source_url: str) -> str:
+    if repo and number is not None:
+        return f"{repo}#{number}"
+    return source_url
+
+
+def issue_matches_reference(reference: dict[str, Any], repo: str, number: int) -> bool:
+    ref_number = issue_number(reference)
+    ref_repo = repository_name(reference, repo)
+    if ref_number == number and ref_repo == repo:
+        return True
+    ref_url = str(reference.get("url", ""))
+    url_repo, kind, url_number = github_reference(ref_url)
+    return kind == "issues" and url_repo == repo and url_number == number
+
+
+def pr_references_issue(pr: dict[str, Any], repo: str, number: int) -> bool:
+    references = relation_nodes(pr.get("closingIssuesReferences"))
+    return any(issue_matches_reference(reference, repo, number) for reference in references)
+
+
+def dedupe_pull_requests(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for value in values:
+        url = str(value.get("url") or value.get("source_url") or "")
+        number = pull_request_number(value)
+        key = url or f"pr:{number}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
+
+
+def pull_request_artifact(
+    pr: dict[str, Any],
+    *,
+    reason: str,
+    max_body_chars: int,
+    source_issue: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    body, body_truncated = truncate_text(pr.get("body", ""), max_body_chars)
+    fallback_repo = repository_name(source_issue, "") if source_issue else ""
+    pr_repo = repository_name(pr, fallback_repo)
+    number = pull_request_number(pr)
+    source_url = pr.get("url") or (pull_request_url(pr_repo, number) if pr_repo and number else "")
+    artifact = {
+        "type": "pull_request",
+        "reason": reason,
+        "source_url": source_url,
+        "url": source_url,
+        "repository": pr_repo,
+        "number": number,
+        "title": pr.get("title", ""),
+        "state": pr.get("state", ""),
+        "created_at": pr.get("createdAt", pr.get("created_at", "")),
+        "updated_at": pr.get("updatedAt", pr.get("updated_at", "")),
+        "closed_at": pr.get("closedAt", pr.get("closed_at", "")),
+        "merged_at": pr.get("mergedAt", pr.get("merged_at", "")),
+        "body": body,
+        "body_truncated": body_truncated,
+    }
+    if source_issue:
+        artifact["linked_issue"] = {
+            "number": issue_number(source_issue),
+            "title": source_issue.get("title", ""),
+            "url": source_issue.get("url", ""),
+            "source_url": source_issue.get("url", ""),
+        }
+    return artifact
+
+
+def pr_scan(repo: str, limit: int, cache: dict[tuple[str, int], list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    key = (repo, limit)
+    if key not in cache:
+        data = run_gh([
+            "pr",
+            "list",
+            "--repo",
+            repo,
+            "--state",
+            "all",
+            "--limit",
+            str(limit),
+            "--json",
+            PR_JSON_FIELDS,
+        ], error_type=IssueReadError)
+        if not isinstance(data, list):
+            raise IssueReadError("gh returned non-list pull request output")
+        cache[key] = [item for item in data if isinstance(item, dict)]
+    return cache[key]
+
+
+def linked_pr_artifacts_for_issue(
+    repo: str,
+    issue: dict[str, Any],
+    project_item: dict[str, Any] | None,
+    *,
+    max_prs: int,
+    max_pr_scan: int,
+    max_body_chars: int,
+    reason_scope: str,
+    pr_cache: dict[tuple[str, int], list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], bool]:
+    number = issue_number(issue)
+    if number is None:
+        return [], False
+
+    candidates: list[dict[str, Any]] = []
+    for pr in linked_pull_requests(project_item):
+        if isinstance(pr, dict):
+            artifact = pull_request_artifact(
+                pr,
+                reason=f"{reason_scope} linked through Project linkedPullRequests",
+                max_body_chars=max_body_chars,
+                source_issue=issue,
+            )
+            candidates.append(artifact)
+
+    for pr in relation_nodes(issue.get("closedByPullRequestsReferences")):
+        artifact = pull_request_artifact(
+            pr,
+            reason=f"{reason_scope} linked through issue closedByPullRequestsReferences",
+            max_body_chars=max_body_chars,
+            source_issue=issue,
+        )
+        candidates.append(artifact)
+
+    scan_truncated = False
+    if not candidates and max_pr_scan > 0:
+        scanned = pr_scan(repo, max_pr_scan, pr_cache)
+        scan_truncated = len(scanned) >= max_pr_scan
+        for pr in scanned:
+            if pr_references_issue(pr, repo, number):
+                artifact = pull_request_artifact(
+                    pr,
+                    reason=f"{reason_scope} linked through pull request closingIssuesReferences fallback",
+                    max_body_chars=max_body_chars,
+                    source_issue=issue,
+                )
+                candidates.append(artifact)
+
+    deduped = newest_first(dedupe_pull_requests(candidates))
+    limited, count_truncated = limit_items(deduped, max_prs)
+    return limited, count_truncated or scan_truncated
+
+
+def comment_artifact(comment: dict[str, Any], *, reason: str, max_body_chars: int) -> dict[str, Any]:
+    body, body_truncated = truncate_text(comment.get("body", ""), max_body_chars)
+    return {
+        "type": "issue_comment",
+        "reason": reason,
+        "source_url": comment.get("url", comment.get("html_url", "")),
+        "url": comment.get("url", comment.get("html_url", "")),
+        "author": simplify_user(comment.get("author") or comment.get("user")),
+        "created_at": comment.get("createdAt", comment.get("created_at", "")),
+        "updated_at": comment.get("updatedAt", comment.get("updated_at", "")),
+        "body": body,
+        "body_truncated": body_truncated,
+    }
+
+
+def handoff_artifact(comment: dict[str, Any], *, max_body_chars: int) -> dict[str, Any]:
+    artifact = comment_artifact(
+        comment,
+        reason="incoming next-agent handoff comment on target issue",
+        max_body_chars=max_body_chars,
+    )
+    parsed = parse_handoff_body(str(comment.get("body", "")))
+    context, context_truncated = truncate_text(parsed.get("context", ""), max_body_chars)
+    parsed["context"] = context
+    artifact["parsed"] = parsed
+    artifact["parsed_context_truncated"] = context_truncated
+    return artifact
+
+
+def blocker_artifact(
+    blocker: dict[str, Any],
+    *,
+    repo: str,
+    project_item: dict[str, Any] | None,
+    max_body_chars: int,
+) -> dict[str, Any]:
+    body, body_truncated = truncate_text(blocker.get("body", ""), max_body_chars)
+    blocker_repo = repository_name(blocker, repo)
+    number = issue_number(blocker)
+    source_url = blocker.get("url") or (issue_url(blocker_repo, number) if number else "")
+    return {
+        "type": "issue",
+        "reason": "direct blocked_by dependency that is closed or in a terminal Project state",
+        "source_url": source_url,
+        "url": source_url,
+        "repository": blocker_repo,
+        "number": number,
+        "title": blocker.get("title", ""),
+        "state": blocker.get("state", ""),
+        "project_status": project_status(project_item),
+        "created_at": blocker.get("createdAt", blocker.get("created_at", "")),
+        "updated_at": blocker.get("updatedAt", blocker.get("updated_at", "")),
+        "closed_at": blocker.get("closedAt", blocker.get("closed_at", "")),
+        "body": body,
+        "body_truncated": body_truncated,
+    }
+
+
+def skipped_blocker(blocker: dict[str, Any], *, repo: str, project_item: dict[str, Any] | None) -> dict[str, Any]:
+    blocker_repo = repository_name(blocker, repo)
+    number = issue_number(blocker)
+    source_url = blocker.get("url") or (issue_url(blocker_repo, number) if number else "")
+    return {
+        "reason": "direct blocker skipped because it is not closed and not in a terminal Project state",
+        "source_url": source_url,
+        "url": source_url,
+        "repository": blocker_repo,
+        "number": number,
+        "title": blocker.get("title", ""),
+        "state": blocker.get("state", ""),
+        "project_status": project_status(project_item),
+    }
+
+
+def blocker_identity(
+    blocker: dict[str, Any],
+    *,
+    repo: str,
+    project_item: dict[str, Any] | None,
+    terminal_statuses: list[str],
+    included_in_summary: bool,
+    summary_omitted_reason: str,
+) -> dict[str, Any]:
+    blocker_repo = repository_name(blocker, repo)
+    number = issue_number(blocker)
+    source_url = blocker.get("url") or (issue_url(blocker_repo, number) if number else "")
+    terminal_reason = blocker_terminal_reason(blocker, project_item, terminal_statuses)
+    return {
+        "type": "issue",
+        "reason": "direct blocked_by dependency identity from target issue",
+        "source_url": source_url,
+        "url": source_url,
+        "repository": blocker_repo,
+        "number": number,
+        "title": blocker.get("title", ""),
+        "state": blocker.get("state", ""),
+        "project_status": project_status(project_item),
+        "created_at": blocker.get("createdAt", blocker.get("created_at", "")),
+        "updated_at": blocker.get("updatedAt", blocker.get("updated_at", "")),
+        "terminal": terminal_reason in {"issue_closed", "project_status_terminal"},
+        "terminal_reason": terminal_reason,
+        "included_in_summary": included_in_summary,
+        "summary_omitted_reason": summary_omitted_reason,
+    }
+
+
+def blocker_identity_section(items: list[dict[str, Any]], *, terminal_statuses: list[str], summary_limit: int) -> dict[str, Any]:
+    return {
+        "items": items,
+        "count": len(items),
+        "read_status": "read",
+        "complete": True,
+        "terminal_statuses": terminal_statuses,
+        "summary_count_limit": summary_limit,
+        "terminal_count": len([item for item in items if item.get("terminal") is True]),
+        "unresolved_count": len([item for item in items if item.get("terminal") is not True]),
+        "summary_omitted_count": len([item for item in items if item.get("summary_omitted_reason")]),
+    }
+
+
+def assemble_related_artifacts(
+    *,
+    repo: str,
+    issue: dict[str, Any],
+    direct_blocker_nodes: list[dict[str, Any]],
+    project_item: dict[str, Any] | None,
+    project_items: list[dict[str, Any]],
+    comments: list[dict[str, Any]],
+    comments_omitted: bool,
+    comments_scan_truncated: bool,
+    terminal_statuses: list[str],
+    max_body_chars: int,
+    max_comment_chars: int,
+    max_comments: int,
+    max_handoff_comments: int,
+    max_linked_prs: int,
+    max_pr_body_chars: int,
+    max_blockers: int,
+    max_blocker_prs: int,
+    max_pr_scan: int,
+) -> dict[str, Any]:
+    target_body, target_body_truncated = truncate_text(issue.get("body", ""), max_body_chars)
+    target_issue = {
+        "type": "issue",
+        "reason": "target issue selected for this Viber run",
+        "source_url": issue.get("url", ""),
+        "url": issue.get("url", ""),
+        "number": issue.get("number"),
+        "title": issue.get("title", ""),
+        "state": issue.get("state", ""),
+        "project_status": project_status(project_item),
+        "created_at": issue.get("createdAt", issue.get("created_at", "")),
+        "updated_at": issue.get("updatedAt", issue.get("updated_at", "")),
+        "body": target_body,
+        "body_truncated": target_body_truncated,
+    }
+
+    handoff_comments = newest_first([
+        handoff_artifact(comment, max_body_chars=max_comment_chars)
+        for comment in comments
+        if has_marker(comment, HANDOFF_MARKER)
+    ])
+    handoff_items, handoff_count_truncated = limit_items(handoff_comments, max_handoff_comments)
+
+    ordinary_comments = newest_first([
+        comment_artifact(comment, reason="ordinary target issue comment", max_body_chars=max_comment_chars)
+        for comment in comments
+        if not has_marker(comment, HANDOFF_MARKER)
+    ])
+    ordinary_items, ordinary_count_truncated = limit_items(ordinary_comments, max_comments)
+
+    pr_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    target_prs, target_prs_truncated = linked_pr_artifacts_for_issue(
+        repo,
+        issue,
+        project_item,
+        max_prs=max_linked_prs,
+        max_pr_scan=max_pr_scan,
+        max_body_chars=max_pr_body_chars,
+        reason_scope="target issue",
+        pr_cache=pr_cache,
+    )
+
+    blocker_records: list[dict[str, Any]] = []
+    terminal_blockers: list[dict[str, Any]] = []
+    skipped_blockers: list[dict[str, Any]] = []
+    for blocker in direct_blocker_nodes:
+        number = issue_number(blocker)
+        blocker_repo = repository_name(blocker, repo)
+        blocker_item = find_project_item(project_items, blocker_repo, number) if number is not None else None
+        terminal = issue_terminal(blocker, blocker_item, terminal_statuses)
+        blocker_records.append({
+            "raw": blocker,
+            "project_item": blocker_item,
+            "repository": blocker_repo,
+            "number": number,
+        })
+        if terminal:
+            terminal_blockers.append(blocker_artifact(blocker, repo=repo, project_item=blocker_item, max_body_chars=max_body_chars))
+        else:
+            skipped_blockers.append(skipped_blocker(blocker, repo=repo, project_item=blocker_item))
+
+    terminal_blockers = newest_first(terminal_blockers)
+    blocker_items, blocker_count_truncated = limit_items(terminal_blockers, max_blockers)
+    included_blocker_keys = {
+        blocker_key(
+            str(blocker.get("repository") or ""),
+            blocker.get("number") if isinstance(blocker.get("number"), int) else None,
+            str(blocker.get("source_url") or blocker.get("url") or ""),
+        )
+        for blocker in blocker_items
+    }
+    direct_blocker_identities = newest_first([
+        blocker_identity(
+            record["raw"],
+            repo=repo,
+            project_item=record["project_item"],
+            terminal_statuses=terminal_statuses,
+            included_in_summary=blocker_key(
+                str(record["repository"] or ""),
+                record["number"] if isinstance(record["number"], int) else None,
+                str(record["raw"].get("url") or ""),
+            )
+            in included_blocker_keys,
+            summary_omitted_reason=(
+                "summary_limit"
+                if issue_terminal(record["raw"], record["project_item"], terminal_statuses)
+                and blocker_key(
+                    str(record["repository"] or ""),
+                    record["number"] if isinstance(record["number"], int) else None,
+                    str(record["raw"].get("url") or ""),
+                )
+                not in included_blocker_keys
+                else ("not_terminal" if not issue_terminal(record["raw"], record["project_item"], terminal_statuses) else "")
+            ),
+        )
+        for record in blocker_records
+    ])
+    blocker_identity_summary = blocker_identity_section(
+        direct_blocker_identities,
+        terminal_statuses=terminal_statuses,
+        summary_limit=max_blockers,
+    )
+
+    blocker_pr_candidates: list[dict[str, Any]] = []
+    blocker_pr_truncated = False
+    for blocker in blocker_items:
+        blocker_repo = str(blocker.get("repository") or repo)
+        number = blocker.get("number")
+        if not isinstance(number, int):
+            continue
+        blocker_raw = next(
+            (
+                item for item in direct_blocker_nodes
+                if issue_number(item) == number and repository_name(item, repo) == blocker_repo
+            ),
+            None,
+        )
+        if blocker_raw is None:
+            continue
+        blocker_project_item = find_project_item(project_items, blocker_repo, number)
+        blocker_prs, blocker_prs_truncated = linked_pr_artifacts_for_issue(
+            blocker_repo,
+            blocker_raw,
+            blocker_project_item,
+            max_prs=max_blocker_prs,
+            max_pr_scan=max_pr_scan,
+            max_body_chars=max_pr_body_chars,
+            reason_scope="direct blocker",
+            pr_cache=pr_cache,
+        )
+        for pr in blocker_prs:
+            pr["blocker"] = {
+                "number": number,
+                "title": blocker.get("title", ""),
+                "source_url": blocker.get("source_url", ""),
+                "url": blocker.get("url", ""),
+            }
+        blocker_pr_candidates.extend(blocker_prs)
+        if blocker_prs_truncated:
+            blocker_pr_truncated = True
+
+    blocker_pr_items, blocker_pr_count_truncated = limit_items(newest_first(dedupe_pull_requests(blocker_pr_candidates)), max_blocker_prs)
+
+    return {
+        "depth_limit": 1,
+        "section_order": [
+            "target_issue",
+            "direct_blocker_identities",
+            "incoming_handoff_comments",
+            "target_linked_pull_requests",
+            "direct_blockers",
+            "blocker_pull_requests",
+            "ordinary_comments",
+        ],
+        "limits": {
+            "target_issue": {"count": 1, "chars_per_item": max_body_chars},
+            "direct_blocker_identities": {"count": len(direct_blocker_identities), "chars_per_item": 0},
+            "incoming_handoff_comments": {"count": max_handoff_comments, "chars_per_item": max_comment_chars},
+            "target_linked_pull_requests": {"count": max_linked_prs, "chars_per_item": max_pr_body_chars, "scan_count": max_pr_scan},
+            "direct_blockers": {"count": max_blockers, "chars_per_item": max_body_chars},
+            "blocker_pull_requests": {"count": max_blocker_prs, "chars_per_item": max_pr_body_chars, "scan_count": max_pr_scan},
+            "ordinary_comments": {"count": max_comments, "chars_per_item": max_comment_chars},
+        },
+        "target_issue": target_issue,
+        "dependency_context": {
+            "status": "read",
+            "required": len(direct_blocker_identities) > 0,
+            "complete": blocker_identity_summary["complete"],
+            "direct_blocker_count": blocker_identity_summary["count"],
+            "terminal_blocker_count": blocker_identity_summary["terminal_count"],
+            "unresolved_blocker_count": blocker_identity_summary["unresolved_count"],
+            "summary_omitted_count": blocker_identity_summary["summary_omitted_count"],
+            "terminal_statuses": terminal_statuses,
+        },
+        "direct_blocker_identities": blocker_identity_summary,
+        "incoming_handoff_comments": artifact_section(
+            handoff_items,
+            count_limit=max_handoff_comments,
+            chars_per_item_limit=max_comment_chars,
+            count_truncated=handoff_count_truncated,
+            scan_truncated=comments_scan_truncated,
+            omitted=comments_omitted,
+        ),
+        "target_linked_pull_requests": artifact_section(
+            target_prs,
+            count_limit=max_linked_prs,
+            chars_per_item_limit=max_pr_body_chars,
+            count_truncated=target_prs_truncated,
+        ),
+        "direct_blockers": {
+            **artifact_section(
+                blocker_items,
+                count_limit=max_blockers,
+                chars_per_item_limit=max_body_chars,
+                count_truncated=blocker_count_truncated,
+            ),
+            "skipped": skipped_blockers,
+        },
+        "blocker_pull_requests": artifact_section(
+            blocker_pr_items,
+            count_limit=max_blocker_prs,
+            chars_per_item_limit=max_pr_body_chars,
+            count_truncated=blocker_pr_count_truncated or blocker_pr_truncated,
+        ),
+        "ordinary_comments": artifact_section(
+            ordinary_items,
+            count_limit=max_comments,
+            chars_per_item_limit=max_comment_chars,
+            count_truncated=ordinary_count_truncated,
+            scan_truncated=comments_scan_truncated,
+            omitted=comments_omitted,
+        ),
+    }
+
+
+def truncation_notices(related_artifacts: dict[str, Any]) -> list[dict[str, Any]]:
+    notices: list[dict[str, Any]] = []
+    limits = related_artifacts.get("limits", {})
+    target_issue = related_artifacts.get("target_issue", {})
+    if isinstance(target_issue, dict) and target_issue.get("body_truncated") is True:
+        target_limits = limits.get("target_issue", {}) if isinstance(limits, dict) else {}
+        notices.append({
+            "section": "target_issue_context",
+            "field": "body",
+            "reason": "body_truncated",
+            "source_url": target_issue.get("source_url", target_issue.get("url", "")),
+            "limit": target_limits.get("chars_per_item", ""),
+        })
+
+    section_names = {
+        "incoming_handoff_comments": "incoming_handoff_notes",
+        "target_linked_pull_requests": "linked_pr_summaries",
+        "direct_blockers": "direct_blocker_summaries",
+        "blocker_pull_requests": "direct_blocker_pr_summaries",
+        "ordinary_comments": "ordinary_comments",
+    }
+    for artifact_section_name, context_section_name in section_names.items():
+        section = related_artifacts.get(artifact_section_name, {})
+        if not isinstance(section, dict):
+            continue
+        section_limits = limits.get(artifact_section_name, {}) if isinstance(limits, dict) else {}
+        for flag in ["omitted", "count_truncated", "body_truncated", "scan_truncated"]:
+            if section.get(flag) is True:
+                source_urls = []
+                if flag == "body_truncated":
+                    source_urls = [
+                        str(item.get("source_url") or item.get("url") or "")
+                        for item in section.get("items", [])
+                        if isinstance(item, dict) and item_body_truncated(item)
+                    ]
+                notices.append({
+                    "section": context_section_name,
+                    "field": "items",
+                    "reason": flag,
+                    "source_url": "",
+                    "source_urls": [value for value in source_urls if value],
+                    "limit": section.get("count_limit", section_limits.get("count", "")),
+                    "chars_per_item_limit": section.get("chars_per_item_limit", section_limits.get("chars_per_item", "")),
+                })
+    return notices
+
+
+def context_pack(related_artifacts: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "viber_work_start_context_pack/v1",
+        "epistemic_status": (
+            "Bounded GitHub-derived dispatch context. Treat summaries and truncated "
+            "bodies as leads; cite source_url/url and inspect sources before relying "
+            "on them as facts."
+        ),
+        "source_url_fields": ["source_url", "url", "parsed.source", "blocker.source_url", "direct_blocker_identities.items.source_url"],
+        "section_order": [
+            "dependency_context",
+            "target_issue_context",
+            "direct_blocker_identities",
+            "incoming_handoff_notes",
+            "linked_pr_summaries",
+            "direct_blocker_summaries",
+            "direct_blocker_pr_summaries",
+            "ordinary_comments",
+            "truncation_notices",
+        ],
+        "dependency_context": related_artifacts.get("dependency_context", {}),
+        "target_issue_context": related_artifacts.get("target_issue", {}),
+        "direct_blocker_identities": related_artifacts.get("direct_blocker_identities", {}),
+        "incoming_handoff_notes": related_artifacts.get("incoming_handoff_comments", {}),
+        "linked_pr_summaries": related_artifacts.get("target_linked_pull_requests", {}),
+        "direct_blocker_summaries": related_artifacts.get("direct_blockers", {}),
+        "direct_blocker_pr_summaries": related_artifacts.get("blocker_pull_requests", {}),
+        "ordinary_comments": related_artifacts.get("ordinary_comments", {}),
+        "truncation_notices": truncation_notices(related_artifacts),
+    }
+
+
+def clarification_signal(reason: str, question: str, artifact_contract: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "work_mode_hint": "issue_comment",
+        "work_mode_reason": reason,
+        "work_mode_outcome_hint": "needs_reply",
+        "work_mode_needs_clarification": True,
+        "work_mode_clarification_question": question,
+        "artifact_contract": artifact_contract,
+    }
+
+
+def work_mode_signal(issue: dict[str, Any], fields: dict[str, Any]) -> dict[str, Any]:
+    labels = {str(label).lower() for label in issue.get("labels", [])}
+    title = str(issue.get("title", "")).strip().lower()
+    work_mode = first_field(fields, "workMode", "work_mode", "work mode")
+    item_type = normalized_token(first_field(fields, "type", "Type", "issue_type", "Issue Type"))
+    status = str(fields.get("status", "")).strip().lower()
+    deliverable_mode, deliverable_reason = requested_deliverable(issue)
+    is_exploratory, exploratory_reason = exploratory_signal(issue, fields)
+
+    artifact_contract: dict[str, Any] = {
+        "requested_work_mode": deliverable_mode,
+        "requested_reason": deliverable_reason,
+        "exploratory": is_exploratory,
+        "exploratory_reason": exploratory_reason,
+        "explicit_work_mode_source": "",
+        "explicit_work_mode_value": "",
+    }
+
+    def selected(mode: str, reason: str) -> dict[str, Any]:
+        return {
+            "work_mode_hint": mode,
+            "work_mode_reason": reason,
+            "work_mode_outcome_hint": "",
+            "work_mode_needs_clarification": False,
+            "work_mode_clarification_question": "",
+            "artifact_contract": artifact_contract,
+        }
+
+    def resolve_explicit(mode: str, value: Any, source: str) -> dict[str, Any]:
+        artifact_contract["explicit_work_mode_source"] = source
+        artifact_contract["explicit_work_mode_value"] = str(value).strip()
+        if deliverable_mode == "conflict":
+            return clarification_signal(
+                "conflicting requested deliverables",
+                "Please confirm the artifact contract for this exploratory issue: should Viber post findings as an issue comment, open an implementation PR with a reusable repo artifact, or create an ADR/design-doc PR?",
+                artifact_contract,
+            )
+        if deliverable_mode and deliverable_mode != mode:
+            return clarification_signal(
+                f"{source} conflicts with requested {deliverable_mode} deliverable",
+                "Please confirm the artifact contract for this exploratory issue: should Viber post findings as an issue comment, open an implementation PR with a reusable repo artifact, or create an ADR/design-doc PR?",
+                artifact_contract,
+            )
+        return selected(mode, source)
+
+    mode = canonical_mode(work_mode)
+    if mode:
+        return resolve_explicit(mode, work_mode, "project field workMode")
+    if str(work_mode).strip():
+        artifact_contract["explicit_work_mode_source"] = "project field workMode"
+        artifact_contract["explicit_work_mode_value"] = str(work_mode).strip()
+        return clarification_signal(
+            "unknown project field workMode",
+            "Please set Work Mode to one of issue_comment, implementation_pr, design_doc_pr, or review_followup, or clarify the requested artifact in the issue.",
+            artifact_contract,
+        )
+
+    mode_labels = [label for label in sorted(labels) if label.startswith("mode/")]
+    recognized_modes = {MODE_LABELS[label]: label for label in mode_labels if label in MODE_LABELS}
+    unknown_mode_labels = [label for label in mode_labels if label not in MODE_LABELS]
+    if unknown_mode_labels:
+        artifact_contract["explicit_work_mode_source"] = "mode label"
+        artifact_contract["explicit_work_mode_value"] = unknown_mode_labels[0]
+        return clarification_signal(
+            f"unknown mode label {unknown_mode_labels[0]}",
+            "Please replace the mode/* label with mode/issue-comment, mode/implementation-pr, mode/design-doc, or mode/review-followup, or clarify the requested artifact in the issue.",
+            artifact_contract,
+        )
+    if len(recognized_modes) > 1:
+        artifact_contract["explicit_work_mode_source"] = "mode label"
+        artifact_contract["explicit_work_mode_value"] = ", ".join(sorted(mode_labels))
+        return clarification_signal(
+            "conflicting mode labels",
+            "Please leave exactly one mode/* label or clarify the requested artifact in the issue.",
+            artifact_contract,
+        )
+    if len(recognized_modes) == 1:
+        mode, label = next(iter(recognized_modes.items()))
+        return resolve_explicit(mode, label, f"label {label}")
+
+    if status in REVIEW_STATUS_ALIASES:
+        return selected("review_followup", f"status {status}")
+    if deliverable_mode == "conflict":
+        return clarification_signal(
+            "conflicting requested deliverables",
+            "Please confirm the artifact contract for this exploratory issue: should Viber post findings as an issue comment, open an implementation PR with a reusable repo artifact, or create an ADR/design-doc PR?",
+            artifact_contract,
+        )
+    if deliverable_mode:
+        return selected(deliverable_mode, deliverable_reason)
+    if item_type in ISSUE_COMMENT_TYPE_ALIASES:
+        return selected("issue_comment", f"project type {item_type}")
+    if normalized_token(issue.get("native_type") or issue.get("type")) in ISSUE_COMMENT_TYPE_ALIASES:
+        return selected("issue_comment", f"native issue type {normalized_token(issue.get('native_type') or issue.get('type'))}")
+    if is_exploratory:
+        return clarification_signal(
+            f"{exploratory_reason} lacks artifact contract",
+            "Please confirm the artifact contract for this exploratory issue: should Viber post findings as an issue comment, open an implementation PR with a reusable repo artifact, or create an ADR/design-doc PR?",
+            artifact_contract,
+        )
+    matching_labels = ISSUE_COMMENT_LABELS & labels
+    if matching_labels:
+        return selected("issue_comment", f"label {sorted(matching_labels)[0]}")
+    if title.startswith(ISSUE_COMMENT_TITLE_PREFIXES):
+        return selected("issue_comment", "title prefix")
+    return selected(DEFAULT_WORK_MODE, "default")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Collect GitHub issue context for a Viber run")
+    parser.add_argument("--repo", required=True, help="Repository in owner/name form")
+    parser.add_argument("--issue", required=True, type=int, help="Issue number")
+    parser.add_argument("--project-owner", help="GitHub Project owner login")
+    parser.add_argument("--project-number", help="GitHub Project number")
+    parser.add_argument("--project-limit", default=200, type=int, help="Maximum Project items to inspect")
+    parser.add_argument("--max-body-chars", default=12000, type=int, help="Maximum issue body characters to emit")
+    parser.add_argument("--max-comments", default=20, type=int, help="Maximum issue comments to emit, up to 99")
+    parser.add_argument("--max-comment-scan", default=100, type=int, help="Maximum issue comments to scan for typed sections, up to 100")
+    parser.add_argument("--max-comment-chars", default=4000, type=int, help="Maximum characters to emit per comment body")
+    parser.add_argument("--max-handoff-comments", default=5, type=int, help="Maximum next-agent handoff comments to emit")
+    parser.add_argument("--max-linked-prs", default=5, type=int, help="Maximum target linked pull requests to emit")
+    parser.add_argument("--max-pr-body-chars", default=8000, type=int, help="Maximum pull request description characters to emit")
+    parser.add_argument("--max-blockers", default=5, type=int, help="Maximum terminal direct blockers to emit")
+    parser.add_argument("--max-blocker-prs", default=5, type=int, help="Maximum blocker linked pull requests to emit")
+    parser.add_argument("--max-pr-scan", default=50, type=int, help="Maximum repository pull requests to scan for closing issue references")
+    parser.add_argument("--terminal-status", action="append", default=[], help="Project Status value treated as terminal; may be repeated")
+    parser.add_argument("--include-telemetry-comments", action="store_true", help="Include marker-tagged Viber telemetry comments")
+    parser.add_argument("--no-comments", action="store_true", help="Do not read or emit issue comments")
+    args = parser.parse_args()
+    if args.max_body_chars < 0:
+        raise UsageError("--max-body-chars must be non-negative")
+    if args.max_comments < 0 or args.max_comments > 99:
+        raise UsageError("--max-comments must be between 0 and 99")
+    if args.max_comment_scan < 0 or args.max_comment_scan > 100:
+        raise UsageError("--max-comment-scan must be between 0 and 100")
+    if args.max_comment_chars < 0:
+        raise UsageError("--max-comment-chars must be non-negative")
+    for name in ["max_handoff_comments", "max_linked_prs", "max_pr_body_chars", "max_blockers", "max_blocker_prs", "max_pr_scan"]:
+        if getattr(args, name) < 0:
+            raise UsageError(f"--{name.replace('_', '-')} must be non-negative")
+    if bool(args.project_owner) != bool(args.project_number):
+        raise ProjectContextIncomplete("--project-owner and --project-number must be provided together")
+
+    issue_fields = ",".join([
+        "number",
+        "title",
+        "issueType",
+        "state",
+        "stateReason",
+        "url",
+        "body",
+        "createdAt",
+        "updatedAt",
+        "closed",
+        "closedAt",
+        "labels",
+        "projectItems",
+        "assignees",
+        "milestone",
+        "author",
+        "blockedBy",
+        "closedByPullRequestsReferences",
+    ])
+    issue_raw = run_gh([
+        "issue",
+        "view",
+        str(args.issue),
+        "--repo",
+        args.repo,
+        "--json",
+        issue_fields,
+    ], error_type=IssueReadError)
+    direct_blocker_nodes = native_blocker_nodes(issue_raw)
+
+    comments = []
+    comments_scan_truncated = False
+    comments_omitted = args.no_comments
+    if not args.no_comments:
+        comment_scan_limit = max(args.max_comment_scan, args.max_comments, args.max_handoff_comments)
+        comments, comments_scan_truncated = issue_comments(
+            args.repo,
+            args.issue,
+            comment_scan_limit,
+        )
+        comments_omitted = comment_scan_limit == 0
+
+    telemetry_comments = [comment for comment in comments if has_marker(comment, TELEMETRY_MARKER)]
+    if not args.include_telemetry_comments:
+        comments = [comment for comment in comments if not has_marker(comment, TELEMETRY_MARKER)]
+    telemetry_comments_excluded = len(telemetry_comments) if not args.include_telemetry_comments else 0
+    handoff_comment_count = len([comment for comment in comments if has_marker(comment, HANDOFF_MARKER)])
+    ordinary_comment_candidates = [comment for comment in comments if not has_marker(comment, HANDOFF_MARKER)]
+    ordinary_comments, ordinary_comments_truncated = limit_items(newest_first(ordinary_comment_candidates), args.max_comments)
+
+    issue = simplify_issue(
+        issue_raw,
+        direct_blocker_nodes=direct_blocker_nodes,
+        comments=ordinary_comments,
+        comments_omitted=comments_omitted,
+        comments_truncated=ordinary_comments_truncated or comments_scan_truncated,
+        comments_excluded=telemetry_comments_excluded + handoff_comment_count,
+        max_body_chars=args.max_body_chars,
+        max_comment_chars=args.max_comment_chars,
+    )
+
+    project_item = None
+    project_items = []
+    project_context_status = "not_requested"
+    if args.project_owner and args.project_number:
+        project_items = read_project_items(args.project_owner, args.project_number, args.project_limit)
+        project_item = find_project_item(project_items, args.repo, args.issue)
+        project_context_status = "read" if project_item else "confirmed_absent"
+
+    fields = project_fields(project_item)
+    project_item_output, project_item_body_truncated = simplify_project_item(project_item, args.max_body_chars)
+    mode_signal = work_mode_signal(issue, fields)
+    terminal_statuses = args.terminal_status or DEFAULT_TERMINAL_STATUSES
+    related_artifacts = assemble_related_artifacts(
+        repo=args.repo,
+        issue=issue_raw,
+        direct_blocker_nodes=direct_blocker_nodes,
+        project_item=project_item,
+        project_items=project_items,
+        comments=comments,
+        comments_omitted=comments_omitted,
+        comments_scan_truncated=comments_scan_truncated,
+        terminal_statuses=terminal_statuses,
+        max_body_chars=args.max_body_chars,
+        max_comment_chars=args.max_comment_chars,
+        max_comments=args.max_comments,
+        max_handoff_comments=args.max_handoff_comments,
+        max_linked_prs=args.max_linked_prs,
+        max_pr_body_chars=args.max_pr_body_chars,
+        max_blockers=args.max_blockers,
+        max_blocker_prs=args.max_blocker_prs,
+        max_pr_scan=args.max_pr_scan,
+    )
+    related_artifacts_truncated = bool(related_artifacts.get("target_issue", {}).get("body_truncated", False))
+    related_artifacts_truncated = related_artifacts_truncated or any(
+        isinstance(related_artifacts.get(section), dict) and related_artifacts[section].get("truncated", False)
+        for section in related_artifacts.get("section_order", [])
+        if section != "target_issue"
+    )
+    context_pack_output = context_pack(related_artifacts)
+    output = {
+        "repo": args.repo,
+        "issue": issue,
+        "project": {
+            "owner": args.project_owner or "",
+            "number": args.project_number or "",
+            "context_status": project_context_status,
+            "item_found": project_item is not None,
+            "item": project_item_output,
+            "fields": fields,
+            "linked_pull_requests": linked_pull_requests(project_item),
+        },
+        "signals": {
+            "labels_lower": [label.lower() for label in issue.get("labels", [])],
+            "title_starts_with_rfc": issue.get("title", "").strip().lower().startswith("rfc:"),
+            "work_mode_hint": mode_signal["work_mode_hint"],
+            "work_mode_reason": mode_signal["work_mode_reason"],
+            "work_mode_outcome_hint": mode_signal["work_mode_outcome_hint"],
+            "work_mode_needs_clarification": mode_signal["work_mode_needs_clarification"],
+            "work_mode_clarification_question": mode_signal["work_mode_clarification_question"],
+            "artifact_contract": mode_signal["artifact_contract"],
+            "terminal_statuses_used": terminal_statuses,
+            "terminal_statuses_source": "arguments" if args.terminal_status else "default",
+            "mode_rules": mode_rules(),
+        },
+        "related_artifacts": related_artifacts,
+        "context_pack": context_pack_output,
+        "truncated": {
+            "issue_body": issue.get("body_truncated", False),
+            "comments": issue.get("comments_truncated", False),
+            "comment_bodies": issue.get("comment_bodies_truncated", False),
+            "project_item_body": project_item_body_truncated,
+            "related_artifacts": related_artifacts_truncated,
+        },
+        "warnings": [],
+    }
+    json.dump(output, sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except ViberContextError as exc:
+        write_error(exc)
+        raise SystemExit(exc.exit_code)

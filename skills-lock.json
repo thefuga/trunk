@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "viber-delivery-planning": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-delivery-planning/SKILL.md",
+      "computedHash": "c909dfb83a275f592779d296bbe3e2b597f6c10c58b52d6840ccfbe48d381091"
+    },
+    "viber-design-doc": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-design-doc/SKILL.md",
+      "computedHash": "88b08e2497101e921480f91c656dab4ab1caf74965127f7689501b422dfd49e3"
+    },
+    "viber-implementation": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-implementation/SKILL.md",
+      "computedHash": "a577d2de2c74c748704709c3808ebf9e088ab5043fb4c752200627e6b82186ca"
+    },
+    "viber-issue-comment": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-issue-comment/SKILL.md",
+      "computedHash": "b497fde0d7f94529f3d4c1a3f8b2922b0b5282f842646730e60e105acabd737d"
+    },
+    "viber-product-discovery": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-product-discovery/SKILL.md",
+      "computedHash": "450b0bf76b9b4e6b86f9621cd72d225ba8eebda077b2c0d23c056d503c3b3cf8"
+    },
+    "viber-review-followup": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-review-followup/SKILL.md",
+      "computedHash": "c40e00348886ce77035f97c9dbde790053fad8fac340a5b69278cb41ff41ae95"
+    },
+    "viber-setup": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-setup/SKILL.md",
+      "computedHash": "8174ec746e31dedf6686ce829f8845bccba2f7cb325159a213a95a087250beb3"
+    },
+    "viber-work-start": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-work-start/SKILL.md",
+      "computedHash": "be4661f4aa5c07991760eda6f8cd7cae37550bb23cdfda89311ece84ea5145da"
+    },
+    "viber-work-wrap-up": {
+      "source": "thefuga/viber",
+      "sourceType": "github",
+      "skillPath": ".skills/viber-work-wrap-up/SKILL.md",
+      "computedHash": "d0637fdcfad47bd0e709460bd7c119293b819d50c39102f9f1fe432d02c077b6"
+    }
+  }
+}

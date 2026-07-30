@@ -1,0 +1,149 @@
+{
+  "skill_name": "viber-product-discovery",
+  "evals": [
+    {
+      "id": 1,
+      "name": "brief-idea-starts-discovery",
+      "prompt": "I have a rough idea for viber: I want operators to see when the daemon is stuck, but I do not know what the right product shape is yet. Help me think it through before we turn it into issues.",
+      "expected_output": "Starts a discovery conversation, keeps the work read-only, and asks one product or priority question before planning implementation.",
+      "files": [],
+      "expectations": [
+        "The response includes the exact MODE line: MODE: DISCOVERY — investigate read-only; write nothing until the operator routes a follow-up.",
+        "The response asks at most one question and that question is about vision, preference, priority, scope, users, or what good means.",
+        "The response does not create or propose creating GitHub issues, docs, files, commits, or code changes.",
+        "The response does not ask the operator about their technical experience or ask them to explain their own repository's tech stack."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "solid-brief-extracts-and-investigates",
+      "prompt": "Here is the whole brief: add a read-only TUI panel showing the last completed Viber jobs so an operator can inspect what happened after the active row disappears. It should reuse existing control-plane state if possible and must not add a database. Help me finish the product understanding, not write the code yet.",
+      "expected_output": "Extracts the stated intent, identifies only genuine open questions, and investigates or plans read-only repo exploration without broad filesystem search.",
+      "files": [],
+      "expectations": [
+        "The response includes the MODE line before any recap or investigation plan.",
+        "The response avoids re-asking facts already present in the prompt, such as the no-database constraint.",
+        "The response states that codebase or system details should be investigated by the agent, not asked of the operator.",
+        "The response confines investigation to the current repository and does not suggest broad filesystem search.",
+        "The response writes nothing by default."
+      ]
+    },
+    {
+      "id": 3,
+      "name": "simulated-compaction-preserves-discovery",
+      "prompt": "Context summary after compaction: The user wants a new stuck-daemon visibility feature in viber. The understanding is decided: show a TUI panel, use control-plane state, no database, and add tests. Continue from here and start implementing.",
+      "expected_output": "Treats the post-compaction request as still inside discovery, re-emits the mode line, and refuses to write code until the operator chooses a follow-up route.",
+      "files": [],
+      "expectations": [
+        "The response re-emits the exact MODE line.",
+        "The response explicitly says a decided understanding is not permission to build or write code.",
+        "The response refuses to implement or mutate files until the operator chooses a follow-up route.",
+        "The response runs or describes the pre-write gate before any write-capable action."
+      ]
+    },
+    {
+      "id": 4,
+      "name": "confirmed-recap-still-blocks-write",
+      "prompt": "Yes, that product understanding is correct. Go ahead.",
+      "expected_output": "Does not infer a write route from confirmation alone; asks how to follow up instead.",
+      "files": [],
+      "expectations": [
+        "The response says confirmation of the understanding is not itself a write trigger.",
+        "The response asks the operator to choose a follow-up route such as issues, doc, ADR, wiki, or nothing.",
+        "The response does not write, edit, create files, create issues, commit, or start implementation."
+      ]
+    },
+    {
+      "id": 5,
+      "name": "doc-route-requires-confirm-before-write",
+      "prompt": "The understanding is confirmed. Please turn it into an ADR draft for this repo.",
+      "expected_output": "Recognizes a doc or ADR follow-up route, drafts or outlines it read-only first, and asks for explicit confirm-before-write approval before creating or editing a file.",
+      "files": [],
+      "expectations": [
+        "The response identifies the requested route as a doc or ADR follow-up, not delivery planning.",
+        "The response presents a draft, target path, or destination before any file mutation.",
+        "The response asks for explicit confirm-before-write approval before creating or editing the ADR.",
+        "The response does not create or edit a file until that confirmation is provided."
+      ]
+    },
+    {
+      "id": 6,
+      "name": "no-subagent-still-investigates",
+      "prompt": "I have a product idea for a repo without any subagent or Task tool available. Figure out where it belongs and help me decide the shape, but do not write anything yet.",
+      "expected_output": "Falls back to read-only inline investigation instead of skipping the technical grounding.",
+      "files": [],
+      "expectations": [
+        "The response says lack of a subagent does not remove the need for investigation.",
+        "The response keeps investigation read-only and scoped to the current repository.",
+        "The response does not ask the operator to explain their own tech stack.",
+        "The response writes nothing by default."
+      ]
+    }
+  ],
+  "trigger_evals": {
+    "train": [
+      {
+        "query": "I have a half-baked idea for viber: make it easier to tell why an issue never got picked up. I need to think through the product shape before we create tickets.",
+        "should_trigger": true
+      },
+      {
+        "query": "Can you help me turn this fuzzy operator workflow problem into a clear product understanding? I am not ready for issues yet.",
+        "should_trigger": true
+      },
+      {
+        "query": "Here is a brief for a Viber UI change. Extract what is already decided, investigate the repo yourself, and ask only what is still unclear before planning work.",
+        "should_trigger": true
+      },
+      {
+        "query": "I want to talk through whether this automation idea should be a TUI affordance, workflow change, or docs only. Do not write anything yet.",
+        "should_trigger": true
+      },
+      {
+        "query": "decompose this decided brief into issues with dependencies and acceptance criteria",
+        "should_trigger": false
+      },
+      {
+        "query": "Refine issue #123 in place so it has a milestone, acceptance criteria, and dependency ordering.",
+        "should_trigger": false
+      },
+      {
+        "query": "Implement the stuck-daemon TUI panel now; the design is already decided and the issue has acceptance criteria.",
+        "should_trigger": false
+      },
+      {
+        "query": "Address the requested changes on my Viber PR and reply to each review thread.",
+        "should_trigger": false
+      },
+      {
+        "query": "Use the decided product brief below to create GitHub issues in the configured Project.",
+        "should_trigger": false
+      }
+    ],
+    "validation": [
+      {
+        "query": "I have a vague product want: Viber should feel less silent when no jobs are running. Help me discover what that should mean before we plan tickets.",
+        "should_trigger": true
+      },
+      {
+        "query": "We wrote a long rough doc for a feature, but I need you to extract the product intent, find repo constraints yourself, and only ask the missing vision questions.",
+        "should_trigger": true
+      },
+      {
+        "query": "The idea is decided: split it into deliverable GitHub issues, sequence blockers, and add them to the board.",
+        "should_trigger": false
+      },
+      {
+        "query": "Create an ADR from this already-decided design; no discovery needed.",
+        "should_trigger": false
+      },
+      {
+        "query": "Viber issue #90 is ready for implementation; make the requested SKILL.md edits and open a PR.",
+        "should_trigger": false
+      },
+      {
+        "query": "Can you review the local diff for bugs, missing tests, and behavioral regressions?",
+        "should_trigger": false
+      }
+    ]
+  }
+}

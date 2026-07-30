@@ -1,0 +1,423 @@
+#!/usr/bin/env python3
+"""Validate a Viber result block before handoff."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from typing import Any
+from urllib.parse import urlparse
+
+
+WORK_MODES = {"issue_comment", "implementation_pr", "design_doc_pr", "review_followup"}
+OUTCOMES = {"ready_for_validation", "needs_reply", "blocked", "failed", "no_change_needed"}
+NEXT_AGENT_HANDOFF_INTENTS = {
+    "blocker_unblocked",
+    "follow_up",
+    "needs_reply",
+    "risk",
+    "shared_context",
+}
+NEXT_AGENT_HANDOFF_SOURCE_KEYS = {"commit", "issue", "pull_request"}
+
+
+class UsageError(Exception):
+    """UsageError reports input problems without a Python traceback."""
+
+
+def read_input(path: str | None) -> str:
+    if path:
+        with open(path, encoding="utf-8") as file:
+            return file.read()
+    if sys.stdin.isatty():
+        raise UsageError("no --file provided and stdin is a TTY; pass --file to avoid hanging")
+    return sys.stdin.read()
+
+
+def extract_result(text: str) -> tuple[dict[str, Any] | None, list[str]]:
+    errors: list[str] = []
+    blocks = re.findall(r"```viber-result\s*(.*?)\s*```", text, flags=re.DOTALL)
+    if len(blocks) > 1:
+        errors.append("found multiple viber-result blocks")
+    payload = blocks[0] if blocks else text.strip()
+    if not payload:
+        errors.append("empty input")
+        return None, errors
+    try:
+        result = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        errors.append(f"invalid JSON: {exc}")
+        return None, errors
+    if not isinstance(result, dict):
+        errors.append("result must be a JSON object")
+        return None, errors
+    return result, errors
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
+
+
+def string_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
+def positive_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def github_reference_from_url(value: str) -> tuple[str, str, int | None, str]:
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "github.com":
+        return "", "", None, ""
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 4:
+        return "", "", None, parsed.fragment
+    number = positive_int_from_string(parts[3])
+    return "/".join(parts[0:2]), parts[2], number, parsed.fragment
+
+
+def positive_int_from_string(value: str) -> int | None:
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    if parsed <= 0:
+        return None
+    return parsed
+
+
+def repository_from_result(result: dict[str, Any]) -> str:
+    issue = result.get("issue") if isinstance(result.get("issue"), dict) else {}
+    identifier = string_value(issue.get("identifier"))
+    repository, found, _ = identifier.partition("#")
+    repository = repository.strip("/ ")
+    if found and "/" in repository:
+        return repository
+
+    repository, kind, _, _ = github_reference_from_url(string_value(issue.get("url")))
+    if kind == "issues":
+        return repository
+    return ""
+
+
+def validate_github_issue_url(
+    value: str,
+    expected_repository: str,
+    expected_number: int | None,
+    *,
+    require_comment: bool,
+    field: str,
+) -> list[str]:
+    errors: list[str] = []
+    repository, kind, number, fragment = github_reference_from_url(value)
+    if repository == "" or kind != "issues" or number is None:
+        return [f"{field} must be a GitHub issue URL"]
+    if expected_repository and repository != expected_repository:
+        errors.append(f"{field} must use repository {expected_repository!r}")
+    if expected_number is not None and number != expected_number:
+        errors.append(f"{field} must point to issue #{expected_number}")
+    if require_comment and not fragment.startswith("issuecomment-"):
+        errors.append(f"{field} must be an issue comment URL")
+    return errors
+
+
+def validate_github_pull_request_url(value: str, expected_repository: str, field: str) -> list[str]:
+    repository, kind, number, _ = github_reference_from_url(value)
+    if repository == "" or kind != "pull" or number is None:
+        return [f"{field} must be a GitHub pull request URL"]
+    if expected_repository and repository != expected_repository:
+        return [f"{field} must use repository {expected_repository!r}"]
+    return []
+
+
+def validate_next_agent_handoffs(result: dict[str, Any]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    handoffs = result.get("next_agent_handoffs")
+    if handoffs is None:
+        return errors, warnings
+    if not isinstance(handoffs, list):
+        errors.append("next_agent_handoffs must be an array")
+        return errors, warnings
+
+    current_repository = repository_from_result(result)
+    if handoffs and not current_repository:
+        errors.append("next_agent_handoffs require issue.identifier or issue.url to include the current repository")
+
+    for index, handoff in enumerate(handoffs):
+        field = f"next_agent_handoffs[{index}]"
+        if not isinstance(handoff, dict):
+            errors.append(f"{field} must be an object")
+            continue
+
+        target_repository = current_repository
+        target_number: int | None = None
+        target = handoff.get("target")
+        if not isinstance(target, dict):
+            errors.append(f"{field}.target must be an object")
+        else:
+            if target.get("kind") != "issue":
+                errors.append(f"{field}.target.kind must be issue")
+
+            configured_repository = string_value(target.get("repository"))
+            if configured_repository:
+                target_repository = configured_repository
+            if target_repository and current_repository and target_repository != current_repository:
+                errors.append(f"{field}.target.repository must match issue repository {current_repository!r}")
+            if not target_repository:
+                errors.append(f"{field}.target.repository is required")
+
+            target_number = positive_int(target.get("number"))
+            if target_number is None:
+                errors.append(f"{field}.target.number must be a positive integer")
+
+            target_url = string_value(target.get("url"))
+            if target_url:
+                errors.extend(
+                    validate_github_issue_url(
+                        target_url,
+                        target_repository,
+                        target_number,
+                        require_comment=False,
+                        field=f"{field}.target.url",
+                    )
+                )
+
+        intent = handoff.get("intent")
+        if intent not in NEXT_AGENT_HANDOFF_INTENTS:
+            errors.append(f"{field}.intent must be one of {sorted(NEXT_AGENT_HANDOFF_INTENTS)}")
+
+        if not string_value(handoff.get("summary")):
+            errors.append(f"{field}.summary is required")
+        if not string_value(handoff.get("context")):
+            errors.append(f"{field}.context is required")
+
+        source = handoff.get("source")
+        if not isinstance(source, dict) or not source:
+            errors.append(f"{field}.source must include at least one supported source link")
+        else:
+            supported_sources = 0
+            for key, value in source.items():
+                source_field = f"{field}.source.{key}"
+                if key not in NEXT_AGENT_HANDOFF_SOURCE_KEYS:
+                    errors.append(f"{source_field} is not supported")
+                    continue
+                source_value = string_value(value)
+                if not source_value:
+                    errors.append(f"{source_field} must be a non-empty string")
+                    continue
+                supported_sources += 1
+                if key == "issue":
+                    errors.extend(
+                        validate_github_issue_url(
+                            source_value,
+                            current_repository,
+                            None,
+                            require_comment=False,
+                            field=source_field,
+                        )
+                    )
+                elif key == "pull_request":
+                    errors.extend(validate_github_pull_request_url(source_value, current_repository, source_field))
+            if supported_sources == 0:
+                errors.append(f"{field}.source must include at least one supported source link")
+
+        if handoff.get("post_to") != "issue_comment":
+            errors.append(f"{field}.post_to must be issue_comment")
+
+        posted_url = string_value(handoff.get("posted_url"))
+        if result.get("outcome") == "ready_for_validation" and not posted_url:
+            errors.append(f"{field}.posted_url is required for ready_for_validation")
+        if posted_url:
+            errors.extend(
+                validate_github_issue_url(
+                    posted_url,
+                    target_repository,
+                    target_number,
+                    require_comment=True,
+                    field=f"{field}.posted_url",
+                )
+            )
+
+    return errors, warnings
+
+
+def validate_shape(result: dict[str, Any], expected_work_mode: str | None) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if result.get("schema_version") != "viber-result/v1":
+        errors.append("schema_version must be viber-result/v1")
+
+    work_mode = result.get("work_mode")
+    if work_mode not in WORK_MODES:
+        errors.append(f"work_mode must be one of {sorted(WORK_MODES)}")
+    if expected_work_mode and work_mode != expected_work_mode:
+        errors.append(f"work_mode {work_mode!r} does not match expected {expected_work_mode!r}")
+
+    outcome = result.get("outcome")
+    if outcome not in OUTCOMES:
+        errors.append(f"outcome must be one of {sorted(OUTCOMES)}")
+
+    issue = result.get("issue")
+    if not isinstance(issue, dict):
+        errors.append("issue must be an object")
+    else:
+        if not truthy(issue.get("identifier")):
+            warnings.append("issue.identifier is empty")
+        if not truthy(issue.get("url")):
+            warnings.append("issue.url is empty")
+
+    if not isinstance(result.get("artifacts"), dict):
+        errors.append("artifacts must be an object")
+    if not isinstance(result.get("validation"), list):
+        errors.append("validation must be an array")
+    if not isinstance(result.get("blockers"), list):
+        errors.append("blockers must be an array")
+    if not isinstance(result.get("policy_checks"), dict):
+        errors.append("policy_checks must be an object")
+
+    if outcome == "blocked" and not result.get("blockers"):
+        errors.append("blocked outcome requires at least one blocker")
+
+    handoff_errors, handoff_warnings = validate_next_agent_handoffs(result)
+    errors.extend(handoff_errors)
+    warnings.extend(handoff_warnings)
+
+    return errors, warnings
+
+
+def validate_policy(result: dict[str, Any], args: argparse.Namespace) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    work_mode = result.get("work_mode")
+    outcome = result.get("outcome")
+    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
+    checks = result.get("policy_checks") if isinstance(result.get("policy_checks"), dict) else {}
+
+    has_pr = truthy(artifacts.get("pull_request")) or truthy(checks.get("created_pr"))
+    has_comment = truthy(artifacts.get("issue_comment"))
+    changed_files = truthy(checks.get("changed_files"))
+    replacement_pr = truthy(checks.get("created_replacement_pr"))
+    used_closing = truthy(checks.get("used_closing_keywords"))
+    closed_issue = truthy(checks.get("closed_issue"))
+    moved_status = truthy(checks.get("moved_project_status"))
+    repository_artifact_authorized = truthy(checks.get("repository_artifact_authorized"))
+
+    if args.require_pr and not has_pr:
+        errors.append("policy requires a pull request artifact")
+    if args.forbid_pr and has_pr:
+        errors.append("policy forbids pull request artifacts")
+    if args.require_issue_comment and not has_comment:
+        errors.append("policy requires an issue comment artifact")
+    if args.forbid_changed_files and changed_files:
+        errors.append("policy forbids changed files")
+    if used_closing and not args.allow_closing_keywords:
+        errors.append("policy forbids PR closing keywords")
+    if closed_issue:
+        errors.append("policy forbids closing the issue")
+    if moved_status and args.forbid_status_move:
+        errors.append("policy forbids direct Project Status movement")
+
+    if args.enforce_mode_policy:
+        if work_mode == "issue_comment":
+            if has_pr:
+                errors.append("issue_comment mode must not create or report a PR")
+            if changed_files:
+                errors.append("issue_comment mode must not change files")
+            if outcome == "ready_for_validation" and not has_comment:
+                errors.append("issue_comment ready_for_validation requires an issue comment")
+        elif work_mode in {"implementation_pr", "design_doc_pr"}:
+            if outcome == "ready_for_validation" and not has_pr:
+                errors.append(f"{work_mode} ready_for_validation requires a PR artifact")
+            if work_mode == "implementation_pr" and outcome == "ready_for_validation" and not repository_artifact_authorized:
+                errors.append("implementation_pr ready_for_validation requires repository_artifact_authorized policy check")
+        elif work_mode == "review_followup":
+            if replacement_pr:
+                errors.append("review_followup mode must not create replacement PRs")
+            if outcome == "ready_for_validation" and not has_pr:
+                errors.append("review_followup ready_for_validation requires the existing PR artifact")
+
+    if outcome == "ready_for_validation" and not result.get("validation"):
+        warnings.append("ready_for_validation has no validation entries")
+    return errors, warnings
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate a viber-result block",
+        epilog=(
+            "Exit codes: 0 valid; 1 validation failed; "
+            "2 usage or input failure."
+        ),
+    )
+    parser.add_argument("--file", help="File containing raw JSON or a fenced viber-result block")
+    parser.add_argument("--work-mode", choices=sorted(WORK_MODES), help="Expected work mode")
+    parser.add_argument("--require-pr", action="store_true", help="Require a pull request artifact")
+    parser.add_argument("--forbid-pr", action="store_true", help="Forbid pull request artifacts")
+    parser.add_argument("--require-issue-comment", action="store_true", help="Require an issue comment artifact")
+    parser.add_argument("--forbid-changed-files", action="store_true", help="Forbid changed files")
+    parser.add_argument("--allow-closing-keywords", action="store_true", help="Allow PR closing keywords")
+    status_policy = parser.add_mutually_exclusive_group()
+    status_policy.add_argument(
+        "--allow-status-move",
+        action="store_true",
+        help="Compatibility no-op; status movement is allowed unless --forbid-status-move is set",
+    )
+    status_policy.add_argument(
+        "--forbid-status-move",
+        action="store_true",
+        help="Forbid direct Project Status movement",
+    )
+    parser.add_argument("--enforce-mode-policy", action="store_true", help="Apply default Viber policy for the reported work mode")
+    args = parser.parse_args()
+
+    try:
+        text = read_input(args.file)
+    except UsageError as exc:
+        print(f"viber-result-validate: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"viber-result-validate: {exc}", file=sys.stderr)
+        return 2
+
+    result, errors = extract_result(text)
+    warnings: list[str] = []
+    if result is not None:
+        shape_errors, shape_warnings = validate_shape(result, args.work_mode)
+        policy_errors, policy_warnings = validate_policy(result, args)
+        errors.extend(shape_errors)
+        errors.extend(policy_errors)
+        warnings.extend(shape_warnings)
+        warnings.extend(policy_warnings)
+
+    output = {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "result": result or {},
+    }
+    json.dump(output, sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    if errors:
+        print("viber-result-validate: invalid viber-result", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+    return 0 if not errors else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

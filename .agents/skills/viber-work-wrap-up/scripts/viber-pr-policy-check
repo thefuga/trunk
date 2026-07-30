@@ -1,0 +1,495 @@
+#!/usr/bin/env python3
+"""Inspect a GitHub pull request for Viber handoff policy risks."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from typing import Any
+
+
+REQUIRED_BODY_SECTIONS = ("Motivation", "Outcome", "Validation", "Continuity")
+HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+CLOSING_KEYWORD_LINE_RE = re.compile(
+    r"^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+"
+    r"(?:(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#\d+|"
+    r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/\d+)"
+    r"\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+PLACEHOLDER_MARKER_TERMS = ("todo", "tbd", "placeholder", "fill this in", "fill me in")
+PLACEHOLDER_ONLY_TERMS = (
+    *PLACEHOLDER_MARKER_TERMS,
+    "n/a",
+    "na",
+    "none",
+    "coming soon",
+)
+ANGLE_PLACEHOLDER_TERMS = (
+    *PLACEHOLDER_MARKER_TERMS,
+    "fill",
+    "insert",
+    "describe",
+    "summary",
+    *(section.casefold() for section in REQUIRED_BODY_SECTIONS),
+)
+PLACEHOLDER_MARKER_RE = re.compile(
+    r"\b(?:"
+    + "|".join(re.escape(term) for term in PLACEHOLDER_MARKER_TERMS)
+    + r"|insert .+ here)\b",
+    re.IGNORECASE,
+)
+ANGLE_PLACEHOLDER_RE = re.compile(
+    r"<[^>\n]*(?:"
+    + "|".join(re.escape(term) for term in ANGLE_PLACEHOLDER_TERMS)
+    + r")[^>\n]*>",
+    re.IGNORECASE,
+)
+
+
+def gh_read_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    return env
+
+
+def run_gh(args: list[str]) -> Any:
+    try:
+        proc = subprocess.run(
+            ["gh", *args],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=gh_read_env(),
+        )
+    except OSError as exc:
+        raise RuntimeError(f"failed to run gh: {exc}") from exc
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or f"gh {' '.join(args)} failed")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"gh returned non-JSON output: {exc}") from exc
+
+
+def pr_view(repo: str, pr: str) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    preferred_fields = [
+        "number",
+        "title",
+        "state",
+        "url",
+        "body",
+        "comments",
+        "files",
+        "commits",
+        "closingIssuesReferences",
+        "headRefName",
+        "baseRefName",
+        "author",
+        "statusCheckRollup",
+        "isDraft",
+        "mergeStateStatus",
+    ]
+    core_fields = [
+        "number",
+        "title",
+        "state",
+        "url",
+        "body",
+        "comments",
+        "files",
+        "commits",
+        "closingIssuesReferences",
+        "headRefName",
+        "baseRefName",
+        "author",
+    ]
+    try:
+        return run_gh(["pr", "view", pr, "--repo", repo, "--json", ",".join(preferred_fields)]), warnings
+    except RuntimeError as exc:
+        warnings.append(f"preferred PR field query failed; retried with core fields: {exc}")
+        return run_gh(["pr", "view", pr, "--repo", repo, "--json", ",".join(core_fields)]), warnings
+
+
+def closing_keyword_matches(repo: str, issue: int, body: str) -> list[str]:
+    return [
+        occurrence["match"]
+        for occurrence in closing_keyword_occurrences(repo, body)
+        if occurrence["repo"] == repo and occurrence["issue_number"] == issue
+    ]
+
+
+def other_closing_keyword_matches(repo: str, issue: int, body: str) -> list[str]:
+    return [
+        occurrence["match"]
+        for occurrence in closing_keyword_occurrences(repo, body)
+        if occurrence["repo"] != repo or occurrence["issue_number"] != issue
+    ]
+
+
+def closing_keyword_occurrences(repo: str, body: str) -> list[dict[str, Any]]:
+    owner, name = repo.split("/", 1)
+    repo_ref = r"(?:(?P<ref_owner>[A-Za-z0-9_.-]+)/(?P<ref_name>[A-Za-z0-9_.-]+))?"
+    issue_ref = rf"{repo_ref}#(?P<issue_number>\d+)"
+    url_ref = r"https://github\.com/(?P<url_owner>[A-Za-z0-9_.-]+)/(?P<url_name>[A-Za-z0-9_.-]+)/issues/(?P<url_issue_number>\d+)"
+    pattern = re.compile(
+        rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?P<ref>{issue_ref}|{url_ref})\b",
+        re.IGNORECASE,
+    )
+    occurrences: list[dict[str, Any]] = []
+    for match in pattern.finditer(body or ""):
+        issue_number = match.group("issue_number") or match.group("url_issue_number")
+        ref_owner = match.group("ref_owner") or match.group("url_owner") or owner
+        ref_name = match.group("ref_name") or match.group("url_name") or name
+        occurrences.append({
+            "match": match.group(0),
+            "repo": f"{ref_owner}/{ref_name}",
+            "issue_number": int(issue_number),
+        })
+    return occurrences
+
+
+def non_closing_references(repo: str, issue: int, body: str) -> list[str]:
+    owner, name = repo.split("/", 1)
+    issue_patterns = [
+        rf"#{issue}\b",
+        rf"{re.escape(owner)}/{re.escape(name)}#{issue}\b",
+        rf"https://github\.com/{re.escape(owner)}/{re.escape(name)}/issues/{issue}\b",
+    ]
+    pattern = re.compile(
+        rf"\b(refs?|references?|related to)\s+({'|'.join(issue_patterns)})",
+        re.IGNORECASE,
+    )
+    return [match.group(0) for match in pattern.finditer(body or "")]
+
+
+def closing_refs_for_issue(pr: dict[str, Any], issue: int) -> list[dict[str, Any]]:
+    refs = pr.get("closingIssuesReferences") or []
+    return [
+        ref
+        for ref in refs
+        if isinstance(ref, dict) and ref.get("number") == issue and not ref_repo_mismatch(ref, pr)
+    ]
+
+
+def other_closing_refs(pr: dict[str, Any], repo: str, issue: int) -> list[dict[str, Any]]:
+    refs = pr.get("closingIssuesReferences") or []
+    return [
+        ref
+        for ref in refs
+        if isinstance(ref, dict)
+        and (ref.get("number") != issue or (ref_repository(ref) not in ("", repo)))
+    ]
+
+
+def ref_repo_mismatch(ref: dict[str, Any], pr: dict[str, Any]) -> bool:
+    repo = ""
+    url = pr.get("url", "")
+    match = re.match(r"https://github\.com/([^/]+/[^/]+)/pulls?/\d+", url)
+    if match:
+        repo = match.group(1)
+    ref_repo = ref_repository(ref)
+    return bool(repo and ref_repo and ref_repo != repo)
+
+
+def ref_repository(ref: dict[str, Any]) -> str:
+    repository = ref.get("repository")
+    if isinstance(repository, dict):
+        value = repository.get("nameWithOwner")
+        if isinstance(value, str):
+            return value
+        owner = repository.get("owner")
+        name = repository.get("name")
+        if isinstance(owner, dict):
+            owner = owner.get("login")
+        if isinstance(owner, str) and isinstance(name, str):
+            return f"{owner}/{name}"
+    url = ref.get("url", "")
+    match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/\d+", str(url))
+    if match:
+        return match.group(1)
+    return ""
+
+
+def head_commit(pr: dict[str, Any]) -> str:
+    commits = pr.get("commits") or []
+    if not commits:
+        return ""
+    last = commits[-1]
+    if not isinstance(last, dict):
+        return ""
+    return last.get("oid") or last.get("commit", {}).get("oid", "")
+
+
+def flatten_checks(value: Any) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    if isinstance(value, list):
+        for item in value:
+            checks.extend(flatten_checks(item))
+    elif isinstance(value, dict):
+        has_check_shape = any(key in value for key in ("status", "conclusion", "name"))
+        if has_check_shape:
+            checks.append(value)
+        for nested in value.values():
+            if isinstance(nested, (dict, list)):
+                checks.extend(flatten_checks(nested))
+    return checks
+
+
+def check_summary(pr: dict[str, Any]) -> dict[str, Any]:
+    checks = flatten_checks(pr.get("statusCheckRollup") or [])
+    summary = {
+        "total": len(checks),
+        "success": 0,
+        "pending": 0,
+        "failing": 0,
+        "skipped_or_neutral": 0,
+        "unknown": 0,
+        "all_success": False,
+        "items": [],
+    }
+    for check in checks:
+        name = check.get("name") or check.get("context") or check.get("workflowName") or ""
+        status = str(check.get("status") or "").upper()
+        conclusion = str(check.get("conclusion") or "").upper()
+        state = conclusion or status or "UNKNOWN"
+        if conclusion == "SUCCESS":
+            bucket = "success"
+        elif conclusion in {"SKIPPED", "NEUTRAL"}:
+            bucket = "skipped_or_neutral"
+        elif conclusion in {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}:
+            bucket = "failing"
+        elif status in {"QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING"} or not conclusion:
+            bucket = "pending"
+        else:
+            bucket = "unknown"
+        summary[bucket] += 1
+        summary["items"].append({"name": name, "state": state, "bucket": bucket})
+    summary["all_success"] = bool(checks) and summary["success"] == len(checks)
+    return summary
+
+
+def matching_required_section(title: str) -> str:
+    normalized = re.sub(r"[*_`[\]()]", "", title).strip().rstrip(":")
+    normalized = re.sub(r"\s+", " ", normalized).casefold()
+    for section in REQUIRED_BODY_SECTIONS:
+        token = section.casefold()
+        if normalized == token or normalized.startswith(token + " ") or normalized.startswith(token + ":"):
+            return section
+    return ""
+
+
+def required_section_contents(body: str) -> tuple[set[str], dict[str, str]]:
+    present: set[str] = set()
+    contents = {section: [] for section in REQUIRED_BODY_SECTIONS}
+    current_section = ""
+    current_level = 0
+
+    for line in (body or "").splitlines():
+        heading = HEADING_RE.match(line)
+        if heading:
+            level = len(heading.group(1))
+            section = matching_required_section(heading.group(2))
+            if section:
+                current_section = section
+                current_level = level
+                present.add(section)
+                continue
+            if current_section and level > current_level:
+                contents[current_section].append(line)
+                continue
+            current_section = ""
+            current_level = 0
+            continue
+        if current_section:
+            contents[current_section].append(line)
+
+    return present, {section: "\n".join(lines) for section, lines in contents.items()}
+
+
+def substantive_text(content: str) -> str:
+    text = HTML_COMMENT_RE.sub("", content or "")
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if CLOSING_KEYWORD_LINE_RE.fullmatch(stripped):
+            continue
+        if re.fullmatch(r"[-*+]\s*", stripped):
+            continue
+        lines.append(stripped)
+    return "\n".join(lines).strip()
+
+
+def placeholder_content(text: str) -> bool:
+    normalized_lines = []
+    for line in text.splitlines():
+        stripped = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s*", "", line).strip()
+        stripped = stripped.strip("*_` ")
+        if stripped:
+            normalized_lines.append(stripped)
+    normalized = "\n".join(normalized_lines).strip()
+    compact = re.sub(r"\s+", " ", normalized)
+    if not compact:
+        return False
+    if compact.rstrip(" .!-").casefold() in PLACEHOLDER_ONLY_TERMS:
+        return True
+    if re.fullmatch(r"<[^>\n]+>", compact):
+        return True
+    if ANGLE_PLACEHOLDER_RE.search(normalized):
+        return True
+    return bool(len(compact) <= 120 and PLACEHOLDER_MARKER_RE.search(compact))
+
+
+def body_contract(body: str) -> dict[str, Any]:
+    present, contents = required_section_contents(body)
+    sections = []
+    for section in REQUIRED_BODY_SECTIONS:
+        content = substantive_text(contents[section])
+        is_present = section in present
+        content_non_empty = bool(content)
+        is_placeholder = content_non_empty and placeholder_content(content)
+        sections.append({
+            "name": section,
+            "present": is_present,
+            "content_non_empty": content_non_empty,
+            "placeholder": is_placeholder,
+            "valid": is_present and content_non_empty and not is_placeholder,
+        })
+
+    missing_sections = [section["name"] for section in sections if not section["present"]]
+    empty_sections = [
+        section["name"]
+        for section in sections
+        if section["present"] and not section["content_non_empty"]
+    ]
+    placeholder_sections = [section["name"] for section in sections if section["placeholder"]]
+    return {
+        "required_sections": sections,
+        "missing_sections": missing_sections,
+        "empty_sections": empty_sections,
+        "placeholder_sections": placeholder_sections,
+        "valid": not missing_sections and not empty_sections and not placeholder_sections,
+    }
+
+
+def policy_violations(
+    contract: dict[str, Any],
+    *,
+    has_closing_keyword_for_issue: bool,
+    other_issue_links: list[Any],
+) -> list[dict[str, str]]:
+    violations: list[dict[str, str]] = []
+    for section in contract["missing_sections"]:
+        violations.append({
+            "id": "missing_required_section",
+            "section": section,
+            "message": f"PR body is missing required section: {section}",
+        })
+    for section in contract["empty_sections"]:
+        violations.append({
+            "id": "empty_required_section",
+            "section": section,
+            "message": f"PR body section has no substantive content: {section}",
+        })
+    for section in contract["placeholder_sections"]:
+        violations.append({
+            "id": "placeholder_required_section",
+            "section": section,
+            "message": f"PR body section still looks like a placeholder: {section}",
+        })
+    if not has_closing_keyword_for_issue:
+        violations.append({
+            "id": "missing_tracked_issue_closing_keyword",
+            "section": "",
+            "message": "PR body must include Closes, Fixes, or Resolves for the tracked issue",
+        })
+    if other_issue_links:
+        violations.append({
+            "id": "unexpected_closing_keyword",
+            "section": "",
+            "message": "PR body or GitHub closing references include a different issue",
+        })
+    return violations
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Inspect a PR for Viber policy risks",
+        epilog="Exit codes: 0 JSON report produced; 2 usage, environment, or GitHub inspection failure.",
+    )
+    parser.add_argument("--repo", required=True, help="Repository in owner/name form")
+    parser.add_argument("--issue", required=True, type=int, help="Tracked issue number")
+    parser.add_argument("--pr", required=True, help="Pull request number or URL")
+    args = parser.parse_args()
+
+    pr, warnings = pr_view(args.repo, args.pr)
+    body = pr.get("body") or ""
+    keyword_matches = closing_keyword_matches(args.repo, args.issue, body)
+    other_keyword_matches = other_closing_keyword_matches(args.repo, args.issue, body)
+    closing_refs = closing_refs_for_issue(pr, args.issue)
+    other_refs = other_closing_refs(pr, args.repo, args.issue)
+    refs_matches = non_closing_references(args.repo, args.issue, body)
+    files = pr.get("files") or []
+    contract = body_contract(body)
+    has_closing_keyword_for_issue = bool(keyword_matches or closing_refs)
+    unexpected_closing_links = [*other_keyword_matches, *other_refs]
+    violations = policy_violations(
+        contract,
+        has_closing_keyword_for_issue=has_closing_keyword_for_issue,
+        other_issue_links=unexpected_closing_links,
+    )
+
+    output = {
+        "repo": args.repo,
+        "issue_number": args.issue,
+        "pull_request": {
+            "number": pr.get("number"),
+            "title": pr.get("title", ""),
+            "state": pr.get("state", ""),
+            "url": pr.get("url", ""),
+            "head_ref": pr.get("headRefName", ""),
+            "base_ref": pr.get("baseRefName", ""),
+            "head_commit": head_commit(pr),
+            "is_draft": pr.get("isDraft", False),
+            "merge_state_status": pr.get("mergeStateStatus", ""),
+        },
+        "files": [file.get("path", "") for file in files if isinstance(file, dict)],
+        "policy": {
+            "status": "failed" if violations else "passed",
+            "passed": not violations,
+            "has_closing_keyword_for_issue": has_closing_keyword_for_issue,
+            "closing_keyword_matches": keyword_matches,
+            "closing_keyword_matches_for_other_issues": other_keyword_matches,
+            "closing_issue_references": closing_refs,
+            "closing_issue_references_for_other_issues": other_refs,
+            "has_non_closing_reference_for_issue": bool(refs_matches),
+            "non_closing_reference_matches": refs_matches,
+            "references_issue": bool(keyword_matches or closing_refs or refs_matches),
+            "closing_keyword_policy_valid": has_closing_keyword_for_issue and not unexpected_closing_links,
+            "body_contract": contract,
+            "violations": violations,
+        },
+        "checks": check_summary(pr),
+        "warnings": warnings,
+    }
+    json.dump(output, sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except RuntimeError as exc:
+        print(f"viber-pr-policy-check: {exc}", file=sys.stderr)
+        raise SystemExit(2)
