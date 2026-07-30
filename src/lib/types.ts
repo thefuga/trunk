@@ -141,6 +141,26 @@ export function localRepoDescriptor(
 	};
 }
 
+export function repoDescriptorFromId(
+	id: string,
+	displayName: string,
+): RepoDescriptor | null {
+	if (id.startsWith("local:")) {
+		return localRepoDescriptor(id.slice("local:".length), displayName);
+	}
+	if (id.startsWith("wsl:")) {
+		const remainder = id.slice("wsl:".length);
+		const separator = remainder.indexOf(":");
+		if (separator <= 0) return null;
+		return wslRepoDescriptor(
+			remainder.slice(0, separator),
+			remainder.slice(separator + 1),
+			displayName,
+		);
+	}
+	return null;
+}
+
 export function wslRepoDescriptor(
 	distro: string,
 	linuxPath: string,

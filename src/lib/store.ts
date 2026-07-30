@@ -6,6 +6,7 @@ import {
 	localRepoDescriptor,
 	normalizeRepoDescriptor,
 	type RepoDescriptor,
+	repoDescriptorFromId,
 } from "./types.js";
 
 export type { PersistedTab } from "./tab-types.js";
@@ -32,7 +33,9 @@ async function saveIfMigrated<T>(
 
 function normalizeRecentRepo(repo: RecentRepo): RecentRepo {
 	const descriptor = normalizeRepoDescriptor(
-		repo.repoDescriptor ?? localRepoDescriptor(repo.path, repo.name),
+		repo.repoDescriptor ??
+			(repo.repoId ? repoDescriptorFromId(repo.repoId, repo.name) : null) ??
+			localRepoDescriptor(repo.path, repo.name),
 	);
 	return {
 		name: repo.name || descriptor.display_name,
@@ -51,7 +54,9 @@ function normalizePersistedTab(tab: PersistedTab): PersistedTab {
 		};
 	}
 	const descriptor = normalizeRepoDescriptor(
-		tab.repoDescriptor ?? localRepoDescriptor(tab.repoPath, tab.repoName),
+		tab.repoDescriptor ??
+			(tab.repoId ? repoDescriptorFromId(tab.repoId, tab.repoName) : null) ??
+			localRepoDescriptor(tab.repoPath, tab.repoName),
 	);
 	return {
 		...tab,

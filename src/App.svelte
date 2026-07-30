@@ -15,6 +15,11 @@ import {
 	type RemoteState,
 } from "./lib/remote-state.svelte.js";
 import {
+	handleRecentOpenFailure,
+	repoErrorMessage,
+	restoreFailureMessage,
+} from "./lib/repo-lifecycle.js";
+import {
 	addRecentRepo,
 	getActiveTabId,
 	getLeftPaneCollapsed,
@@ -39,6 +44,7 @@ import {
 } from "./lib/store.js";
 import type { TabInfo } from "./lib/tab-types.js";
 import { createTabId } from "./lib/tab-types.js";
+import { showToast } from "./lib/toast.svelte.js";
 import { localRepoDescriptor, type RepoDescriptor } from "./lib/types.js";
 import {
 	createUndoRedoState,
@@ -281,11 +287,13 @@ async function handlePickerPick(repo: RecentRepo) {
 	}
 	try {
 		await safeInvoke("open_repo", { path: descriptor.id, repo: descriptor });
-	} catch {
-		// Path slipped past the prune step (race or transient). Drop it
-		// silently — picker stays quiet by design.
-		await removeRecentRepo(descriptor.id);
-		pickerOpen = false;
+	} catch (error: unknown) {
+		showToast(
+			await handleRecentOpenFailure(error, () =>
+				removeRecentRepo(descriptor.id),
+			),
+			"error",
+		);
 		return;
 	}
 	await addRecentRepo({
@@ -377,6 +385,18 @@ function persistTabs() {
 	}, 500);
 }
 
+async function retryRestore(tabId: string) {
+	const tab = tabs.find((candidate) => candidate.id === tabId);
+	const repoKey = tab ? repoCommandKey(tab) : null;
+	if (!tab?.repoDescriptor || !repoKey) return;
+	try {
+		await safeInvoke("open_repo", { path: repoKey, repo: tab.repoDescriptor });
+		tab.restoreError = null;
+	} catch (error: unknown) {
+		tab.restoreError = repoErrorMessage(error);
+	}
+}
+
 // Restore on mount
 $effect(() => {
 	(async () => {
@@ -425,12 +445,16 @@ $effect(() => {
 			if (pt.repoPath && repoKey) {
 				try {
 					await safeInvoke("open_repo", { path: repoKey, repo: descriptor });
-				} catch {
-					// Repo no longer exists -- skip this tab
-					continue;
+				} catch (error: unknown) {
+					tab.restoreError = restoreFailureMessage(descriptor, error);
+					if (!tab.restoreError) continue;
 				}
 				// Initial dirty check for restored tab
 				try {
+					if (tab.restoreError) {
+						restoredTabs.push(tab);
+						continue;
+					}
 					const counts = await safeInvoke<{
 						staged: number;
 						unstaged: number;
@@ -699,7 +723,7 @@ $effect(() => {
       onreorder={(newTabs) => { tabs = newTabs; persistTabs(); }}
     />
     <div data-tauri-drag-region class="flex-1 h-full"></div>
-    {#if activeTab?.repoPath}
+    {#if activeTab?.repoPath && !activeTab.restoreError}
       {@const activeState = getOrCreateTabState(activeTabId)}
       <Toolbar repoPath={repoCommandKey(activeTab) ?? activeTab.repoPath} remoteState={activeState.remoteState} undoRedo={activeState.undoRedo} reviewActive={reviewPanelOpen} reviewPanelShowing={activeReviewPanelShowing} {showInlineComments} inlineCommentCount={activeInlineCommentCount} reviewCommentCount={activeReviewCommentCount} ontoggleinlinecomments={toggleInlineComments} />
     {/if}
@@ -708,7 +732,19 @@ $effect(() => {
   <div style="flex: 1; overflow: hidden; position: relative;">
     {#each tabs as tab (tab.id)}
       <div style="position: absolute; inset: 0; display: flex; flex-direction: column; {tab.id !== activeTabId ? 'visibility: hidden; pointer-events: none;' : ''}">
-        {#if tab.repoPath}
+        {#if tab.repoPath && tab.restoreError}
+          <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p class="text-sm font-semibold" style="color: var(--color-text);">Could not open {tab.repoName}</p>
+            <p class="max-w-lg text-sm" style="color: var(--color-danger);">{tab.restoreError}</p>
+            <button
+              class="rounded-md px-3 py-1.5 text-sm"
+              style="background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text);"
+              onclick={() => retryRestore(tab.id)}
+            >
+              Retry
+            </button>
+          </div>
+        {:else if tab.repoPath}
           {@const tabState = getOrCreateTabState(tab.id)}
           <RepoView
             repoPath={repoCommandKey(tab) ?? tab.repoPath}
